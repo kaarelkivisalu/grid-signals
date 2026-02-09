@@ -1,0 +1,23 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project
+
+grid-signals — Nordic-Baltic Energy Intelligence Agent. Automated market analysis powered by structured data pipelines and LLM reasoning with tool use.
+
+See `ROADMAP.md` for the full project plan and future directions.
+
+### Architecture
+
+- **Data ingestion:** ENTSO-E, Open-Meteo, Elering/Fingrid APIs → DuckDB
+- **LLM agent:** Claude API with tool use, queries DuckDB through structured tools
+- **Output:** Automated daily briefing (delivery channel TBD)
+
+### Tech Stack
+
+- Python 3.12+, DuckDB, entsoe-py, Claude API, pytest, uv
+
+## Build & Test Commands
+
+*To be filled in once the project scaffolding is added.*
