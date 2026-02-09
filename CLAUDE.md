@@ -20,4 +20,11 @@ See `ROADMAP.md` for the full project plan and future directions.
 
 ## Build & Test Commands
 
-*To be filled in once the project scaffolding is added.*
+```bash
+uv sync --all-extras   # install dependencies
+uv run pytest tests/    # run tests
+```
+
+## Workflow
+
+- After completing a unit of work, proactively commit using [Conventional Commits](https://www.conventionalcommits.org/).
