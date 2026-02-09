@@ -10,3 +10,4 @@ class BiddingZone(StrEnum):
     FI = "FI"       # Finland
     SE4 = "SE4"     # Southern Sweden
     SE3 = "SE3"     # Central Sweden
+    PL = "PL"       # Poland (for LT-PL cross-border flows)
