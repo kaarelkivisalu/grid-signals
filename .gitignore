@@ -4,4 +4,6 @@ __pycache__/
 *.egg-info/
 dist/
 data/
+briefings/
 .pytest_cache/
+.envrc
