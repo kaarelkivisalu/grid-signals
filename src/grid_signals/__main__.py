@@ -32,6 +32,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     sub.add_parser("validate", help="Run data validation checks")
 
+    agent_cmd = sub.add_parser("agent", help="Ask the energy intelligence agent a question")
+    agent_cmd.add_argument("question", help="Question to ask the agent")
+    agent_cmd.add_argument(
+        "--model",
+        default="claude-sonnet-4-20250514",
+        help="Claude model to use (default: claude-sonnet-4-20250514)",
+    )
+
     return parser.parse_args(argv)
 
 
@@ -75,6 +83,26 @@ def main(argv: list[str] | None = None) -> int:
         try:
             create_tables(con)
             run_all_validations(con)
+        finally:
+            con.close()
+
+    elif args.command == "agent":
+        from grid_signals.agent import run_agent
+        from grid_signals.db.connection import get_connection
+        from grid_signals.db.schema import create_tables
+
+        con = get_connection(db_path)
+        try:
+            create_tables(con)
+            result = run_agent(args.question, con, model=args.model)
+            print(result.content)
+            logger = logging.getLogger(__name__)
+            logger.info(
+                "tokens: %d in / %d out, tool calls: %d",
+                result.input_tokens,
+                result.output_tokens,
+                len(result.tool_calls),
+            )
         finally:
             con.close()
 
