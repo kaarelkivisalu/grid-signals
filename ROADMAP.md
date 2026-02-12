@@ -117,29 +117,29 @@ Implementation:
 **Decision: Airflow vs simple cron.**
 Airflow is overkill for MVP. A cron job calling a Python script is sufficient. Move to Airflow later if the DAG complexity grows.
 
-### Milestone 6: LLM Agent with Tool Use
+### Milestone 6: LLM Agent with Tool Use ✅
 
 **Goal:** Build an LLM agent that can query the database through structured tools and reason about the data.
 
 Tools to implement:
-- [ ] `get_day_ahead_prices(zone: str, start: date, end: date)` — returns hourly prices
-- [ ] `get_generation_mix(zone: str, date: date)` — returns generation by fuel type
-- [ ] `get_wind_forecast(region: str, start: date, end: date)` — returns wind speed/generation forecast
-- [ ] `get_outages(zone: str, fuel_type: str | None)` — returns active REMIT outage messages
-- [ ] `get_cross_border_flows(from_zone: str, to_zone: str, start: date, end: date)` — returns scheduled/actual flows
-- [ ] `get_load_forecast(zone: str, start: date, end: date)` — returns total load forecast
-- [ ] `calculate_spread(zone_1: str, zone_2: str, start: date, end: date)` — computes price spread time series
-- [ ] `get_historical_similar_days(zone: str, conditions: dict)` — finds past days with similar wind/temp/outage patterns and returns their prices
+- [x] `get_day_ahead_prices(zone: str, start: date, end: date)` — returns hourly prices
+- [x] `get_generation_mix(zone: str, date: date)` — returns generation by fuel type
+- [x] `get_wind_forecast(region: str, start: date, end: date)` — returns wind speed/generation forecast
+- [x] `get_outages(zone: str, fuel_type: str | None)` — returns active REMIT outage messages
+- [x] `get_cross_border_flows(from_zone: str, to_zone: str, start: date, end: date)` — returns scheduled/actual flows
+- [x] `get_load_forecast(zone: str, start: date, end: date)` — returns total load forecast
+- [x] `calculate_spread(zone_1: str, zone_2: str, start: date, end: date)` — computes price spread time series
+- [x] `get_historical_similar_days(zone: str, conditions: dict)` — finds past days with similar wind/temp/outage patterns and returns their prices
 
 Agent design:
-- [ ] Use Claude API with tool use
-- [ ] System prompt with domain knowledge:
+- [x] Use Claude API with tool use
+- [x] System prompt with domain knowledge:
   - Interconnector capacities (SE4-LT: ~700 MW, FI-EE: ~1000 MW, EE-LV: ~800 MW, LT-PL: ~500 MW)
   - Key generation assets (Olkiluoto 1&2: ~1.7 GW nuclear, Narva oil shale: ~1.1 GW, Kruonis pumped storage: 900 MW)
   - Market coupling mechanics (how day-ahead auction works, price convergence when interconnectors not congested)
   - Seasonal patterns (spring flood drives Nordic hydro, winter demand peaks in Baltics, wind seasonality)
-- [ ] Multi-step reasoning: agent should call multiple tools, compare results, and synthesize
-- [ ] Grounding: all numbers in the output must come from tool calls, not from the LLM
+- [x] Multi-step reasoning: agent should call multiple tools, compare results, and synthesize
+- [x] Grounding: all numbers in the output must come from tool calls, not from the LLM
 
 ### Milestone 7: Daily Briefing Generation
 
@@ -162,7 +162,7 @@ Agent design:
 ### Milestone 8: Testing, Documentation & Polish
 
 - [x] Integration tests: mock API responses, verify ingestion writes correct data
-- [ ] Unit tests for spread calculation, similar-day matching logic
+- [x] Unit tests for spread calculation, similar-day matching logic
 - [ ] End-to-end test: seed DB with known data, run briefing generation, verify output references correct numbers
 - [ ] README with:
   - Architecture diagram
