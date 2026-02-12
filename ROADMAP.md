@@ -100,7 +100,7 @@ Implementation:
 
 **Goal:** Automate data ingestion on a schedule.
 
-- [ ] For MVP, use a simple scheduler — `cron` or a lightweight Python scheduler (APScheduler)
+- [x] For MVP, use a simple scheduler — `cron` or a lightweight Python scheduler (APScheduler)
   - Daily at 05:00 EET: pull latest day-ahead prices, generation forecasts, outages
   - Every 6 hours: update weather forecasts
   - Daily: backfill any gaps from previous days
@@ -155,7 +155,7 @@ Agent design:
      - **Outages** — any new or notable REMIT messages
      - **Spreads** — cross-border spread analysis
      - **Watch list** — things to monitor during the day
-- [ ] Schedule briefing generation at 06:30 EET (after day-ahead results are published)
+- [x] Schedule briefing generation at 06:30 EET (after day-ahead results are published)
 - [x] Output format: structured text (Markdown) saved to file
 - [x] CLI command: `briefing` with `--date`, `--output`, `--model` options
 - [ ] Delivery mechanism to be decided (email, web UI, or other — see post-MVP directions)

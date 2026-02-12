@@ -1,0 +1,29 @@
+# Grid Signals — example crontab
+#
+# Install with: crontab crontab.example
+# Edit paths to match your setup.
+#
+# All times in EET (Europe/Tallinn). Use TZ= to set the timezone for each job,
+# or set TZ=Europe/Tallinn at the top if your cron supports it.
+
+SHELL=/bin/bash
+PROJECT=/home/user/projects/grid-signals
+
+# --- Data Ingestion ---
+
+# Daily at 05:00 EET: pull day-ahead prices, generation, load, outages, flows
+0 5 * * * cd $PROJECT && TZ=Europe/Tallinn uv run python -m grid_signals daily >> logs/daily.log 2>&1
+
+# Every 6 hours: update weather forecasts (7-day ahead)
+0 */6 * * * cd $PROJECT && uv run python -m grid_signals weather >> logs/weather.log 2>&1
+
+# Daily at 05:30 EET: backfill any gaps from the past 3 days
+30 5 * * * cd $PROJECT && TZ=Europe/Tallinn uv run python -m grid_signals backfill --start $(date -d '-3 days' +%Y-%m-%d) --end $(date +%Y-%m-%d) >> logs/backfill.log 2>&1
+
+# Daily at 05:45 EET: validate data quality
+45 5 * * * cd $PROJECT && TZ=Europe/Tallinn uv run python -m grid_signals validate >> logs/validate.log 2>&1
+
+# --- Briefing Generation ---
+
+# Daily at 06:30 EET: generate morning briefing (after day-ahead results published)
+30 6 * * * cd $PROJECT && TZ=Europe/Tallinn uv run python -m grid_signals briefing >> logs/briefing.log 2>&1
