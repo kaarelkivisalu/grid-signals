@@ -51,7 +51,7 @@ Implementation:
   - `ingest_outages(zones, date_range)`
 - [x] Handle ENTSO-E API quirks: XML response parsing, rate limiting (400 requests/min), pagination for large date ranges, timezone handling (all data is UTC but markets trade in CET)
 - [x] Write data to DuckDB, with upsert logic to avoid duplicates on re-runs
-- [ ] Backfill 3-6 months of historical data for each data type
+- [x] Backfill 6 months of historical data for each data type (Aug 2025 → Feb 2026, ~1.3M rows)
 
 **Key risks:**
 - ENTSO-E API key approval can take several business days.
