@@ -28,3 +28,4 @@ uv run pytest tests/    # run tests
 ## Workflow
 
 - After completing a unit of work, proactively commit using [Conventional Commits](https://www.conventionalcommits.org/).
+- After completing a milestone or significant task, update `ROADMAP.md` to reflect current progress (e.g., mark checklist items as done with `[x]`, note completion status in milestone headers). The roadmap should always accurately represent the actual state of the project.

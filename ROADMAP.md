@@ -8,27 +8,27 @@ Nordic-Baltic Energy Intelligence Agent: automated market analysis powered by st
 
 The MVP delivers two things: a reliable data pipeline that pulls from public energy/weather APIs into a local database, and an LLM agent that queries that data to produce a daily morning briefing.
 
-### Milestone 1: Project Setup & Data Models
+### Milestone 1: Project Setup & Data Models ✅
 
 **Goal:** Establish project structure, define schemas, set up DuckDB.
 
-- [ ] Initialize Python project (pyproject.toml, uv/pip, basic directory structure)
-- [ ] Define data models / schemas for:
+- [x] Initialize Python project (pyproject.toml, uv/pip, basic directory structure)
+- [x] Define data models / schemas for:
   - Day-ahead prices by bidding zone (EE, LV, LT, FI, SE4, SE3)
   - Generation by fuel type per zone
   - Total load forecast per zone
   - Cross-border physical flows (interconnector capacities and scheduled exchanges)
   - REMIT outage messages (planned and unplanned)
   - Wind speed and solar irradiance forecasts for key locations
-- [ ] Set up DuckDB database with tables matching these schemas
-- [ ] Write a thin data-access layer (Python functions that query DuckDB and return structured results)
+- [x] Set up DuckDB database with tables matching these schemas
+- [x] Write a thin data-access layer (Python functions that query DuckDB and return structured results)
 
 **Key decisions:**
 - Bidding zones in scope for MVP: EE, LV, LT, FI, SE4. Possibly SE3 for wind context.
 - Time granularity: hourly for prices/generation/load, daily for outages.
 - DuckDB for storage — single-file, no server, fast analytical queries, good parquet support.
 
-### Milestone 2: Data Ingestion — ENTSO-E
+### Milestone 2: Data Ingestion — ENTSO-E ✅
 
 **Goal:** Pull core market data from the ENTSO-E Transparency Platform.
 
@@ -41,16 +41,16 @@ Data available from ENTSO-E:
 - Scheduled commercial exchanges
 
 Implementation:
-- [ ] Register for ENTSO-E API key (free, takes ~3 days for approval)
-- [ ] Use `entsoe-py` library as the API wrapper
-- [ ] Build ingestion functions for each data type:
+- [x] Register for ENTSO-E API key (free, takes ~3 days for approval)
+- [x] Use `entsoe-py` library as the API wrapper
+- [x] Build ingestion functions for each data type:
   - `ingest_day_ahead_prices(zones, date_range)`
   - `ingest_generation_per_type(zones, date_range)`
   - `ingest_total_load(zones, date_range)`
   - `ingest_cross_border_flows(borders, date_range)`
   - `ingest_outages(zones, date_range)`
-- [ ] Handle ENTSO-E API quirks: XML response parsing, rate limiting (400 requests/min), pagination for large date ranges, timezone handling (all data is UTC but markets trade in CET)
-- [ ] Write data to DuckDB, with upsert logic to avoid duplicates on re-runs
+- [x] Handle ENTSO-E API quirks: XML response parsing, rate limiting (400 requests/min), pagination for large date ranges, timezone handling (all data is UTC but markets trade in CET)
+- [x] Write data to DuckDB, with upsert logic to avoid duplicates on re-runs
 - [ ] Backfill 3-6 months of historical data for each data type
 
 **Key risks:**
@@ -58,24 +58,25 @@ Implementation:
 - The API is unreliable at times — build in retries with exponential backoff.
 - Some data types have different availability delays (day-ahead prices available ~13:00 CET D-1, generation actuals available next day).
 
-### Milestone 3: Data Ingestion — Weather (Open-Meteo)
+### Milestone 3: Data Ingestion — Weather (Open-Meteo) ✅
 
 **Goal:** Pull wind and solar forecasts for key generation regions.
 
-- [ ] Identify key coordinates:
+- [x] Identify key coordinates:
   - Southern Sweden (SE4): ~56.0°N, 14.0°E (Skåne wind farms)
   - Central Sweden (SE3): ~59.0°N, 16.0°E
   - Finland: ~61.5°N, 24.0°E (inland wind), ~63.0°N, 21.0°E (Ostrobothnia coast)
   - Estonia: ~59.0°N, 25.0°E
   - Lithuania: ~55.5°N, 24.0°E
-- [ ] Use Open-Meteo free API (no key required):
+  - Latvia: ~57.0°N, 24.0°E
+- [x] Use Open-Meteo free API (no key required):
   - Wind speed at 100m hub height
   - Solar irradiance (GHI)
   - Temperature (drives demand)
   - Forecast horizon: 7 days ahead, hourly
-- [ ] Build ingestion: `ingest_weather_forecast(locations, date_range)`
-- [ ] Store both the forecast and when it was fetched (to track forecast revisions)
-- [ ] Backfill historical weather actuals for model context
+- [x] Build ingestion: `ingest_weather_forecasts()` and `ingest_weather_history()`
+- [x] Store both the forecast and when it was fetched (to track forecast revisions)
+- [x] Backfill historical weather actuals for model context
 
 ### Milestone 4: Data Ingestion — Baltic/Nordic System Data
 
@@ -95,7 +96,7 @@ Implementation:
 
 **Note:** Some of this data overlaps with ENTSO-E. The TSO APIs are useful for near-real-time data (updated every few minutes) vs ENTSO-E (hourly/daily).
 
-### Milestone 5: Scheduling & Pipeline Orchestration
+### Milestone 5: Scheduling & Pipeline Orchestration ✅
 
 **Goal:** Automate data ingestion on a schedule.
 
@@ -103,13 +104,15 @@ Implementation:
   - Daily at 05:00 EET: pull latest day-ahead prices, generation forecasts, outages
   - Every 6 hours: update weather forecasts
   - Daily: backfill any gaps from previous days
-- [ ] Add basic logging and error handling
+- [x] Add basic logging and error handling
   - Log each ingestion run (source, date range, rows inserted, errors)
   - Alert on failure (email or log notification)
-- [ ] Data validation checks:
+- [x] Data validation checks:
   - No missing hours in price data
   - Prices within reasonable bounds (negative OK, but flag if < -500 or > 4000 EUR/MWh)
   - Wind forecasts not stale (check timestamp)
+- [x] Pipeline orchestration: `run_daily()`, `run_weather()`, `run_backfill()`
+- [x] CLI commands: `daily`, `weather`, `backfill`, `validate`
 
 **Decision: Airflow vs simple cron.**
 Airflow is overkill for MVP. A cron job calling a Python script is sufficient. Move to Airflow later if the DAG complexity grows.
@@ -158,7 +161,7 @@ Agent design:
 
 ### Milestone 8: Testing, Documentation & Polish
 
-- [ ] Integration tests: mock API responses, verify ingestion writes correct data
+- [x] Integration tests: mock API responses, verify ingestion writes correct data
 - [ ] Unit tests for spread calculation, similar-day matching logic
 - [ ] End-to-end test: seed DB with known data, run briefing generation, verify output references correct numbers
 - [ ] README with:
@@ -166,7 +169,7 @@ Agent design:
   - Setup instructions
   - Example briefing output
   - Screenshots or sample outputs
-- [ ] Clean up CLAUDE.md with actual build/test commands
+- [x] Clean up CLAUDE.md with actual build/test commands
 
 ---
 
