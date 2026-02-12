@@ -40,6 +40,23 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Claude model to use (default: claude-sonnet-4-20250514)",
     )
 
+    briefing_cmd = sub.add_parser("briefing", help="Generate a daily morning briefing")
+    briefing_cmd.add_argument(
+        "--date",
+        default=None,
+        help="Date to generate briefing for (YYYY-MM-DD, default: today)",
+    )
+    briefing_cmd.add_argument(
+        "--output",
+        default=None,
+        help="Output directory for Markdown file (default: briefings/)",
+    )
+    briefing_cmd.add_argument(
+        "--model",
+        default="claude-sonnet-4-20250514",
+        help="Claude model to use (default: claude-sonnet-4-20250514)",
+    )
+
     return parser.parse_args(argv)
 
 
@@ -102,6 +119,39 @@ def main(argv: list[str] | None = None) -> int:
                 result.input_tokens,
                 result.output_tokens,
                 len(result.tool_calls),
+            )
+        finally:
+            con.close()
+
+    elif args.command == "briefing":
+        from grid_signals.briefing import generate_briefing
+        from grid_signals.db.connection import get_connection
+        from grid_signals.db.schema import create_tables
+
+        target_date = None
+        if args.date:
+            target_date = datetime.strptime(args.date, "%Y-%m-%d").date()
+
+        output_dir = Path(args.output) if args.output else None
+
+        con = get_connection(db_path)
+        try:
+            create_tables(con)
+            result = generate_briefing(
+                con,
+                target_date=target_date,
+                output_dir=output_dir,
+                model=args.model,
+            )
+            print(result.content)
+            logger = logging.getLogger(__name__)
+            if result.output_path:
+                logger.info("Briefing saved to %s", result.output_path)
+            logger.info(
+                "tokens: %d in / %d out, tool calls: %d",
+                result.agent_result.input_tokens,
+                result.agent_result.output_tokens,
+                len(result.agent_result.tool_calls),
             )
         finally:
             con.close()
