@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+import anthropic
 import duckdb
 
 from grid_signals.agent.loop import Agent, AgentResult, DEFAULT_MODEL, DEFAULT_MAX_TURNS
@@ -79,6 +80,7 @@ def generate_briefing(
     output_dir: Path | None = DEFAULT_OUTPUT_DIR,
     model: str = DEFAULT_MODEL,
     max_turns: int = DEFAULT_MAX_TURNS,
+    client: anthropic.Anthropic | None = None,
 ) -> BriefingResult:
     """Generate a daily briefing by running the agent with a structured prompt.
 
@@ -88,6 +90,7 @@ def generate_briefing(
         output_dir: Directory to save the Markdown file. None to skip saving.
         model: Claude model to use.
         max_turns: Maximum agent turns.
+        client: Anthropic client (optional, for testing).
 
     Returns:
         BriefingResult with the briefing content and metadata.
@@ -98,7 +101,7 @@ def generate_briefing(
     prompt = build_briefing_prompt(target_date)
     logger.info("Generating briefing for %s", target_date.isoformat())
 
-    agent = Agent(con, model=model, max_turns=max_turns)
+    agent = Agent(con, client=client, model=model, max_turns=max_turns)
     agent_result = agent.run(prompt)
 
     logger.info(

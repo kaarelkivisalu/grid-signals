@@ -164,7 +164,7 @@ Agent design:
 
 - [x] Integration tests: mock API responses, verify ingestion writes correct data
 - [x] Unit tests for spread calculation, similar-day matching logic
-- [ ] End-to-end test: seed DB with known data, run briefing generation, verify output references correct numbers
+- [x] End-to-end test: seed DB with known data, run briefing generation, verify output references correct numbers
 - [ ] README with:
   - Architecture diagram
   - Setup instructions
