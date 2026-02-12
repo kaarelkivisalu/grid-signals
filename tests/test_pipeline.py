@@ -76,7 +76,7 @@ class TestPriceCompleteness:
         )
         assert len(results) == 1
         assert results[0].passed is False
-        assert "10 hours" in results[0].detail
+        assert "10 intervals" in results[0].detail
 
     def test_pass_23_hours_dst(self, con):
         """23 hours is valid (DST spring-forward)."""
@@ -95,12 +95,32 @@ class TestPriceCompleteness:
         )
         assert results[0].passed is True
 
+    def test_pass_96_quarters(self, con):
+        """96 quarter-hourly intervals is a complete day at 15-min resolution."""
+        rows = [
+            DayAheadPrice(
+                zone=BiddingZone.EE,
+                timestamp=datetime(2024, 1, 15, h, m, tzinfo=UTC),
+                price_eur_mwh=50.0,
+            )
+            for h in range(24)
+            for m in (0, 15, 30, 45)
+        ]
+        insert_day_ahead_prices(con, rows)
+
+        results = validate_price_completeness(
+            con, BiddingZone.EE, datetime(2024, 1, 15, tzinfo=UTC)
+        )
+        assert len(results) == 1
+        assert results[0].passed is True
+        assert "15min" in results[0].detail
+
     def test_fail_empty_day(self, con):
         results = validate_price_completeness(
             con, BiddingZone.EE, datetime(2024, 1, 15, tzinfo=UTC)
         )
         assert results[0].passed is False
-        assert "0 hours" in results[0].detail
+        assert "0 intervals" in results[0].detail
 
 
 # ---------------------------------------------------------------------------

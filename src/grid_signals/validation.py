@@ -25,29 +25,63 @@ def validate_price_completeness(
     zone: BiddingZone,
     date: datetime,
 ) -> list[ValidationResult]:
-    """Check that 24 hourly prices exist for the given zone and date.
+    """Check that prices cover the full day for the given zone.
 
-    Accepts 23 or 25 hours to account for DST transitions.
+    Detects resolution (hourly or 15-min) from the data itself by checking
+    the minimum gap between consecutive timestamps. Expects:
+    - Hourly (60 min): 23-25 intervals (DST transitions)
+    - Quarter-hourly (15 min): 92-100 intervals (DST transitions)
     """
     start = date.replace(hour=0, minute=0, second=0, microsecond=0)
     end = start + timedelta(days=1)
 
     row = con.execute(
         """
-        SELECT COUNT(*) AS cnt
-        FROM day_ahead_prices
-        WHERE zone = ? AND timestamp >= ? AND timestamp < ?
+        SELECT
+            COUNT(*) AS cnt,
+            MIN(gap_min) AS min_gap
+        FROM (
+            SELECT
+                EXTRACT(EPOCH FROM (timestamp - LAG(timestamp) OVER (ORDER BY timestamp))) / 60
+                    AS gap_min
+            FROM day_ahead_prices
+            WHERE zone = ? AND timestamp >= ? AND timestamp < ?
+        )
+        WHERE gap_min IS NOT NULL
         """,
         [zone.value, start, end],
     ).fetchone()
-    count = row[0] if row else 0
+    # cnt here is number of gaps = intervals - 1
+    total_rows_row = con.execute(
+        "SELECT COUNT(*) FROM day_ahead_prices WHERE zone = ? AND timestamp >= ? AND timestamp < ?",
+        [zone.value, start, end],
+    ).fetchone()
+    count = total_rows_row[0] if total_rows_row else 0
+    min_gap = row[1] if row and row[1] is not None else None
 
-    passed = count in (23, 24, 25)
+    if count == 0:
+        return [
+            ValidationResult(
+                check=f"price_completeness:{zone.value}",
+                passed=False,
+                detail="0 intervals found",
+            )
+        ]
+
+    # Detect resolution from the smallest gap
+    if min_gap is not None and min_gap <= 15:
+        resolution = "15min"
+        expected_min, expected_max = 92, 100
+    else:
+        resolution = "hourly"
+        expected_min, expected_max = 23, 25
+
+    passed = expected_min <= count <= expected_max
     return [
         ValidationResult(
             check=f"price_completeness:{zone.value}",
             passed=passed,
-            detail=f"{count} hours found (expected 23-25)",
+            detail=f"{count} intervals ({resolution}), expected {expected_min}-{expected_max}",
         )
     ]
 
