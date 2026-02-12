@@ -165,11 +165,11 @@ Agent design:
 - [x] Integration tests: mock API responses, verify ingestion writes correct data
 - [x] Unit tests for spread calculation, similar-day matching logic
 - [x] End-to-end test: seed DB with known data, run briefing generation, verify output references correct numbers
-- [ ] README with:
+- [x] README with:
   - Architecture diagram
   - Setup instructions
   - Example briefing output
-  - Screenshots or sample outputs
+  - CLI usage examples
 - [x] Clean up CLAUDE.md with actual build/test commands
 
 ---
