@@ -160,7 +160,7 @@ Agent design:
 - [x] CLI command: `briefing` with `--date`, `--output`, `--model` options
 - [ ] Delivery mechanism to be decided (email, web UI, or other — see post-MVP directions)
 
-### Milestone 8: Testing, Documentation & Polish
+### Milestone 8: Testing, Documentation & Polish ✅
 
 - [x] Integration tests: mock API responses, verify ingestion writes correct data
 - [x] Unit tests for spread calculation, similar-day matching logic
