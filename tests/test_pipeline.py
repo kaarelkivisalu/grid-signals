@@ -22,6 +22,9 @@ from grid_signals.validation import (
     validate_weather_freshness,
 )
 
+_1H = timedelta(hours=1)
+_15M = timedelta(minutes=15)
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -47,7 +50,8 @@ class TestPriceCompleteness:
         rows = [
             DayAheadPrice(
                 zone=BiddingZone.EE,
-                timestamp=datetime(2024, 1, 15, h, tzinfo=UTC),
+                period_start=datetime(2024, 1, 15, h, tzinfo=UTC),
+                period_end=datetime(2024, 1, 15, h, tzinfo=UTC) + _1H,
                 price_eur_mwh=50.0,
             )
             for h in range(24)
@@ -64,7 +68,8 @@ class TestPriceCompleteness:
         rows = [
             DayAheadPrice(
                 zone=BiddingZone.EE,
-                timestamp=datetime(2024, 1, 15, h, tzinfo=UTC),
+                period_start=datetime(2024, 1, 15, h, tzinfo=UTC),
+                period_end=datetime(2024, 1, 15, h, tzinfo=UTC) + _1H,
                 price_eur_mwh=50.0,
             )
             for h in range(10)
@@ -83,7 +88,8 @@ class TestPriceCompleteness:
         rows = [
             DayAheadPrice(
                 zone=BiddingZone.EE,
-                timestamp=datetime(2024, 3, 31, h, tzinfo=UTC),
+                period_start=datetime(2024, 3, 31, h, tzinfo=UTC),
+                period_end=datetime(2024, 3, 31, h, tzinfo=UTC) + _1H,
                 price_eur_mwh=50.0,
             )
             for h in range(23)
@@ -100,7 +106,8 @@ class TestPriceCompleteness:
         rows = [
             DayAheadPrice(
                 zone=BiddingZone.EE,
-                timestamp=datetime(2024, 1, 15, h, m, tzinfo=UTC),
+                period_start=datetime(2024, 1, 15, h, m, tzinfo=UTC),
+                period_end=datetime(2024, 1, 15, h, m, tzinfo=UTC) + _15M,
                 price_eur_mwh=50.0,
             )
             for h in range(24)
@@ -133,7 +140,8 @@ class TestPriceBounds:
         rows = [
             DayAheadPrice(
                 zone=BiddingZone.FI,
-                timestamp=datetime(2024, 1, 15, h, tzinfo=UTC),
+                period_start=datetime(2024, 1, 15, h, tzinfo=UTC),
+                period_end=datetime(2024, 1, 15, h, tzinfo=UTC) + _1H,
                 price_eur_mwh=50.0 + h,
             )
             for h in range(24)
@@ -147,10 +155,12 @@ class TestPriceBounds:
         assert results[0].passed is True
 
     def test_fail_extreme_high(self, con):
+        ts = datetime(2024, 1, 15, 0, tzinfo=UTC)
         rows = [
             DayAheadPrice(
                 zone=BiddingZone.FI,
-                timestamp=datetime(2024, 1, 15, 0, tzinfo=UTC),
+                period_start=ts,
+                period_end=ts + _1H,
                 price_eur_mwh=5000.0,
             ),
         ]
@@ -163,10 +173,12 @@ class TestPriceBounds:
         assert "1 prices outside" in results[0].detail
 
     def test_fail_extreme_low(self, con):
+        ts = datetime(2024, 1, 15, 0, tzinfo=UTC)
         rows = [
             DayAheadPrice(
                 zone=BiddingZone.FI,
-                timestamp=datetime(2024, 1, 15, 0, tzinfo=UTC),
+                period_start=ts,
+                period_end=ts + _1H,
                 price_eur_mwh=-600.0,
             ),
         ]
@@ -198,7 +210,8 @@ class TestWeatherFreshness:
                 location_name="EE",
                 latitude=59.0,
                 longitude=25.0,
-                timestamp=now,
+                period_start=now,
+                period_end=now + timedelta(hours=1),
                 fetched_at=now - timedelta(hours=1),
                 wind_speed_100m_ms=8.0,
                 solar_irradiance_wm2=100.0,
@@ -218,7 +231,8 @@ class TestWeatherFreshness:
                 location_name="EE",
                 latitude=59.0,
                 longitude=25.0,
-                timestamp=old,
+                period_start=old,
+                period_end=old + timedelta(hours=1),
                 fetched_at=old,
                 wind_speed_100m_ms=8.0,
                 solar_irradiance_wm2=100.0,

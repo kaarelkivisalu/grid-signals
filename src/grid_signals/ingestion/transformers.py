@@ -1,6 +1,6 @@
 """Pure functions: pandas objects (entsoe-py output) → Pydantic models."""
 
-from datetime import UTC
+from datetime import UTC, timedelta
 
 import pandas as pd
 
@@ -15,18 +15,28 @@ from grid_signals.models import (
 )
 
 
+def _detect_interval(index: pd.DatetimeIndex) -> timedelta:
+    """Infer the period duration from a DatetimeIndex."""
+    if len(index) >= 2:
+        return (index[1] - index[0]).to_pytimedelta()
+    return timedelta(hours=1)  # safe fallback
+
+
 def transform_day_ahead_prices(
     series: pd.Series, zone: BiddingZone
 ) -> list[DayAheadPrice]:
     """Convert entsoe-py day-ahead price Series to DayAheadPrice models."""
+    interval = _detect_interval(series.index)
     rows: list[DayAheadPrice] = []
     for ts, price in series.items():
         if pd.isna(price):
             continue
+        period_start = ts.to_pydatetime().astimezone(UTC)
         rows.append(
             DayAheadPrice(
                 zone=zone,
-                timestamp=ts.to_pydatetime().astimezone(UTC),
+                period_start=period_start,
+                period_end=period_start + interval,
                 price_eur_mwh=float(price),
             )
         )
@@ -42,9 +52,10 @@ def transform_generation(
     Consumption" second level) and flat string columns.  Only keeps "Actual
     Aggregated" when a second level is present.
     """
+    interval = _detect_interval(df.index)
     rows: list[GenerationByType] = []
     for ts, row in df.iterrows():
-        ts_utc = ts.to_pydatetime().astimezone(UTC)
+        period_start = ts.to_pydatetime().astimezone(UTC)
         for col, value in row.items():
             if pd.isna(value):
                 continue
@@ -58,7 +69,8 @@ def transform_generation(
             rows.append(
                 GenerationByType(
                     zone=zone,
-                    timestamp=ts_utc,
+                    period_start=period_start,
+                    period_end=period_start + interval,
                     fuel_type=normalize_fuel_type(fuel_raw),
                     generation_mw=float(value),
                 )
@@ -74,15 +86,18 @@ def transform_load(
     The DataFrame typically has a single column; we sum across columns
     if there happen to be multiple.
     """
+    interval = _detect_interval(df.index)
     rows: list[TotalLoad] = []
     for ts, row in df.iterrows():
         total = row.sum()
         if pd.isna(total):
             continue
+        period_start = ts.to_pydatetime().astimezone(UTC)
         rows.append(
             TotalLoad(
                 zone=zone,
-                timestamp=ts.to_pydatetime().astimezone(UTC),
+                period_start=period_start,
+                period_end=period_start + interval,
                 load_mw=float(total),
                 is_forecast=is_forecast,
             )
@@ -94,15 +109,18 @@ def transform_cross_border_flows(
     series: pd.Series, from_zone: BiddingZone, to_zone: BiddingZone
 ) -> list[CrossBorderFlow]:
     """Convert entsoe-py cross-border flow Series to CrossBorderFlow models."""
+    interval = _detect_interval(series.index)
     rows: list[CrossBorderFlow] = []
     for ts, flow in series.items():
         if pd.isna(flow):
             continue
+        period_start = ts.to_pydatetime().astimezone(UTC)
         rows.append(
             CrossBorderFlow(
                 from_zone=from_zone,
                 to_zone=to_zone,
-                timestamp=ts.to_pydatetime().astimezone(UTC),
+                period_start=period_start,
+                period_end=period_start + interval,
                 flow_mw=float(flow),
             )
         )
@@ -139,13 +157,13 @@ def transform_outages(
         available = float(r.get("available_capacity", 0) or 0)
         unavailable = nominal - available
 
-        end_time = r.get("end")
-        if pd.isna(end_time):
-            end_time = None
+        period_end = r.get("end")
+        if pd.isna(period_end):
+            period_end = None
         else:
-            end_time = pd.Timestamp(end_time).to_pydatetime().astimezone(UTC)
+            period_end = pd.Timestamp(period_end).to_pydatetime().astimezone(UTC)
 
-        start_time = pd.Timestamp(r["start"]).to_pydatetime().astimezone(UTC)
+        period_start = pd.Timestamp(r["start"]).to_pydatetime().astimezone(UTC)
 
         rows.append(
             Outage(
@@ -156,8 +174,8 @@ def transform_outages(
                 ),
                 outage_type=outage_type,
                 unavailable_mw=unavailable,
-                start_time=start_time,
-                end_time=end_time,
+                period_start=period_start,
+                period_end=period_end,
                 message_id=str(r["mrid"]),
             )
         )

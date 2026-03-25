@@ -6,7 +6,7 @@ references correct numbers from the seed data.
 """
 
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import MagicMock
 
 import duckdb
@@ -65,11 +65,13 @@ def con():
 def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
     day = datetime(2024, 3, 15, tzinfo=UTC)
 
+    _1H = timedelta(hours=1)
     # Prices: EE 50..96, FI 40..86
     insert_day_ahead_prices(con, [
         DayAheadPrice(
             zone=BiddingZone.EE,
-            timestamp=datetime(2024, 3, 15, h, tzinfo=UTC),
+            period_start=datetime(2024, 3, 15, h, tzinfo=UTC),
+            period_end=datetime(2024, 3, 15, h, tzinfo=UTC) + _1H,
             price_eur_mwh=50.0 + h * 2,
         )
         for h in range(24)
@@ -77,23 +79,27 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
     insert_day_ahead_prices(con, [
         DayAheadPrice(
             zone=BiddingZone.FI,
-            timestamp=datetime(2024, 3, 15, h, tzinfo=UTC),
+            period_start=datetime(2024, 3, 15, h, tzinfo=UTC),
+            period_end=datetime(2024, 3, 15, h, tzinfo=UTC) + _1H,
             price_eur_mwh=40.0 + h * 2,
         )
         for h in range(24)
     ])
 
     # Generation mix
+    ts = datetime(2024, 3, 15, 12, tzinfo=UTC)
     insert_generation_by_type(con, [
         GenerationByType(
             zone=BiddingZone.EE,
-            timestamp=datetime(2024, 3, 15, 12, tzinfo=UTC),
+            period_start=ts,
+            period_end=ts + _1H,
             fuel_type="oil_shale",
             generation_mw=750.0,
         ),
         GenerationByType(
             zone=BiddingZone.EE,
-            timestamp=datetime(2024, 3, 15, 12, tzinfo=UTC),
+            period_start=ts,
+            period_end=ts + _1H,
             fuel_type="wind_onshore",
             generation_mw=200.0,
         ),
@@ -103,7 +109,8 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
     insert_total_load(con, [
         TotalLoad(
             zone=BiddingZone.EE,
-            timestamp=datetime(2024, 3, 15, h, tzinfo=UTC),
+            period_start=datetime(2024, 3, 15, h, tzinfo=UTC),
+            period_end=datetime(2024, 3, 15, h, tzinfo=UTC) + _1H,
             load_mw=950.0 + h * 10,
             is_forecast=True,
         )
@@ -115,7 +122,8 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
         CrossBorderFlow(
             from_zone=BiddingZone.FI,
             to_zone=BiddingZone.EE,
-            timestamp=datetime(2024, 3, 15, h, tzinfo=UTC),
+            period_start=datetime(2024, 3, 15, h, tzinfo=UTC),
+            period_end=datetime(2024, 3, 15, h, tzinfo=UTC) + _1H,
             flow_mw=500.0,
         )
         for h in range(24)
@@ -129,8 +137,8 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
             fuel_type="nuclear",
             outage_type="planned",
             unavailable_mw=OUTAGE_MW,
-            start_time=datetime(2024, 3, 10, tzinfo=UTC),
-            end_time=datetime(2024, 3, 20, tzinfo=UTC),
+            period_start=datetime(2024, 3, 10, tzinfo=UTC),
+            period_end=datetime(2024, 3, 20, tzinfo=UTC),
             message_id="REMIT-E2E-001",
         ),
     ])
@@ -141,7 +149,8 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
             location_name="EE_tallinn",
             latitude=59.0,
             longitude=25.0,
-            timestamp=datetime(2024, 3, 15, h, tzinfo=UTC),
+            period_start=datetime(2024, 3, 15, h, tzinfo=UTC),
+            period_end=datetime(2024, 3, 15, h, tzinfo=UTC) + _1H,
             fetched_at=day,
             wind_speed_100m_ms=WIND_SPEED,
             solar_irradiance_wm2=120.0,

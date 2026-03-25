@@ -27,37 +27,19 @@ def validate_price_completeness(
 ) -> list[ValidationResult]:
     """Check that prices cover the full day for the given zone.
 
-    Detects resolution (hourly or 15-min) from the data itself by checking
-    the minimum gap between consecutive timestamps. Expects:
+    Detects resolution (hourly or 15-min) directly from period_end - period_start.
+    Expects:
     - Hourly (60 min): 23-25 intervals (DST transitions)
     - Quarter-hourly (15 min): 92-100 intervals (DST transitions)
     """
     start = date.replace(hour=0, minute=0, second=0, microsecond=0)
     end = start + timedelta(days=1)
 
-    row = con.execute(
-        """
-        SELECT
-            COUNT(*) AS cnt,
-            MIN(gap_min) AS min_gap
-        FROM (
-            SELECT
-                EXTRACT(EPOCH FROM (timestamp - LAG(timestamp) OVER (ORDER BY timestamp))) / 60
-                    AS gap_min
-            FROM day_ahead_prices
-            WHERE zone = ? AND timestamp >= ? AND timestamp < ?
-        )
-        WHERE gap_min IS NOT NULL
-        """,
-        [zone.value, start, end],
-    ).fetchone()
-    # cnt here is number of gaps = intervals - 1
     total_rows_row = con.execute(
-        "SELECT COUNT(*) FROM day_ahead_prices WHERE zone = ? AND timestamp >= ? AND timestamp < ?",
+        "SELECT COUNT(*) FROM day_ahead_prices WHERE zone = ? AND period_start >= ? AND period_start < ?",
         [zone.value, start, end],
     ).fetchone()
     count = total_rows_row[0] if total_rows_row else 0
-    min_gap = row[1] if row and row[1] is not None else None
 
     if count == 0:
         return [
@@ -68,8 +50,18 @@ def validate_price_completeness(
             )
         ]
 
-    # Detect resolution from the smallest gap
-    if min_gap is not None and min_gap <= 15:
+    # Detect resolution from the period duration
+    interval_row = con.execute(
+        """
+        SELECT MIN((EXTRACT(EPOCH FROM (period_end - period_start)) / 60)::INT) AS min_interval_min
+        FROM day_ahead_prices
+        WHERE zone = ? AND period_start >= ? AND period_start < ?
+        """,
+        [zone.value, start, end],
+    ).fetchone()
+    min_interval = interval_row[0] if interval_row and interval_row[0] is not None else 60
+
+    if min_interval <= 15:
         resolution = "15min"
         expected_min, expected_max = 92, 100
     else:
@@ -99,7 +91,7 @@ def validate_price_bounds(
         """
         SELECT COUNT(*) AS cnt
         FROM day_ahead_prices
-        WHERE zone = ? AND timestamp >= ? AND timestamp < ?
+        WHERE zone = ? AND period_start >= ? AND period_start < ?
           AND (price_eur_mwh < -500 OR price_eur_mwh > 4000)
         """,
         [zone.value, start, end],

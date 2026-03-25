@@ -1,6 +1,6 @@
 """Tests for the daily briefing generation module."""
 
-from datetime import date, datetime, UTC
+from datetime import date, datetime, timedelta, UTC
 from unittest.mock import MagicMock
 
 import duckdb
@@ -31,7 +31,8 @@ def con():
     insert_day_ahead_prices(c, [
         DayAheadPrice(
             zone=BiddingZone.EE,
-            timestamp=datetime(2024, 6, 10, h, tzinfo=UTC),
+            period_start=datetime(2024, 6, 10, h, tzinfo=UTC),
+            period_end=datetime(2024, 6, 10, h, tzinfo=UTC) + timedelta(hours=1),
             price_eur_mwh=45.0 + h,
         )
         for h in range(24)

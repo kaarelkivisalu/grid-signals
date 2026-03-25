@@ -9,34 +9,38 @@ class DayAheadPrice(BaseModel):
     """Hourly day-ahead electricity price for a bidding zone."""
 
     zone: BiddingZone
-    timestamp: datetime  # UTC, start of the hour
+    period_start: datetime  # UTC, inclusive
+    period_end: datetime  # UTC, exclusive
     price_eur_mwh: float
 
 
 class GenerationByType(BaseModel):
-    """Hourly aggregated generation for a single fuel type in a zone."""
+    """Generation for a single fuel type in a zone (hourly or 15-min)."""
 
     zone: BiddingZone
-    timestamp: datetime  # UTC
+    period_start: datetime  # UTC, inclusive
+    period_end: datetime  # UTC, exclusive
     fuel_type: str  # e.g. "wind_onshore", "solar", "nuclear", "gas", "oil_shale", "hydro"
     generation_mw: float
 
 
 class TotalLoad(BaseModel):
-    """Hourly total load (actual or forecast) for a zone."""
+    """Total load (actual or forecast) for a zone (hourly or 15-min)."""
 
     zone: BiddingZone
-    timestamp: datetime  # UTC
+    period_start: datetime  # UTC, inclusive
+    period_end: datetime  # UTC, exclusive
     load_mw: float
     is_forecast: bool
 
 
 class CrossBorderFlow(BaseModel):
-    """Hourly scheduled or actual cross-border flow between two zones."""
+    """Scheduled or actual cross-border flow between two zones (hourly or 15-min)."""
 
     from_zone: BiddingZone
     to_zone: BiddingZone
-    timestamp: datetime  # UTC
+    period_start: datetime  # UTC, inclusive
+    period_end: datetime  # UTC, exclusive
     flow_mw: float  # positive = from → to
 
 
@@ -48,6 +52,6 @@ class Outage(BaseModel):
     fuel_type: str
     outage_type: str  # "planned" or "unplanned"
     unavailable_mw: float
-    start_time: datetime  # UTC
-    end_time: datetime | None  # UTC, None if open-ended
+    period_start: datetime  # UTC
+    period_end: datetime | None  # UTC, None if open-ended
     message_id: str  # REMIT message ID for deduplication

@@ -90,7 +90,8 @@ class TestTransformWeatherResponse:
         assert rows[0].location_name == "TEST_loc"
         assert rows[0].latitude == 56.0
         assert rows[0].longitude == 14.0
-        assert rows[0].timestamp == datetime(2024, 7, 1, 0, tzinfo=UTC)
+        assert rows[0].period_start == datetime(2024, 7, 1, 0, tzinfo=UTC)
+        assert rows[0].period_end == datetime(2024, 7, 1, 1, tzinfo=UTC)
         assert rows[0].fetched_at == fetched_at
         assert rows[0].wind_speed_100m_ms == 8.5
         assert rows[0].temperature_c == 18.0
@@ -132,7 +133,7 @@ class TestTransformWeatherResponse:
         rows = transform_weather_response(
             data, SAMPLE_LOCATION, datetime(2024, 7, 1, tzinfo=UTC)
         )
-        assert rows[0].timestamp.tzinfo == UTC
+        assert rows[0].period_start.tzinfo == UTC
 
 
 # ---------------------------------------------------------------------------

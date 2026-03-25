@@ -25,8 +25,8 @@ TOOLS: list[dict] = [
     {
         "name": "get_day_ahead_prices",
         "description": (
-            "Get hourly day-ahead electricity prices for a bidding zone. "
-            "Returns price_eur_mwh for each hour in the range."
+            "Get day-ahead electricity prices for a bidding zone. "
+            "Returns price_eur_mwh with period_start/period_end for each interval in the range."
         ),
         "input_schema": {
             "type": "object",
@@ -306,16 +306,16 @@ def _calculate_spread(
     prices_1 = get_day_ahead_prices(con, BiddingZone(zone_1), start, end)
     prices_2 = get_day_ahead_prices(con, BiddingZone(zone_2), start, end)
 
-    lookup_2 = {p.timestamp: p.price_eur_mwh for p in prices_2}
+    lookup_2 = {p.period_start: p.price_eur_mwh for p in prices_2}
 
     hourly: list[dict] = []
     for p in prices_1:
-        if p.timestamp in lookup_2:
-            spread = round(p.price_eur_mwh - lookup_2[p.timestamp], 2)
+        if p.period_start in lookup_2:
+            spread = round(p.price_eur_mwh - lookup_2[p.period_start], 2)
             hourly.append({
-                "timestamp": p.timestamp.isoformat(),
+                "period_start": p.period_start.isoformat(),
                 "zone_1_price": p.price_eur_mwh,
-                "zone_2_price": lookup_2[p.timestamp],
+                "zone_2_price": lookup_2[p.period_start],
                 "spread": spread,
             })
 
@@ -358,14 +358,14 @@ def _get_historical_similar_days(
         """
         WITH daily_weather AS (
             SELECT
-                date_trunc('day', timestamp) AS day,
+                date_trunc('day', period_start) AS day,
                 avg(wind_speed_100m_ms) AS avg_wind,
                 avg(temperature_c) AS avg_temp
             FROM weather_forecasts
             WHERE location_name = ?
               AND wind_speed_100m_ms IS NOT NULL
               AND temperature_c IS NOT NULL
-            GROUP BY date_trunc('day', timestamp)
+            GROUP BY date_trunc('day', period_start)
         ),
         similar_days AS (
             SELECT day, avg_wind, avg_temp
@@ -375,13 +375,13 @@ def _get_historical_similar_days(
         ),
         daily_prices AS (
             SELECT
-                date_trunc('day', timestamp) AS day,
+                date_trunc('day', period_start) AS day,
                 avg(price_eur_mwh) AS avg_price,
                 min(price_eur_mwh) AS min_price,
                 max(price_eur_mwh) AS max_price
             FROM day_ahead_prices
             WHERE zone = ?
-            GROUP BY date_trunc('day', timestamp)
+            GROUP BY date_trunc('day', period_start)
         )
         SELECT
             s.day, s.avg_wind, s.avg_temp,

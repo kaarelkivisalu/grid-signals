@@ -82,7 +82,8 @@ class TestTransformDayAheadPrices:
         assert len(rows) == 3
         assert rows[0].price_eur_mwh == 50.0
         assert rows[0].zone == BiddingZone.EE
-        assert rows[0].timestamp == datetime(2024, 1, 1, 0, tzinfo=UTC)
+        assert rows[0].period_start == datetime(2024, 1, 1, 0, tzinfo=UTC)
+        assert rows[0].period_end == datetime(2024, 1, 1, 1, tzinfo=UTC)
 
     def test_nan_skipped(self):
         idx = pd.date_range("2024-01-01", periods=3, freq="h", tz="UTC")
@@ -96,7 +97,7 @@ class TestTransformDayAheadPrices:
         rows = transform_day_ahead_prices(series, BiddingZone.EE)
         assert len(rows) == 2
         # Tallinn is UTC+2 in winter
-        assert rows[0].timestamp == datetime(2023, 12, 31, 22, tzinfo=UTC)
+        assert rows[0].period_start == datetime(2023, 12, 31, 22, tzinfo=UTC)
 
 
 class TestTransformGeneration:
@@ -222,7 +223,7 @@ class TestTransformOutages:
         df = self._make_outage_df()
         rows = transform_outages(df, BiddingZone.FI)
         um002 = next(r for r in rows if r.message_id == "UM-002")
-        assert um002.end_time is None
+        assert um002.period_end is None
 
     def test_empty_dataframe(self):
         df = pd.DataFrame()

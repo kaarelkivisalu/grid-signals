@@ -1,6 +1,6 @@
 """Tests for DB schema creation and data access layer."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import duckdb
 import pytest
@@ -29,6 +29,8 @@ from grid_signals.models import (
     TotalLoad,
     WeatherForecast,
 )
+
+_1H = timedelta(hours=1)
 
 
 @pytest.fixture
@@ -71,7 +73,12 @@ def test_all_tables_exist(con):
 
 def test_insert_and_query_day_ahead_prices(con):
     rows = [
-        DayAheadPrice(zone=BiddingZone.EE, timestamp=datetime(2024, 1, 1, h, tzinfo=UTC), price_eur_mwh=50.0 + h)
+        DayAheadPrice(
+            zone=BiddingZone.EE,
+            period_start=datetime(2024, 1, 1, h, tzinfo=UTC),
+            period_end=datetime(2024, 1, 1, h, tzinfo=UTC) + _1H,
+            price_eur_mwh=50.0 + h,
+        )
         for h in range(24)
     ]
     assert insert_day_ahead_prices(con, rows) == 24
@@ -88,8 +95,8 @@ def test_insert_and_query_day_ahead_prices(con):
 
 def test_upsert_day_ahead_prices(con):
     ts = datetime(2024, 1, 1, 12, tzinfo=UTC)
-    insert_day_ahead_prices(con, [DayAheadPrice(zone=BiddingZone.FI, timestamp=ts, price_eur_mwh=40.0)])
-    insert_day_ahead_prices(con, [DayAheadPrice(zone=BiddingZone.FI, timestamp=ts, price_eur_mwh=42.0)])
+    insert_day_ahead_prices(con, [DayAheadPrice(zone=BiddingZone.FI, period_start=ts, period_end=ts + _1H, price_eur_mwh=40.0)])
+    insert_day_ahead_prices(con, [DayAheadPrice(zone=BiddingZone.FI, period_start=ts, period_end=ts + _1H, price_eur_mwh=42.0)])
 
     result = get_day_ahead_prices(con, BiddingZone.FI, datetime(2024, 1, 1, tzinfo=UTC), datetime(2024, 1, 2, tzinfo=UTC))
     assert len(result) == 1
@@ -102,8 +109,8 @@ def test_upsert_day_ahead_prices(con):
 def test_insert_and_query_generation(con):
     ts = datetime(2024, 6, 15, 12, tzinfo=UTC)
     rows = [
-        GenerationByType(zone=BiddingZone.EE, timestamp=ts, fuel_type="wind_onshore", generation_mw=320.0),
-        GenerationByType(zone=BiddingZone.EE, timestamp=ts, fuel_type="oil_shale", generation_mw=800.0),
+        GenerationByType(zone=BiddingZone.EE, period_start=ts, period_end=ts + _1H, fuel_type="wind_onshore", generation_mw=320.0),
+        GenerationByType(zone=BiddingZone.EE, period_start=ts, period_end=ts + _1H, fuel_type="oil_shale", generation_mw=800.0),
     ]
     insert_generation_by_type(con, rows)
 
@@ -121,8 +128,8 @@ def test_insert_and_query_generation(con):
 def test_insert_and_query_total_load(con):
     ts = datetime(2024, 1, 1, 8, tzinfo=UTC)
     rows = [
-        TotalLoad(zone=BiddingZone.LT, timestamp=ts, load_mw=1200.0, is_forecast=True),
-        TotalLoad(zone=BiddingZone.LT, timestamp=ts, load_mw=1180.0, is_forecast=False),
+        TotalLoad(zone=BiddingZone.LT, period_start=ts, period_end=ts + _1H, load_mw=1200.0, is_forecast=True),
+        TotalLoad(zone=BiddingZone.LT, period_start=ts, period_end=ts + _1H, load_mw=1180.0, is_forecast=False),
     ]
     insert_total_load(con, rows)
 
@@ -140,7 +147,7 @@ def test_insert_and_query_total_load(con):
 def test_insert_and_query_flows(con):
     ts = datetime(2024, 3, 1, 10, tzinfo=UTC)
     insert_cross_border_flows(con, [
-        CrossBorderFlow(from_zone=BiddingZone.FI, to_zone=BiddingZone.EE, timestamp=ts, flow_mw=450.0),
+        CrossBorderFlow(from_zone=BiddingZone.FI, to_zone=BiddingZone.EE, period_start=ts, period_end=ts + _1H, flow_mw=450.0),
     ])
 
     result = get_cross_border_flows(
@@ -159,15 +166,15 @@ def test_insert_and_query_outages(con):
         Outage(
             zone=BiddingZone.FI, asset_name="Olkiluoto 2", fuel_type="nuclear",
             outage_type="planned", unavailable_mw=890.0,
-            start_time=datetime(2024, 5, 1, tzinfo=UTC),
-            end_time=datetime(2024, 5, 15, tzinfo=UTC),
+            period_start=datetime(2024, 5, 1, tzinfo=UTC),
+            period_end=datetime(2024, 5, 15, tzinfo=UTC),
             message_id="REMIT-001",
         ),
         Outage(
             zone=BiddingZone.EE, asset_name="Narva Unit 8", fuel_type="oil_shale",
             outage_type="unplanned", unavailable_mw=300.0,
-            start_time=datetime(2024, 5, 3, tzinfo=UTC),
-            end_time=None,
+            period_start=datetime(2024, 5, 3, tzinfo=UTC),
+            period_end=None,
             message_id="REMIT-002",
         ),
     ])
@@ -188,17 +195,17 @@ def test_upsert_outage(con):
     o = Outage(
         zone=BiddingZone.FI, asset_name="Olkiluoto 2", fuel_type="nuclear",
         outage_type="planned", unavailable_mw=890.0,
-        start_time=datetime(2024, 5, 1, tzinfo=UTC),
-        end_time=datetime(2024, 5, 15, tzinfo=UTC),
+        period_start=datetime(2024, 5, 1, tzinfo=UTC),
+        period_end=datetime(2024, 5, 15, tzinfo=UTC),
         message_id="REMIT-001",
     )
     insert_outages(con, [o])
-    o_updated = o.model_copy(update={"end_time": datetime(2024, 5, 20, tzinfo=UTC)})
+    o_updated = o.model_copy(update={"period_end": datetime(2024, 5, 20, tzinfo=UTC)})
     insert_outages(con, [o_updated])
 
     result = get_outages(con, BiddingZone.FI)
     assert len(result) == 1
-    assert result[0].end_time == datetime(2024, 5, 20, tzinfo=UTC)
+    assert result[0].period_end == datetime(2024, 5, 20, tzinfo=UTC)
 
 
 # ---- weather ----
@@ -209,7 +216,9 @@ def test_insert_and_query_weather(con):
     rows = [
         WeatherForecast(
             location_name="SE4_skane", latitude=56.0, longitude=14.0,
-            timestamp=datetime(2024, 7, 1, h, tzinfo=UTC), fetched_at=now,
+            period_start=datetime(2024, 7, 1, h, tzinfo=UTC),
+            period_end=datetime(2024, 7, 1, h, tzinfo=UTC) + _1H,
+            fetched_at=now,
             wind_speed_100m_ms=8.5, solar_irradiance_wm2=400.0, temperature_c=18.0,
         )
         for h in range(6, 18)
@@ -229,12 +238,14 @@ def test_weather_returns_latest_forecast(con):
     ts = datetime(2024, 7, 1, 12, tzinfo=UTC)
     old_fc = WeatherForecast(
         location_name="FI_inland", latitude=61.5, longitude=24.0,
-        timestamp=ts, fetched_at=datetime(2024, 6, 30, 6, tzinfo=UTC),
+        period_start=ts, period_end=ts + _1H,
+        fetched_at=datetime(2024, 6, 30, 6, tzinfo=UTC),
         wind_speed_100m_ms=5.0, solar_irradiance_wm2=None, temperature_c=15.0,
     )
     new_fc = WeatherForecast(
         location_name="FI_inland", latitude=61.5, longitude=24.0,
-        timestamp=ts, fetched_at=datetime(2024, 7, 1, 6, tzinfo=UTC),
+        period_start=ts, period_end=ts + _1H,
+        fetched_at=datetime(2024, 7, 1, 6, tzinfo=UTC),
         wind_speed_100m_ms=7.2, solar_irradiance_wm2=None, temperature_c=16.0,
     )
     insert_weather_forecasts(con, [old_fc, new_fc])

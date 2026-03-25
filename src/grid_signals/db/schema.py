@@ -9,37 +9,41 @@ DDL_STATEMENTS: list[str] = [
     # --- energy ---
     """
     CREATE TABLE IF NOT EXISTS day_ahead_prices (
-        zone        VARCHAR NOT NULL,
-        timestamp   TIMESTAMPTZ NOT NULL,
+        zone          VARCHAR NOT NULL,
+        period_start  TIMESTAMPTZ NOT NULL,
+        period_end    TIMESTAMPTZ NOT NULL,
         price_eur_mwh DOUBLE NOT NULL,
-        PRIMARY KEY (zone, timestamp)
+        PRIMARY KEY (zone, period_start)
     )
     """,
     """
     CREATE TABLE IF NOT EXISTS generation_by_type (
         zone          VARCHAR NOT NULL,
-        timestamp     TIMESTAMPTZ NOT NULL,
+        period_start  TIMESTAMPTZ NOT NULL,
+        period_end    TIMESTAMPTZ NOT NULL,
         fuel_type     VARCHAR NOT NULL,
         generation_mw DOUBLE NOT NULL,
-        PRIMARY KEY (zone, timestamp, fuel_type)
+        PRIMARY KEY (zone, period_start, fuel_type)
     )
     """,
     """
     CREATE TABLE IF NOT EXISTS total_load (
-        zone        VARCHAR NOT NULL,
-        timestamp   TIMESTAMPTZ NOT NULL,
-        load_mw     DOUBLE NOT NULL,
-        is_forecast BOOLEAN NOT NULL,
-        PRIMARY KEY (zone, timestamp, is_forecast)
+        zone         VARCHAR NOT NULL,
+        period_start TIMESTAMPTZ NOT NULL,
+        period_end   TIMESTAMPTZ NOT NULL,
+        load_mw      DOUBLE NOT NULL,
+        is_forecast  BOOLEAN NOT NULL,
+        PRIMARY KEY (zone, period_start, is_forecast)
     )
     """,
     """
     CREATE TABLE IF NOT EXISTS cross_border_flows (
-        from_zone VARCHAR NOT NULL,
-        to_zone   VARCHAR NOT NULL,
-        timestamp TIMESTAMPTZ NOT NULL,
-        flow_mw   DOUBLE NOT NULL,
-        PRIMARY KEY (from_zone, to_zone, timestamp)
+        from_zone    VARCHAR NOT NULL,
+        to_zone      VARCHAR NOT NULL,
+        period_start TIMESTAMPTZ NOT NULL,
+        period_end   TIMESTAMPTZ NOT NULL,
+        flow_mw      DOUBLE NOT NULL,
+        PRIMARY KEY (from_zone, to_zone, period_start)
     )
     """,
     """
@@ -50,8 +54,8 @@ DDL_STATEMENTS: list[str] = [
         fuel_type      VARCHAR NOT NULL,
         outage_type    VARCHAR NOT NULL,
         unavailable_mw DOUBLE NOT NULL,
-        start_time     TIMESTAMPTZ NOT NULL,
-        end_time       TIMESTAMPTZ
+        period_start   TIMESTAMPTZ NOT NULL,
+        period_end     TIMESTAMPTZ
     )
     """,
     # --- weather ---
@@ -60,12 +64,13 @@ DDL_STATEMENTS: list[str] = [
         location_name        VARCHAR NOT NULL,
         latitude             DOUBLE NOT NULL,
         longitude            DOUBLE NOT NULL,
-        timestamp            TIMESTAMPTZ NOT NULL,
+        period_start         TIMESTAMPTZ NOT NULL,
+        period_end           TIMESTAMPTZ NOT NULL,
         fetched_at           TIMESTAMPTZ NOT NULL,
         wind_speed_100m_ms   DOUBLE,
         solar_irradiance_wm2 DOUBLE,
         temperature_c        DOUBLE,
-        PRIMARY KEY (location_name, timestamp, fetched_at)
+        PRIMARY KEY (location_name, period_start, fetched_at)
     )
     """,
 ]

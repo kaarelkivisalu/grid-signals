@@ -1,7 +1,7 @@
 """Tests for the LLM agent: tool execution (real DB) and loop (mocked API)."""
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import duckdb
@@ -28,6 +28,8 @@ from grid_signals.models import (
     WeatherForecast,
 )
 
+_1H = timedelta(hours=1)
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -52,7 +54,8 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
     ee_prices = [
         DayAheadPrice(
             zone=BiddingZone.EE,
-            timestamp=datetime(2024, 1, 15, h, tzinfo=UTC),
+            period_start=datetime(2024, 1, 15, h, tzinfo=UTC),
+            period_end=datetime(2024, 1, 15, h, tzinfo=UTC) + _1H,
             price_eur_mwh=50.0 + h * 2,  # 50, 52, 54, ... 96
         )
         for h in range(24)
@@ -60,7 +63,8 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
     fi_prices = [
         DayAheadPrice(
             zone=BiddingZone.FI,
-            timestamp=datetime(2024, 1, 15, h, tzinfo=UTC),
+            period_start=datetime(2024, 1, 15, h, tzinfo=UTC),
+            period_end=datetime(2024, 1, 15, h, tzinfo=UTC) + _1H,
             price_eur_mwh=40.0 + h * 2,  # 40, 42, 44, ... 86
         )
         for h in range(24)
@@ -69,16 +73,19 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
     insert_day_ahead_prices(con, fi_prices)
 
     # Generation mix for EE
+    ts = datetime(2024, 1, 15, 12, tzinfo=UTC)
     insert_generation_by_type(con, [
         GenerationByType(
             zone=BiddingZone.EE,
-            timestamp=datetime(2024, 1, 15, 12, tzinfo=UTC),
+            period_start=ts,
+            period_end=ts + _1H,
             fuel_type="oil_shale",
             generation_mw=800.0,
         ),
         GenerationByType(
             zone=BiddingZone.EE,
-            timestamp=datetime(2024, 1, 15, 12, tzinfo=UTC),
+            period_start=ts,
+            period_end=ts + _1H,
             fuel_type="wind_onshore",
             generation_mw=150.0,
         ),
@@ -88,7 +95,8 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
     insert_total_load(con, [
         TotalLoad(
             zone=BiddingZone.EE,
-            timestamp=datetime(2024, 1, 15, h, tzinfo=UTC),
+            period_start=datetime(2024, 1, 15, h, tzinfo=UTC),
+            period_end=datetime(2024, 1, 15, h, tzinfo=UTC) + _1H,
             load_mw=900.0 + h * 10,
             is_forecast=True,
         )
@@ -96,11 +104,13 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
     ])
 
     # Cross-border flows FI->EE
+    ts2 = datetime(2024, 1, 15, 12, tzinfo=UTC)
     insert_cross_border_flows(con, [
         CrossBorderFlow(
             from_zone=BiddingZone.FI,
             to_zone=BiddingZone.EE,
-            timestamp=datetime(2024, 1, 15, 12, tzinfo=UTC),
+            period_start=ts2,
+            period_end=ts2 + _1H,
             flow_mw=450.0,
         ),
     ])
@@ -113,8 +123,8 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
             fuel_type="nuclear",
             outage_type="planned",
             unavailable_mw=890.0,
-            start_time=datetime(2024, 1, 10, tzinfo=UTC),
-            end_time=datetime(2024, 1, 20, tzinfo=UTC),
+            period_start=datetime(2024, 1, 10, tzinfo=UTC),
+            period_end=datetime(2024, 1, 20, tzinfo=UTC),
             message_id="REMIT-TEST-001",
         ),
     ])
@@ -126,7 +136,8 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
                 location_name="EE_tallinn",
                 latitude=59.0,
                 longitude=25.0,
-                timestamp=datetime(2024, 1, d, h, tzinfo=UTC),
+                period_start=datetime(2024, 1, d, h, tzinfo=UTC),
+                period_end=datetime(2024, 1, d, h, tzinfo=UTC) + _1H,
                 fetched_at=day,
                 wind_speed_100m_ms=7.0 + (d - 15) * 0.5,
                 solar_irradiance_wm2=50.0,
@@ -139,7 +150,8 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
     insert_day_ahead_prices(con, [
         DayAheadPrice(
             zone=BiddingZone.EE,
-            timestamp=datetime(2024, 1, 16, h, tzinfo=UTC),
+            period_start=datetime(2024, 1, 16, h, tzinfo=UTC),
+            period_end=datetime(2024, 1, 16, h, tzinfo=UTC) + _1H,
             price_eur_mwh=55.0 + h * 2,
         )
         for h in range(24)
