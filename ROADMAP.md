@@ -22,10 +22,11 @@ The MVP delivers two things: a reliable data pipeline that pulls from public ene
   - Wind speed and solar irradiance forecasts for key locations
 - [x] Set up DuckDB database with tables matching these schemas
 - [x] Write a thin data-access layer (Python functions that query DuckDB and return structured results)
+- [x] Rename timestamp columns to `period_start`/`period_end` (half-open intervals) across all tables — rows are now self-describing with respect to resolution (hourly or 15-min ISP); migration script included
 
 **Key decisions:**
 - Bidding zones in scope for MVP: EE, LV, LT, FI, SE4. Possibly SE3 for wind context.
-- Time granularity: hourly for prices/generation/load, daily for outages.
+- Time granularity: hourly for prices/generation/load, daily for outages; 15-min supported transparently.
 - DuckDB for storage — single-file, no server, fast analytical queries, good parquet support.
 
 ### Milestone 2: Data Ingestion — ENTSO-E ✅
