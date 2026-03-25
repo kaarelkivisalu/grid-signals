@@ -7,3 +7,5 @@ data/
 briefings/
 .pytest_cache/
 .envrc
+.env*
+!.env.example

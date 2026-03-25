@@ -6,12 +6,12 @@ Nordic-Baltic Energy Intelligence Agent. Automated market analysis powered by st
 
 ```
                          ┌──────────────┐
-                         │   CLI / Cron  │
+                         │   CLI / Cron │
                          └──────┬───────┘
                                 │
               ┌─────────────────┼─────────────────┐
-              │                 │                  │
-              ▼                 ▼                  ▼
+              │                 │                 │
+              ▼                 ▼                 ▼
      ┌────────────────┐ ┌─────────────┐  ┌────────────────┐
      │ Data Ingestion │ │   Briefing  │  │   Agent Chat   │
      │                │ │  Generator  │  │                │
@@ -24,8 +24,8 @@ Nordic-Baltic Energy Intelligence Agent. Automated market analysis powered by st
              │                 │                 │
              ▼                 ▼                 ▼
         ┌──────────────────────────────────────────┐
-        │              LLM Agent                    │
-        │  Claude API with 8 energy market tools    │
+        │              LLM Agent                   │
+        │  Claude API with 8 energy market tools   │
         └─────────────────┬────────────────────────┘
                           │
                           ▼
@@ -110,6 +110,7 @@ crontab crontab.example
 ```
 
 This schedules:
+
 - **05:00 EET** — daily data ingestion
 - **Every 6h** — weather forecast updates
 - **05:30 EET** — gap backfill (last 3 days)
@@ -120,30 +121,36 @@ This schedules:
 
 ```markdown
 ## Key Signal
+
 Finnish nuclear capacity remains constrained with Olkiluoto 2 (890 MW)
 offline until March 20, keeping FI prices elevated and driving imports
 via EstLink.
 
 ## Price Outlook
+
 Estonian day-ahead prices averaged 73.00 EUR/MWh, ranging from 50.00 to
 96.00 EUR/MWh. Finnish prices averaged 63.00 EUR/MWh, with FI
 consistently cheaper than EE by 10.00 EUR/MWh.
 
 ## Wind & Weather
+
 Wind speeds at EE_tallinn held steady at 8.5 m/s throughout the day,
 above typical March averages. Solar irradiance at 120 W/m2 with
 temperatures around 2.0°C.
 
 ## Outages
+
 Olkiluoto 2 (FI, nuclear, 890 MW) — planned outage through March 20.
 No new outage messages.
 
 ## Spreads
+
 EE-FI spread was a constant 10.00 EUR/MWh (EE more expensive),
 indicating persistent EstLink congestion. FI→EE flows at 500 MW near
 interconnector capacity.
 
 ## Watch List
+
 - Olkiluoto 2 return on March 20 — watch for schedule changes
 - Wind forecast evolution for SE4 and FI regions
 - EE-FI spread narrowing if FI wind picks up
@@ -157,13 +164,13 @@ uv run pytest tests/
 
 ## Tech stack
 
-| Component | Choice |
-|-----------|--------|
-| Language | Python 3.12+ |
-| Database | DuckDB |
-| ENTSO-E client | entsoe-py |
-| Weather data | Open-Meteo API |
-| LLM | Claude API (tool use) |
-| Scheduling | cron |
-| Testing | pytest |
-| Package mgmt | uv |
+| Component      | Choice                |
+| -------------- | --------------------- |
+| Language       | Python 3.12+          |
+| Database       | DuckDB                |
+| ENTSO-E client | entsoe-py             |
+| Weather data   | Open-Meteo API        |
+| LLM            | Claude API (tool use) |
+| Scheduling     | cron                  |
+| Testing        | pytest                |
+| Package mgmt   | uv                    |

@@ -17,7 +17,10 @@ from grid_signals.ingestion.entsoe import (
     ingest_total_load,
 )
 from grid_signals.ingestion.locations import LOCATIONS
-from grid_signals.ingestion.openmeteo import ingest_weather_forecasts, ingest_weather_history
+from grid_signals.ingestion.openmeteo import (
+    ingest_weather_forecasts,
+    ingest_weather_history,
+)
 from grid_signals.ingestion.weather_client import get_openmeteo_client
 from grid_signals.models.zones import BiddingZone
 
@@ -30,12 +33,10 @@ def run_daily(db_path: Path = DEFAULT_DB_PATH) -> int:
     Covers both day-ahead data and actuals for the previous day.
     Returns total rows inserted.
     """
-    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-    start = today - timedelta(days=1)
-    end = today + timedelta(days=1)
+    today = pd.Timestamp.utcnow().normalize()
+    start_ts = today - pd.Timedelta(days=1)
+    end_ts = today + pd.Timedelta(days=1)
 
-    start_ts = pd.Timestamp(start)
-    end_ts = pd.Timestamp(end)
     zones = list(BiddingZone)
 
     con = get_connection(db_path)
@@ -114,7 +115,9 @@ def run_backfill(
         logger.info("backfill: day_ahead_prices → %d rows", prices)
         total += prices
 
-        generation = ingest_generation_per_type(con, entsoe_client, zones, start_ts, end_ts)
+        generation = ingest_generation_per_type(
+            con, entsoe_client, zones, start_ts, end_ts
+        )
         logger.info("backfill: generation → %d rows", generation)
         total += generation
 
