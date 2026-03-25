@@ -40,47 +40,111 @@ CHUNK_DAYS = 30  # ENTSO-E works well with ~1 month chunks
 zones = list(BiddingZone)
 
 
-def backfill_entsoe_chunked(con, client, start, end):
-    """Backfill ENTSO-E data in monthly chunks to respect rate limits."""
+def _get_missing_ranges(con, table, ts_col, start, end):
+    """Return list of (start, end) datetime pairs covering days with no data."""
+    existing_dates = {
+        row[0]
+        for row in con.execute(
+            f"SELECT DISTINCT CAST({ts_col} AS DATE) FROM {table}"
+            f" WHERE {ts_col} >= ? AND {ts_col} < ?",
+            [start, end],
+        ).fetchall()
+    }
+
+    missing_days = []
     current = start
-    total = 0
+    while current < end:
+        if current.date() not in existing_dates:
+            missing_days.append(current)
+        current += timedelta(days=1)
+
+    if not missing_days:
+        return []
+
+    # Merge consecutive missing days into contiguous ranges, then cap at CHUNK_DAYS
+    ranges = []
+    range_start = missing_days[0]
+    prev = missing_days[0]
+    for day in missing_days[1:]:
+        if day - prev > timedelta(days=1):
+            ranges.extend(_split(range_start, prev + timedelta(days=1)))
+            range_start = day
+        prev = day
+    ranges.extend(_split(range_start, prev + timedelta(days=1)))
+    return ranges
+
+
+def _split(start, end):
+    """Split a date range into CHUNK_DAYS-sized pieces."""
+    chunks = []
+    current = start
     while current < end:
         chunk_end = min(current + timedelta(days=CHUNK_DAYS), end)
-        s = pd.Timestamp(current)
-        e = pd.Timestamp(chunk_end)
-        label = f"{current.date()} → {chunk_end.date()}"
-
-        logger.info("=== Chunk: %s ===", label)
-
-        n = ingest_day_ahead_prices(con, client, zones, s, e)
-        logger.info("  prices: %d rows", n)
-        total += n
-
-        n = ingest_generation_per_type(con, client, zones, s, e)
-        logger.info("  generation: %d rows", n)
-        total += n
-
-        n = ingest_total_load(con, client, zones, s, e)
-        logger.info("  load: %d rows", n)
-        total += n
-
-        n = ingest_cross_border_flows(con, client, BORDERS, s, e)
-        logger.info("  flows: %d rows", n)
-        total += n
-
-        n = ingest_outages(con, client, zones, s, e)
-        logger.info("  outages: %d rows", n)
-        total += n
-
+        chunks.append((current, chunk_end))
         current = chunk_end
+    return chunks
 
+
+def backfill_entsoe_chunked(con, client, start, end):
+    """Backfill ENTSO-E data, fetching only date ranges missing from the DB."""
+    total = 0
+    tasks = [
+        (
+            "prices",
+            "day_ahead_prices",
+            "timestamp",
+            lambda s, e: ingest_day_ahead_prices(con, client, zones, s, e),
+        ),
+        (
+            "generation",
+            "generation_by_type",
+            "timestamp",
+            lambda s, e: ingest_generation_per_type(con, client, zones, s, e),
+        ),
+        (
+            "load",
+            "total_load",
+            "timestamp",
+            lambda s, e: ingest_total_load(con, client, zones, s, e),
+        ),
+        (
+            "flows",
+            "cross_border_flows",
+            "timestamp",
+            lambda s, e: ingest_cross_border_flows(con, client, BORDERS, s, e),
+        ),
+        (
+            "outages",
+            "outages",
+            "start_time",
+            lambda s, e: ingest_outages(con, client, zones, s, e),
+        ),
+    ]
+    for label, table, ts_col, ingest_fn in tasks:
+        ranges = _get_missing_ranges(con, table, ts_col, start, end)
+        if not ranges:
+            logger.info("%s: fully covered, skipping", label)
+            continue
+        for r_start, r_end in ranges:
+            s, e = pd.Timestamp(r_start), pd.Timestamp(r_end)
+            n = ingest_fn(s, e)
+            logger.info("  %s %s → %s: %d rows", label, r_start.date(), r_end.date(), n)
+            total += n
     return total
 
 
 def backfill_weather(con, start, end):
-    """Backfill weather history from Open-Meteo."""
+    """Backfill weather history, fetching only date ranges missing from the DB."""
     client = get_openmeteo_client()
-    total = ingest_weather_history(con, client, LOCATIONS, start, end)
+    ranges = _get_missing_ranges(con, "weather_forecasts", "timestamp", start, end)
+    if not ranges:
+        logger.info("weather: fully covered, skipping")
+        return 0
+    total = 0
+    for r_start, r_end in ranges:
+        n = ingest_weather_history(con, client, LOCATIONS, r_start, r_end)
+        logger.info("  weather %s → %s: %d rows", r_start.date(), r_end.date(), n)
+        total += n
     return total
 
 
