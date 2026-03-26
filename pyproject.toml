@@ -1,7 +1,3 @@
-[build-system]
-requires = ["uv_build"]
-build-backend = "uv_build"
-
 [project]
 name = "grid-signals"
 version = "0.1.0"
@@ -11,21 +7,22 @@ dependencies = [
     "duckdb>=1.5, <1.6",
     "entsoe-py==0.7.11",
     "httpx>=0.28",
-    "anthropic==0.86",
+    "anthropic>=0.86, <1",
     "pydantic>=2.12, <3",
     "pandas>=3.0, <3.1",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "pytest>=9, <10",
     "pytest-asyncio>=0.24",
+    "pandas-stubs>=3.0.0.260204",
 ]
+
+[build-system]
+requires = ["uv_build>=0.11, <0.12"]
+build-backend = "uv_build"
+
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-
-[dependency-groups]
-dev = [
-    "pandas-stubs>=3.0.0.260204",
-]

@@ -38,13 +38,13 @@ uv run python -m grid_signals briefing    # generate daily briefing (needs ANTHR
 ## DB Schema
 
 - **Tables:** day_ahead_prices, generation_by_type, total_load, cross_border_flows, outages, weather_forecasts
-- **Outages** uses `start_time`/`end_time` columns; all other tables use `timestamp`
+- All tables use `period_start`/`period_end` columns for time ranges
 - All inserts use upsert (`INSERT OR REPLACE`) for idempotency
 
 ## Data Quirks
 
 - **DuckDB single-writer lock:** cannot run concurrent writes (e.g. daily + backfill simultaneously)
-- **15-min ISP transition (mid-2025):** some data is hourly, some 15-min. Validation detects resolution dynamically from timestamp gaps (min_gap ≤ 15 → 15min mode)
+- **15-min ISP transition (mid-2025):** some data is hourly, some 15-min. Validation detects resolution dynamically from `period_start` gaps (min_gap ≤ 15 → 15min mode)
 - **ENTSO-E rate limit:** 400 req/min. PL zone has the most generation data (~37K rows/month). Backfill in 30-day chunks works well
 - **Open-Meteo:** archive API for historical, forecast API for future; both free, no key needed
 - **entsoe-py:** some zones have no data for certain types (e.g. SE4 outages returns empty)

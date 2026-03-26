@@ -230,32 +230,29 @@ dependencies = [
     { name = "pydantic" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
+    { name = "pandas-stubs" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "pandas-stubs" },
-]
-
 [package.metadata]
 requires-dist = [
-    { name = "anthropic", specifier = "==0.86" },
+    { name = "anthropic", specifier = ">=0.86,<1" },
     { name = "duckdb", specifier = ">=1.5,<1.6" },
     { name = "entsoe-py", specifier = "==0.7.11" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "pandas", specifier = ">=3.0,<3.1" },
     { name = "pydantic", specifier = ">=2.12,<3" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9,<10" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
 ]
-provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pandas-stubs", specifier = ">=3.0.0.260204" }]
+dev = [
+    { name = "pandas-stubs", specifier = ">=3.0.0.260204" },
+    { name = "pytest", specifier = ">=9,<10" },
+    { name = "pytest-asyncio", specifier = ">=0.24" },
+]
 
 [[package]]
 name = "h11"
