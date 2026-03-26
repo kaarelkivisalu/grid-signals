@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from datetime import UTC, datetime
 
 import duckdb
@@ -26,7 +27,8 @@ TOOLS: list[dict] = [
         "name": "get_day_ahead_prices",
         "description": (
             "Get day-ahead electricity prices for a bidding zone. "
-            "Returns price_eur_mwh with period_start/period_end for each interval in the range."
+            "Returns daily statistics (mean, min, max with hours, peak/off-peak averages, "
+            "compact hourly profile) instead of raw intervals."
         ),
         "input_schema": {
             "type": "object",
@@ -51,7 +53,8 @@ TOOLS: list[dict] = [
     {
         "name": "get_generation_mix",
         "description": (
-            "Get hourly generation by fuel type for a bidding zone. "
+            "Get daily generation totals and shares by fuel type for a bidding zone. "
+            "Returns total_mwh, avg_mw, and share_pct per fuel type per day. "
             "Optionally filter by a specific fuel_type (e.g. wind_onshore, "
             "solar, nuclear, gas, oil_shale, hydro)."
         ),
@@ -82,8 +85,8 @@ TOOLS: list[dict] = [
     {
         "name": "get_wind_forecast",
         "description": (
-            "Get weather forecast (wind speed at 100m, solar irradiance, "
-            "temperature) for a location. Use location names like SE4_skane, "
+            "Get daily weather forecast summary (wind, solar, temperature "
+            "mean/min/max) for a location. Use location names like SE4_skane, "
             "FI_inland, EE_tallinn, etc."
         ),
         "input_schema": {
@@ -138,8 +141,8 @@ TOOLS: list[dict] = [
     {
         "name": "get_cross_border_flows",
         "description": (
-            "Get hourly cross-border physical flows between two zones. "
-            "Positive flow_mw means power flows from from_zone to to_zone."
+            "Get daily cross-border flow summary (mean, min, max, direction changes) "
+            "between two zones. Positive flow_mw means power flows from from_zone to to_zone."
         ),
         "input_schema": {
             "type": "object",
@@ -169,8 +172,8 @@ TOOLS: list[dict] = [
     {
         "name": "get_load_forecast",
         "description": (
-            "Get hourly total load forecast for a bidding zone. "
-            "Returns only forecast values (not actuals)."
+            "Get daily load forecast summary (mean, min with hour, max with hour) "
+            "for a bidding zone. Returns only forecast values (not actuals)."
         ),
         "input_schema": {
             "type": "object",
@@ -195,10 +198,9 @@ TOOLS: list[dict] = [
     {
         "name": "calculate_spread",
         "description": (
-            "Calculate hourly price spread between two bidding zones "
-            "(zone_1 price minus zone_2 price). Returns hourly spreads "
-            "and summary statistics (mean, min, max, hours with positive/"
-            "negative spread)."
+            "Calculate price spread between two bidding zones "
+            "(zone_1 price minus zone_2 price). Returns summary statistics "
+            "(mean, min, max, hours with positive/negative spread)."
         ),
         "input_schema": {
             "type": "object",
@@ -292,6 +294,148 @@ def _parse_datetime(s: str) -> datetime:
 
 
 # ---------------------------------------------------------------------------
+# Summary helpers — compact daily aggregates for token efficiency
+# ---------------------------------------------------------------------------
+
+
+def _summarize_prices(rows: list) -> list[dict]:
+    """Group price rows by date; return daily stats."""
+    by_date: dict[str, list] = defaultdict(list)
+    for r in rows:
+        day = r.period_start.strftime("%Y-%m-%d")
+        by_date[day].append(r)
+    result = []
+    for day, prices in sorted(by_date.items()):
+        vals = [p.price_eur_mwh for p in prices]
+        hours = [p.period_start.hour for p in prices]
+        min_idx = vals.index(min(vals))
+        max_idx = vals.index(max(vals))
+        peak = [v for v, h in zip(vals, hours) if 8 <= h < 20]
+        offpeak = [v for v, h in zip(vals, hours) if h < 8 or h >= 20]
+        result.append({
+            "date": day,
+            "zone": prices[0].zone.value,
+            "count": len(vals),
+            "mean": round(sum(vals) / len(vals), 2),
+            "min": round(min(vals), 2),
+            "min_hour": hours[min_idx],
+            "max": round(max(vals), 2),
+            "max_hour": hours[max_idx],
+            "peak_avg": round(sum(peak) / len(peak), 2) if peak else None,
+            "offpeak_avg": round(sum(offpeak) / len(offpeak), 2) if offpeak else None,
+            "hourly": [round(v, 2) for v in vals],
+        })
+    return result
+
+
+def _summarize_generation(rows: list) -> list[dict]:
+    """Group generation rows by date; return fuel-type totals and shares."""
+    by_date: dict[str, list] = defaultdict(list)
+    for r in rows:
+        day = r.period_start.strftime("%Y-%m-%d")
+        by_date[day].append(r)
+    result = []
+    for day, entries in sorted(by_date.items()):
+        # Determine interval hours from period_start/period_end
+        fuel_totals: dict[str, float] = defaultdict(float)
+        fuel_counts: dict[str, int] = defaultdict(int)
+        for e in entries:
+            hours = (e.period_end - e.period_start).total_seconds() / 3600
+            fuel_totals[e.fuel_type] += e.generation_mw * hours
+            fuel_counts[e.fuel_type] += 1
+        total_mwh = sum(fuel_totals.values())
+        fuels = []
+        for ft in sorted(fuel_totals.keys()):
+            mwh = fuel_totals[ft]
+            fuels.append({
+                "fuel_type": ft,
+                "total_mwh": round(mwh, 1),
+                "avg_mw": round(mwh / (fuel_counts[ft] * ((entries[0].period_end - entries[0].period_start).total_seconds() / 3600)) if fuel_counts[ft] else 0, 1),
+                "share_pct": round(mwh / total_mwh * 100, 1) if total_mwh else 0,
+            })
+        result.append({
+            "date": day,
+            "zone": entries[0].zone.value,
+            "total_mwh": round(total_mwh, 1),
+            "fuels": fuels,
+        })
+    return result
+
+
+def _summarize_weather(rows: list) -> list[dict]:
+    """Group weather rows by date; return daily summary stats."""
+    by_date: dict[str, list] = defaultdict(list)
+    for r in rows:
+        day = r.period_start.strftime("%Y-%m-%d")
+        by_date[day].append(r)
+    result = []
+    for day, entries in sorted(by_date.items()):
+        winds = [e.wind_speed_100m_ms for e in entries if e.wind_speed_100m_ms is not None]
+        temps = [e.temperature_c for e in entries if e.temperature_c is not None]
+        solars = [e.solar_irradiance_wm2 for e in entries if e.solar_irradiance_wm2 is not None]
+        summary: dict = {"date": day, "location": entries[0].location_name, "count": len(entries)}
+        if winds:
+            summary["wind"] = {"mean": round(sum(winds) / len(winds), 1), "min": round(min(winds), 1), "max": round(max(winds), 1)}
+        if temps:
+            summary["temperature"] = {"mean": round(sum(temps) / len(temps), 1), "min": round(min(temps), 1), "max": round(max(temps), 1)}
+        if solars:
+            summary["solar"] = {"mean": round(sum(solars) / len(solars), 1), "max": round(max(solars), 1)}
+        result.append(summary)
+    return result
+
+
+def _summarize_flows(rows: list) -> list[dict]:
+    """Group flow rows by date; return daily summary stats."""
+    by_date: dict[str, list] = defaultdict(list)
+    for r in rows:
+        day = r.period_start.strftime("%Y-%m-%d")
+        by_date[day].append(r)
+    result = []
+    for day, entries in sorted(by_date.items()):
+        vals = [e.flow_mw for e in entries]
+        direction_changes = sum(
+            1 for i in range(1, len(vals))
+            if (vals[i] >= 0) != (vals[i - 1] >= 0)
+        )
+        result.append({
+            "date": day,
+            "from_zone": entries[0].from_zone.value,
+            "to_zone": entries[0].to_zone.value,
+            "count": len(vals),
+            "mean_flow_mw": round(sum(vals) / len(vals), 1),
+            "min_flow_mw": round(min(vals), 1),
+            "max_flow_mw": round(max(vals), 1),
+            "direction_changes": direction_changes,
+        })
+    return result
+
+
+def _summarize_load(rows: list) -> list[dict]:
+    """Group load rows by date; return daily summary stats."""
+    by_date: dict[str, list] = defaultdict(list)
+    for r in rows:
+        day = r.period_start.strftime("%Y-%m-%d")
+        by_date[day].append(r)
+    result = []
+    for day, entries in sorted(by_date.items()):
+        vals = [e.load_mw for e in entries]
+        hours = [e.period_start.hour for e in entries]
+        min_idx = vals.index(min(vals))
+        max_idx = vals.index(max(vals))
+        result.append({
+            "date": day,
+            "zone": entries[0].zone.value,
+            "count": len(vals),
+            "mean_mw": round(sum(vals) / len(vals), 1),
+            "min_mw": round(min(vals), 1),
+            "min_hour": hours[min_idx],
+            "max_mw": round(max(vals), 1),
+            "max_hour": hours[max_idx],
+        })
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Computed tools
 # ---------------------------------------------------------------------------
 
@@ -323,7 +467,6 @@ def _calculate_spread(
         return {
             "zone_1": zone_1,
             "zone_2": zone_2,
-            "hourly": [],
             "summary": None,
         }
 
@@ -331,7 +474,6 @@ def _calculate_spread(
     return {
         "zone_1": zone_1,
         "zone_2": zone_2,
-        "hourly": hourly,
         "summary": {
             "mean_spread": round(sum(spreads) / len(spreads), 2),
             "min_spread": min(spreads),
@@ -456,7 +598,7 @@ def _dispatch(
             _parse_date(tool_input["start_date"]),
             _parse_date(tool_input["end_date"]),
         )
-        return [r.model_dump(mode="json") for r in rows]
+        return _summarize_prices(rows)
 
     if name == "get_generation_mix":
         rows = get_generation_mix(
@@ -466,7 +608,7 @@ def _dispatch(
             _parse_date(tool_input["end_date"]),
             fuel_type=tool_input.get("fuel_type"),
         )
-        return [r.model_dump(mode="json") for r in rows]
+        return _summarize_generation(rows)
 
     if name == "get_wind_forecast":
         rows = get_weather_forecasts(
@@ -475,7 +617,7 @@ def _dispatch(
             _parse_date(tool_input["start_date"]),
             _parse_date(tool_input["end_date"]),
         )
-        return [r.model_dump(mode="json") for r in rows]
+        return _summarize_weather(rows)
 
     if name == "get_outages":
         active_at = None
@@ -497,7 +639,7 @@ def _dispatch(
             _parse_date(tool_input["start_date"]),
             _parse_date(tool_input["end_date"]),
         )
-        return [r.model_dump(mode="json") for r in rows]
+        return _summarize_flows(rows)
 
     if name == "get_load_forecast":
         rows = get_total_load(
@@ -507,7 +649,7 @@ def _dispatch(
             _parse_date(tool_input["end_date"]),
             forecast_only=True,
         )
-        return [r.model_dump(mode="json") for r in rows]
+        return _summarize_load(rows)
 
     if name == "calculate_spread":
         return _calculate_spread(

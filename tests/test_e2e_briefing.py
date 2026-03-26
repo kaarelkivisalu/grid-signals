@@ -314,14 +314,17 @@ class TestEndToEndBriefing:
         assert "calculate_spread" in tool_names
 
         # --- Verify tool calls returned real DB data ---
-        # EE prices tool call should have 24 hours
+        # EE prices tool call should have daily summary
         ee_price_call = next(
             tc for tc in result.agent_result.tool_calls
             if tc.name == "get_day_ahead_prices" and '"EE"' in json.dumps(tc.input)
         )
         ee_data = json.loads(ee_price_call.output)
-        assert len(ee_data) == 24
-        assert ee_data[0]["price_eur_mwh"] == 50.0
+        assert len(ee_data) >= 1
+        # Total intervals across all days should be 24
+        total_count = sum(d["count"] for d in ee_data)
+        assert total_count == 24
+        assert ee_data[0]["min"] == 50.0
 
         # Outage tool call should find Olkiluoto 2
         outage_call = next(

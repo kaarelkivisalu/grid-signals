@@ -170,9 +170,13 @@ class TestGetDayAheadPrices:
             {"zone": "EE", "start_date": "2024-01-15", "end_date": "2024-01-16"},
             con,
         ))
-        assert len(result) == 24
-        assert result[0]["price_eur_mwh"] == 50.0
-        assert result[23]["price_eur_mwh"] == 96.0
+        # Daily summary: should have entry for 2024-01-15
+        day_15 = next(r for r in result if r["date"] == "2024-01-15")
+        assert day_15["min"] == 50.0
+        assert day_15["max"] <= 96.0
+        assert day_15["zone"] == "EE"
+        assert "mean" in day_15
+        assert "hourly" in day_15
 
     def test_empty_range(self, con):
         result = json.loads(execute_tool(
@@ -198,8 +202,10 @@ class TestGetGenerationMix:
             {"zone": "EE", "start_date": "2024-01-15", "end_date": "2024-01-16"},
             con,
         ))
-        assert len(result) == 2
-        fuel_types = {r["fuel_type"] for r in result}
+        # Daily summary with fuels list
+        assert len(result) >= 1
+        day_15 = next(r for r in result if r["date"] == "2024-01-15")
+        fuel_types = {f["fuel_type"] for f in day_15["fuels"]}
         assert fuel_types == {"oil_shale", "wind_onshore"}
 
     def test_filter_by_fuel_type(self, con):
@@ -213,8 +219,10 @@ class TestGetGenerationMix:
             },
             con,
         ))
-        assert len(result) == 1
-        assert result[0]["generation_mw"] == 150.0
+        assert len(result) >= 1
+        day_15 = next(r for r in result if r["date"] == "2024-01-15")
+        assert len(day_15["fuels"]) == 1
+        assert day_15["fuels"][0]["avg_mw"] == 150.0
 
 
 class TestGetWindForecast:
@@ -224,8 +232,11 @@ class TestGetWindForecast:
             {"location": "EE_tallinn", "start_date": "2024-01-15", "end_date": "2024-01-16"},
             con,
         ))
-        assert len(result) == 24
-        assert result[0]["wind_speed_100m_ms"] == 7.0
+        # Daily summary
+        assert len(result) >= 1
+        day_15 = next(r for r in result if r["date"] == "2024-01-15")
+        assert day_15["wind"]["mean"] == 7.0
+        assert day_15["location"] == "EE_tallinn"
 
     def test_unknown_location(self, con):
         result = json.loads(execute_tool(
@@ -274,8 +285,11 @@ class TestGetCrossBorderFlows:
             },
             con,
         ))
+        # Daily summary
         assert len(result) == 1
-        assert result[0]["flow_mw"] == 450.0
+        assert result[0]["mean_flow_mw"] == 450.0
+        assert result[0]["from_zone"] == "FI"
+        assert result[0]["to_zone"] == "EE"
 
 
 class TestGetLoadForecast:
@@ -285,8 +299,10 @@ class TestGetLoadForecast:
             {"zone": "EE", "start_date": "2024-01-15", "end_date": "2024-01-16"},
             con,
         ))
-        assert len(result) == 24
-        assert all(r["is_forecast"] for r in result)
+        # Daily summary
+        day_15 = next(r for r in result if r["date"] == "2024-01-15")
+        assert day_15["min_mw"] == 900.0
+        assert day_15["zone"] == "EE"
 
 
 class TestCalculateSpread:
@@ -303,10 +319,7 @@ class TestCalculateSpread:
         ))
         assert result["zone_1"] == "EE"
         assert result["zone_2"] == "FI"
-        assert len(result["hourly"]) == 24
         # EE = 50+h*2, FI = 40+h*2 → spread = 10 for every hour
-        for h in result["hourly"]:
-            assert h["spread"] == 10.0
         assert result["summary"]["mean_spread"] == 10.0
         assert result["summary"]["hours_positive"] == 24
         assert result["summary"]["hours_negative"] == 0
@@ -322,7 +335,6 @@ class TestCalculateSpread:
             },
             con,
         ))
-        assert result["hourly"] == []
         assert result["summary"] is None
 
 
@@ -453,9 +465,11 @@ class TestAgentLoopSingleToolCall:
         assert "50" in result.content or "96" in result.content
         assert len(result.tool_calls) == 1
         assert result.tool_calls[0].name == "get_day_ahead_prices"
-        # Verify the tool got real data from the DB
+        # Verify the tool got real data from the DB (daily summary format)
         tool_output = json.loads(result.tool_calls[0].output)
-        assert len(tool_output) == 24
+        assert len(tool_output) >= 1
+        day_15 = next(r for r in tool_output if r["date"] == "2024-01-15")
+        assert day_15["min"] == 50.0
 
 
 class TestAgentLoopMultipleToolCalls:
