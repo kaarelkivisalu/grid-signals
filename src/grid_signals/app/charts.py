@@ -161,7 +161,7 @@ def price_heatmap(con: duckdb.DuckDBPyConnection, zones: list[str],
         """
         SELECT zone, extract(hour FROM period_start) AS hour, price_eur_mwh
         FROM day_ahead_prices
-        WHERE zone = ANY(?) AND period_start >= ? AND period_start < ? + INTERVAL 1 DAY
+        WHERE zone = ANY(?) AND period_start >= ?::DATE AND period_start < ?::DATE + INTERVAL 1 DAY
         ORDER BY zone, hour
         """,
         [zones, date, date],
