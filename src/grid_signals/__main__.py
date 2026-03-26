@@ -58,6 +58,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Output directory for Markdown file (default: briefings/)",
     )
     briefing_cmd.add_argument(
+        "--no-save",
+        action="store_true",
+        default=False,
+        help="Do not save the briefing to a file",
+    )
+    briefing_cmd.add_argument(
         "--model",
         default="claude-haiku-4-5-20251001",
         help="Claude model to use (default: claude-haiku-4-5-20251001)",
@@ -148,7 +154,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.date:
             target_date = datetime.strptime(args.date, "%Y-%m-%d").date()
 
-        output_dir = Path(args.output) if args.output else DEFAULT_OUTPUT_DIR
+        if args.no_save:
+            output_dir = None
+        elif args.output:
+            output_dir = Path(args.output)
+        else:
+            output_dir = DEFAULT_OUTPUT_DIR
 
         con = get_connection(db_path)
         try:
