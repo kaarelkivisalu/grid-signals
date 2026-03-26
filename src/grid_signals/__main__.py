@@ -140,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
             con.close()
 
     elif args.command == "briefing":
-        from grid_signals.briefing import generate_briefing
+        from grid_signals.briefing import DEFAULT_OUTPUT_DIR, generate_briefing
         from grid_signals.db.connection import get_connection
         from grid_signals.db.schema import create_tables
 
@@ -148,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.date:
             target_date = datetime.strptime(args.date, "%Y-%m-%d").date()
 
-        output_dir = Path(args.output) if args.output else None
+        output_dir = Path(args.output) if args.output else DEFAULT_OUTPUT_DIR
 
         con = get_connection(db_path)
         try:
