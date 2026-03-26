@@ -13,7 +13,6 @@ from grid_signals.app.charts import (
     wind_vs_price,
 )
 from grid_signals.db.connection import DEFAULT_DB_PATH
-from grid_signals.db.schema import create_tables
 
 st.set_page_config(page_title="Dashboard — Grid Signals", page_icon="⚡", layout="wide")
 st.title("Dashboard")
@@ -32,9 +31,7 @@ WEATHER_LOCATIONS = [
 @st.cache_resource
 def get_dash_db() -> duckdb.DuckDBPyConnection:
     """Read-only DB connection for the dashboard."""
-    con = duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
-    create_tables(con)
-    return con
+    return duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
 
 
 con = get_dash_db()

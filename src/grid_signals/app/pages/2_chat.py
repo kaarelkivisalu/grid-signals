@@ -7,7 +7,6 @@ import streamlit as st
 
 from grid_signals.agent.loop import Agent, AgentResult
 from grid_signals.db.connection import DEFAULT_DB_PATH
-from grid_signals.db.schema import create_tables
 
 st.set_page_config(page_title="Chat — Grid Signals", page_icon="⚡", layout="wide")
 st.title("Energy Intelligence Chat")
@@ -24,9 +23,7 @@ if not os.environ.get("ANTHROPIC_API_KEY"):
 @st.cache_resource
 def get_chat_db() -> duckdb.DuckDBPyConnection:
     """Read-only DB connection for the chat agent."""
-    con = duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
-    create_tables(con)
-    return con
+    return duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
 
 
 # Display conversation history

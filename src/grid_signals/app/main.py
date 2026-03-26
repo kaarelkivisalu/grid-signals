@@ -6,7 +6,6 @@ import duckdb
 import streamlit as st
 
 from grid_signals.db.connection import DEFAULT_DB_PATH
-from grid_signals.db.schema import create_tables
 
 st.set_page_config(
     page_title="Grid Signals",
@@ -20,9 +19,7 @@ st.set_page_config(
 @st.cache_resource
 def get_db() -> duckdb.DuckDBPyConnection:
     """Open a read-only DuckDB connection, shared across all pages."""
-    con = duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
-    create_tables(con)
-    return con
+    return duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
 
 
 # --- Sidebar ---
