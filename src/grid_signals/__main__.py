@@ -36,8 +36,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     agent_cmd.add_argument("question", help="Question to ask the agent")
     agent_cmd.add_argument(
         "--model",
-        default="claude-sonnet-4-20250514",
-        help="Claude model to use (default: claude-sonnet-4-20250514)",
+        default="claude-haiku-4-5-20251001",
+        help="Claude model to use (default: claude-haiku-4-5-20251001)",
     )
     agent_cmd.add_argument(
         "--max-turns",
@@ -59,8 +59,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     briefing_cmd.add_argument(
         "--model",
-        default="claude-sonnet-4-20250514",
-        help="Claude model to use (default: claude-sonnet-4-20250514)",
+        default="claude-haiku-4-5-20251001",
+        help="Claude model to use (default: claude-haiku-4-5-20251001)",
     )
     briefing_cmd.add_argument(
         "--max-turns",
