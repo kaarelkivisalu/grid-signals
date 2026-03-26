@@ -31,6 +31,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     backfill.add_argument("--end", required=True, help="End date (YYYY-MM-DD)")
 
     sub.add_parser("validate", help="Run data validation checks")
+    sub.add_parser("ui", help="Launch the Streamlit web interface")
 
     agent_cmd = sub.add_parser("agent", help="Ask the energy intelligence agent a question")
     agent_cmd.add_argument("question", help="Question to ask the agent")
@@ -120,6 +121,15 @@ def main(argv: list[str] | None = None) -> int:
             run_all_validations(con)
         finally:
             con.close()
+
+    elif args.command == "ui":
+        import subprocess
+
+        app_path = Path(__file__).parent / "app" / "main.py"
+        subprocess.run(
+            ["streamlit", "run", str(app_path)],
+            check=True,
+        )
 
     elif args.command == "agent":
         from grid_signals.agent import run_agent

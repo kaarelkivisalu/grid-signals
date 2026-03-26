@@ -179,17 +179,17 @@ Agent design:
 
 After the MVP is working and delivering daily briefings, there are several directions to expand. These are not sequential — pick based on interest and feedback.
 
-### Direction A: Interactive Chat Interface
+### Direction A: Interactive Chat Interface ✅ (basic)
 
 Add a conversational interface so users can ask follow-up questions about the market.
 
-- Web UI (FastAPI + React) with conversation memory
-- Persistent conversation context — the agent remembers what was discussed earlier in the session
+- [x] Streamlit chat page with `st.chat_input()` / `st.chat_message()`
+- [x] Tool call visibility in expanders, token/cost display
+- [ ] Persistent conversation context — the agent remembers what was discussed earlier in the session (requires `Agent.run()` refactor to accept message history)
 - Example queries:
   - "What's driving the FI-EE spread today?"
   - "How does tomorrow compare to last Tuesday?"
   - "What happens if Olkiluoto comes back online Thursday?"
-- Requires: conversation management, potentially session storage, more robust error handling for open-ended queries
 
 ### Direction B: Anomaly Detection & Real-Time Alerts
 
@@ -219,16 +219,15 @@ Generate weekly/monthly PDF reports suitable for distribution within a trading o
 - Backtest mode: generate a report for any historical period and compare predictions vs actuals
 - Requires: PDF generation (WeasyPrint or similar), chart rendering (matplotlib/plotly exported as images), templating
 
-### Direction E: Dashboard & Visualization
+### Direction E: Dashboard & Visualization ✅ (basic)
 
 Build a web dashboard with live charts and the briefing.
 
-- Price heatmap across bidding zones (hourly, colored by price level)
-- Wind forecast vs actuals chart
-- Spread evolution over time
-- Interconnector flow visualization (map-based)
-- The daily briefing text alongside the charts
-- Tech: FastAPI backend serving data + React frontend with a charting library (Recharts, D3, or Plotly)
+- [x] Streamlit dashboard with Plotly charts: hourly prices, generation mix, cross-border flows, wind vs price, price heatmap
+- [x] Briefing viewer page with date selector
+- [x] CLI command: `uv run python -m grid_signals ui`
+- [ ] Interconnector flow visualization (map-based)
+- [ ] Spread evolution over time chart
 
 ### Direction F: Multi-Tenant SaaS
 
