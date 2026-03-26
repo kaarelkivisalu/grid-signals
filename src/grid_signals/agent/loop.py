@@ -34,6 +34,28 @@ class AgentResult:
     tool_calls: list[ToolCallRecord] = field(default_factory=list)
     input_tokens: int = 0
     output_tokens: int = 0
+    model: str = ""
+
+    @property
+    def estimated_cost_usd(self) -> float:
+        """Estimate API cost in USD based on model and token counts."""
+        return estimate_cost(self.model, self.input_tokens, self.output_tokens)
+
+
+# Pricing per million tokens (input, output) in USD.
+_MODEL_PRICING: dict[str, tuple[float, float]] = {
+    "claude-haiku-4-5-20251001": (1.00, 5.00),
+    "claude-sonnet-4-20250514": (3.00, 15.00),
+    "claude-opus-4-20250514": (15.00, 75.00),
+}
+
+
+def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    """Estimate API cost in USD. Falls back to Sonnet pricing for unknown models."""
+    input_price, output_price = _MODEL_PRICING.get(
+        model, _MODEL_PRICING["claude-sonnet-4-20250514"]
+    )
+    return (input_tokens * input_price + output_tokens * output_price) / 1_000_000
 
 
 class Agent:
@@ -80,6 +102,7 @@ class Agent:
                     tool_calls=tool_log,
                     input_tokens=total_input_tokens,
                     output_tokens=total_output_tokens,
+                    model=self.model,
                 )
 
             if response.stop_reason == "tool_use":
@@ -115,6 +138,7 @@ class Agent:
                 tool_calls=tool_log,
                 input_tokens=total_input_tokens,
                 output_tokens=total_output_tokens,
+                model=self.model,
             )
 
         # Max turns exhausted
@@ -126,6 +150,7 @@ class Agent:
             tool_calls=tool_log,
             input_tokens=total_input_tokens,
             output_tokens=total_output_tokens,
+            model=self.model,
         )
 
 

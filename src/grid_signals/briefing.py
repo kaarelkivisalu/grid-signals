@@ -105,11 +105,12 @@ def generate_briefing(
     agent_result = agent.run(prompt)
 
     logger.info(
-        "Briefing generated: %d chars, %d tool calls, %d/%d tokens",
+        "Briefing generated: %d chars, %d tool calls, %d/%d tokens, cost: $%.4f",
         len(agent_result.content),
         len(agent_result.tool_calls),
         agent_result.input_tokens,
         agent_result.output_tokens,
+        agent_result.estimated_cost_usd,
     )
 
     output_path = None
