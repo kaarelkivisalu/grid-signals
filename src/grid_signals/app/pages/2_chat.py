@@ -65,7 +65,7 @@ if prompt := st.chat_input("Ask about Baltic-Nordic energy markets..."):
 
         cost_str = (
             f"Tokens: {result.input_tokens:,} in / {result.output_tokens:,} out · "
-            f"Cost: ${result.estimated_cost_usd:.4f}"
+            f"Estimated cost: ${result.estimated_cost_usd:.4f}"
         )
         st.caption(cost_str)
 
