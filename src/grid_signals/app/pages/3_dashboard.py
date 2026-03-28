@@ -19,12 +19,20 @@ st.title("Dashboard")
 
 ZONES = ["EE", "LV", "LT", "FI", "SE4", "SE3"]
 INTERCONNECTORS = [
-    ("FI", "EE"), ("EE", "LV"), ("LV", "LT"), ("SE4", "LT"), ("LT", "PL"),
+    ("FI", "EE"),
+    ("EE", "LV"),
+    ("LV", "LT"),
+    ("SE4", "LT"),
+    ("LT", "PL"),
 ]
 WEATHER_LOCATIONS = [
-    "EE_tallinn", "LV_riga", "LT_vilnius",
-    "FI_inland", "FI_coast",
-    "SE4_skane", "SE3_central",
+    "EE_tallinn",
+    "LV_riga",
+    "LT_vilnius",
+    "FI_inland",
+    "FI_coast",
+    "SE4_skane",
+    "SE3_central",
 ]
 
 
@@ -47,29 +55,38 @@ start_str = start_date.isoformat()
 end_str = end_date.isoformat()
 
 # --- Tabs for chart types ---
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "Hourly Prices", "Generation Mix", "Cross-Border Flows",
-    "Wind vs Price", "Price Heatmap",
-])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    [
+        "Hourly Prices",
+        "Generation Mix",
+        "Cross-Border Flows",
+        "Wind vs Price",
+        "Price Heatmap",
+    ]
+)
 
 with tab1:
     selected_zones = st.multiselect("Zones", ZONES, default=["EE", "FI", "LT"])
     if selected_zones:
         fig = hourly_prices(con, selected_zones, start_str, end_str)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
 with tab2:
     zone = st.selectbox("Zone", ZONES, key="gen_zone")
     fig = generation_mix(con, zone, start_str, end_str)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 with tab3:
     ic_labels = [f"{f} → {t}" for f, t in INTERCONNECTORS]
-    ic_idx = st.selectbox("Interconnector", range(len(INTERCONNECTORS)),
-                          format_func=lambda i: ic_labels[i], key="ic_select")
+    ic_idx = st.selectbox(
+        "Interconnector",
+        range(len(INTERCONNECTORS)),
+        format_func=lambda i: ic_labels[i],
+        key="ic_select",
+    )
     f_zone, t_zone = INTERCONNECTORS[ic_idx]
     fig = cross_border_flows(con, f_zone, t_zone, start_str, end_str)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 with tab4:
     wcol1, wcol2 = st.columns(2)
@@ -78,11 +95,13 @@ with tab4:
     with wcol2:
         w_loc = st.selectbox("Weather location", WEATHER_LOCATIONS, key="wind_loc")
     fig = wind_vs_price(con, w_zone, w_loc, start_str, end_str)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 with tab5:
-    hm_date = st.date_input("Date", value=date.today() - timedelta(days=1), key="hm_date")
+    hm_date = st.date_input(
+        "Date", value=date.today() - timedelta(days=1), key="hm_date"
+    )
     hm_zones = st.multiselect("Zones", ZONES, default=ZONES, key="hm_zones")
     if hm_zones:
         fig = price_heatmap(con, hm_zones, hm_date.isoformat())
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")

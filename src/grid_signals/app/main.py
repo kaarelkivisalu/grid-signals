@@ -22,9 +22,6 @@ def get_db() -> duckdb.DuckDBPyConnection:
 
 # --- Sidebar & Navigation ---
 
-st.sidebar.title("⚡ Grid Signals")
-st.sidebar.caption("Nordic-Baltic Energy Intelligence")
-
 pages = st.navigation(
     [
         st.Page("pages/overview.py", title="Overview", icon="🏠", default=True),
@@ -33,5 +30,8 @@ pages = st.navigation(
         st.Page("pages/3_dashboard.py", title="Dashboard", icon="📊"),
     ],
 )
+
+st.sidebar.title("⚡ Grid Signals")
+st.sidebar.caption("Nordic-Baltic Energy Intelligence")
 
 pages.run()
