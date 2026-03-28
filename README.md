@@ -103,7 +103,7 @@ uv run grid-signals ui
 uv run grid-signals agent "What are the key drivers for EE prices today?"
 
 # Use a specific model
-uv run grid-signals agent "Compare FI and EE spreads this week" --model claude-sonnet-4-20250514
+uv run grid-signals agent "Compare FI and EE spreads this week" --model claude-sonnet-4-6-20250514
 ```
 
 ### Scheduling
