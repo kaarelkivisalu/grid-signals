@@ -3,6 +3,7 @@
 import json
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
+from zoneinfo import ZoneInfo
 
 import duckdb
 import pytest
@@ -29,6 +30,7 @@ from grid_signals.models import (
 )
 
 _1H = timedelta(hours=1)
+_CET = ZoneInfo("Europe/Berlin")
 
 
 # ---------------------------------------------------------------------------
@@ -50,12 +52,14 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
     """Insert known data for 2024-01-15 across multiple tables."""
     day = datetime(2024, 1, 15, tzinfo=UTC)
 
-    # Prices: EE and FI for 24 hours
+    # Prices: EE and FI for 24 hours, aligned to CET delivery day 2024-01-15.
+    # CET 00:00 = UTC 23:00 on Jan 14 (January is UTC+1).
+    cet_start = datetime(2024, 1, 15, tzinfo=_CET).astimezone(UTC)
     ee_prices = [
         DayAheadPrice(
             zone=BiddingZone.EE,
-            period_start=datetime(2024, 1, 15, h, tzinfo=UTC),
-            period_end=datetime(2024, 1, 15, h, tzinfo=UTC) + _1H,
+            period_start=cet_start + timedelta(hours=h),
+            period_end=cet_start + timedelta(hours=h) + _1H,
             price_eur_mwh=50.0 + h * 2,  # 50, 52, 54, ... 96
         )
         for h in range(24)
@@ -63,8 +67,8 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
     fi_prices = [
         DayAheadPrice(
             zone=BiddingZone.FI,
-            period_start=datetime(2024, 1, 15, h, tzinfo=UTC),
-            period_end=datetime(2024, 1, 15, h, tzinfo=UTC) + _1H,
+            period_start=cet_start + timedelta(hours=h),
+            period_end=cet_start + timedelta(hours=h) + _1H,
             price_eur_mwh=40.0 + h * 2,  # 40, 42, 44, ... 86
         )
         for h in range(24)
@@ -175,8 +179,9 @@ class TestGetDayAheadPrices:
         assert day_15["min"] == 50.0
         assert day_15["max"] <= 96.0
         assert day_15["zone"] == "EE"
+        assert day_15["timezone"] == "CET/CEST"
         assert "mean" in day_15
-        assert "hourly" in day_15
+        assert "intervals" in day_15
 
     def test_empty_range(self, con):
         result = json.loads(execute_tool(

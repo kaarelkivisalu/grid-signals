@@ -5,8 +5,12 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 import duckdb
+
+# Day-ahead markets operate in CET/CEST (Europe/Berlin covers this).
+CET = ZoneInfo("Europe/Berlin")
 
 from grid_signals.db.queries import (
     get_cross_border_flows,
@@ -27,8 +31,9 @@ TOOLS: list[dict] = [
         "name": "get_day_ahead_prices",
         "description": (
             "Get day-ahead electricity prices for a bidding zone. "
-            "Returns daily statistics (mean, min, max with hours, peak/off-peak averages, "
-            "compact hourly profile) instead of raw intervals."
+            "All timestamps and dates are in CET/CEST (market timezone). "
+            "Returns daily statistics (mean, min, max with timestamps, peak/off-peak "
+            "averages, compact 15-min interval profile) instead of raw data."
         ),
         "input_schema": {
             "type": "object",
@@ -283,6 +288,11 @@ def _parse_date(s: str) -> datetime:
     return datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=UTC)
 
 
+def _parse_date_cet(s: str) -> datetime:
+    """Parse YYYY-MM-DD as CET/CEST and convert to UTC."""
+    return datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=CET).astimezone(UTC)
+
+
 def _parse_datetime(s: str) -> datetime:
     """Parse YYYY-MM-DD or ISO datetime string to UTC datetime."""
     for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d"):
@@ -299,31 +309,34 @@ def _parse_datetime(s: str) -> datetime:
 
 
 def _summarize_prices(rows: list) -> list[dict]:
-    """Group price rows by date; return daily stats."""
+    """Group price rows by CET/CEST date; return daily stats."""
     by_date: dict[str, list] = defaultdict(list)
     for r in rows:
-        day = r.period_start.strftime("%Y-%m-%d")
+        day = r.period_start.astimezone(CET).strftime("%Y-%m-%d")
         by_date[day].append(r)
     result = []
     for day, prices in sorted(by_date.items()):
         vals = [p.price_eur_mwh for p in prices]
-        hours = [p.period_start.hour for p in prices]
+        times_cet = [p.period_start.astimezone(CET) for p in prices]
+        hours = [t.hour for t in times_cet]
+        timestamps = [t.strftime("%H:%M") for t in times_cet]
         min_idx = vals.index(min(vals))
         max_idx = vals.index(max(vals))
         peak = [v for v, h in zip(vals, hours) if 8 <= h < 20]
         offpeak = [v for v, h in zip(vals, hours) if h < 8 or h >= 20]
         result.append({
             "date": day,
+            "timezone": "CET/CEST",
             "zone": prices[0].zone.value,
             "count": len(vals),
             "mean": round(sum(vals) / len(vals), 2),
             "min": round(min(vals), 2),
-            "min_hour": hours[min_idx],
+            "min_at": timestamps[min_idx],
             "max": round(max(vals), 2),
-            "max_hour": hours[max_idx],
+            "max_at": timestamps[max_idx],
             "peak_avg": round(sum(peak) / len(peak), 2) if peak else None,
             "offpeak_avg": round(sum(offpeak) / len(offpeak), 2) if offpeak else None,
-            "hourly": [round(v, 2) for v in vals],
+            "intervals": [round(v, 2) for v in vals],
         })
     return result
 
@@ -595,8 +608,8 @@ def _dispatch(
         rows = get_day_ahead_prices(
             con,
             BiddingZone(tool_input["zone"]),
-            _parse_date(tool_input["start_date"]),
-            _parse_date(tool_input["end_date"]),
+            _parse_date_cet(tool_input["start_date"]),
+            _parse_date_cet(tool_input["end_date"]),
         )
         return _summarize_prices(rows)
 
@@ -656,8 +669,8 @@ def _dispatch(
             con,
             tool_input["zone_1"],
             tool_input["zone_2"],
-            _parse_date(tool_input["start_date"]),
-            _parse_date(tool_input["end_date"]),
+            _parse_date_cet(tool_input["start_date"]),
+            _parse_date_cet(tool_input["end_date"]),
         )
 
     if name == "get_historical_similar_days":

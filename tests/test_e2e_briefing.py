@@ -8,6 +8,7 @@ references correct numbers from the seed data.
 import json
 from datetime import UTC, date, datetime, timedelta
 from unittest.mock import MagicMock
+from zoneinfo import ZoneInfo
 
 import duckdb
 import pytest
@@ -66,12 +67,16 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
     day = datetime(2024, 3, 15, tzinfo=UTC)
 
     _1H = timedelta(hours=1)
+    _CET = ZoneInfo("Europe/Berlin")
+    # Prices aligned to CET delivery day 2024-03-15.
+    # CET 00:00 = UTC 23:00 on March 14 (March 15 is still CET, UTC+1).
+    cet_start = datetime(2024, 3, 15, tzinfo=_CET).astimezone(UTC)
     # Prices: EE 50..96, FI 40..86
     insert_day_ahead_prices(con, [
         DayAheadPrice(
             zone=BiddingZone.EE,
-            period_start=datetime(2024, 3, 15, h, tzinfo=UTC),
-            period_end=datetime(2024, 3, 15, h, tzinfo=UTC) + _1H,
+            period_start=cet_start + timedelta(hours=h),
+            period_end=cet_start + timedelta(hours=h) + _1H,
             price_eur_mwh=50.0 + h * 2,
         )
         for h in range(24)
@@ -79,8 +84,8 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
     insert_day_ahead_prices(con, [
         DayAheadPrice(
             zone=BiddingZone.FI,
-            period_start=datetime(2024, 3, 15, h, tzinfo=UTC),
-            period_end=datetime(2024, 3, 15, h, tzinfo=UTC) + _1H,
+            period_start=cet_start + timedelta(hours=h),
+            period_end=cet_start + timedelta(hours=h) + _1H,
             price_eur_mwh=40.0 + h * 2,
         )
         for h in range(24)
