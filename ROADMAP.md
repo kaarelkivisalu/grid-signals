@@ -4,80 +4,9 @@ Nordic-Baltic Energy Intelligence Agent: automated market analysis powered by st
 
 ---
 
-## MVP — Data Ingestion + Daily Briefing
+## MVP — Completed ✅
 
-The MVP delivers two things: a reliable data pipeline that pulls from public energy/weather APIs into a local database, and an LLM agent that queries that data to produce a daily morning briefing.
-
-### Milestone 1: Project Setup & Data Models ✅
-
-**Goal:** Establish project structure, define schemas, set up DuckDB.
-
-- [x] Initialize Python project (pyproject.toml, uv/pip, basic directory structure)
-- [x] Define data models / schemas for:
-  - Day-ahead prices by bidding zone (EE, LV, LT, FI, SE4, SE3)
-  - Generation by fuel type per zone
-  - Total load forecast per zone
-  - Cross-border physical flows (interconnector capacities and scheduled exchanges)
-  - REMIT outage messages (planned and unplanned)
-  - Wind speed and solar irradiance forecasts for key locations
-- [x] Set up DuckDB database with tables matching these schemas
-- [x] Write a thin data-access layer (Python functions that query DuckDB and return structured results)
-- [x] Rename timestamp columns to `period_start`/`period_end` (half-open intervals) across all tables — rows are now self-describing with respect to resolution (hourly or 15-min ISP); migration script included
-
-**Key decisions:**
-- Bidding zones in scope for MVP: EE, LV, LT, FI, SE4. Possibly SE3 for wind context.
-- Time granularity: hourly for prices/generation/load, daily for outages; 15-min supported transparently.
-- DuckDB for storage — single-file, no server, fast analytical queries, good parquet support.
-
-### Milestone 2: Data Ingestion — ENTSO-E ✅
-
-**Goal:** Pull core market data from the ENTSO-E Transparency Platform.
-
-Data available from ENTSO-E:
-- Day-ahead prices (all zones)
-- Aggregated generation per type (wind, solar, nuclear, gas, oil shale, hydro, etc.)
-- Total load and load forecast
-- Cross-border physical flows between bidding zones
-- REMIT urgent market messages (outages)
-- Scheduled commercial exchanges
-
-Implementation:
-- [x] Register for ENTSO-E API key (free, takes ~3 days for approval)
-- [x] Use `entsoe-py` library as the API wrapper
-- [x] Build ingestion functions for each data type:
-  - `ingest_day_ahead_prices(zones, date_range)`
-  - `ingest_generation_per_type(zones, date_range)`
-  - `ingest_total_load(zones, date_range)`
-  - `ingest_cross_border_flows(borders, date_range)`
-  - `ingest_outages(zones, date_range)`
-- [x] Handle ENTSO-E API quirks: XML response parsing, rate limiting (400 requests/min), pagination for large date ranges, timezone handling (all data is UTC but markets trade in CET)
-- [x] Write data to DuckDB, with upsert logic to avoid duplicates on re-runs
-- [x] Backfill 6 months of historical data for each data type (Aug 2025 → Feb 2026, ~1.3M rows)
-
-**Key risks:**
-- ENTSO-E API key approval can take several business days.
-- The API is unreliable at times — build in retries with exponential backoff.
-- Some data types have different availability delays (day-ahead prices available ~13:00 CET D-1, generation actuals available next day).
-
-### Milestone 3: Data Ingestion — Weather (Open-Meteo) ✅
-
-**Goal:** Pull wind and solar forecasts for key generation regions.
-
-- [x] Identify key coordinates:
-  - Southern Sweden (SE4): ~56.0°N, 14.0°E (Skåne wind farms)
-  - Central Sweden (SE3): ~59.0°N, 16.0°E
-  - Finland: ~61.5°N, 24.0°E (inland wind), ~63.0°N, 21.0°E (Ostrobothnia coast)
-  - Estonia: ~59.0°N, 25.0°E
-  - Lithuania: ~55.5°N, 24.0°E
-  - Latvia: ~57.0°N, 24.0°E
-- [x] Use Open-Meteo free API (no key required):
-  - Wind speed at 100m hub height
-  - Solar irradiance (GHI)
-  - Temperature (drives demand)
-  - Forecast horizon: 7 days ahead, hourly
-- [x] Build ingestion: `ingest_weather_forecasts()` and `ingest_weather_history()`
-- [x] Store both the forecast and when it was fetched (to track forecast revisions)
-- [x] Backfill historical weather actuals for model context
+Milestones 1–3, 5–8 are done: project setup, DuckDB schemas, ENTSO-E ingestion, Open-Meteo weather, scheduling/CLI, LLM agent with tool use, daily briefing generation, testing & docs.
 
 ### Milestone 4: Data Ingestion — Baltic/Nordic System Data
 
@@ -93,103 +22,19 @@ Implementation:
   - Wind power production (actual vs forecast)
   - System state and frequency
   - Requires free API key registration
-- [ ] Evaluate: Litgrid/AST APIs for LT/LV (less mature, may skip for MVP)
+- [ ] Evaluate: Litgrid/AST APIs for LT/LV (less mature, may skip)
 
 **Note:** Some of this data overlaps with ENTSO-E. The TSO APIs are useful for near-real-time data (updated every few minutes) vs ENTSO-E (hourly/daily).
-
-### Milestone 5: Scheduling & Pipeline Orchestration ✅
-
-**Goal:** Automate data ingestion on a schedule.
-
-- [x] For MVP, use a simple scheduler — `cron` or a lightweight Python scheduler (APScheduler)
-  - Daily at 05:00 EET: pull latest day-ahead prices, generation forecasts, outages
-  - Every 6 hours: update weather forecasts
-  - Daily: backfill any gaps from previous days
-- [x] Add basic logging and error handling
-  - Log each ingestion run (source, date range, rows inserted, errors)
-  - Alert on failure (email or log notification)
-- [x] Data validation checks:
-  - No missing hours in price data
-  - Prices within reasonable bounds (negative OK, but flag if < -500 or > 4000 EUR/MWh)
-  - Wind forecasts not stale (check timestamp)
-- [x] Pipeline orchestration: `run_daily()`, `run_weather()`, `run_backfill()`
-- [x] CLI commands: `daily`, `weather`, `backfill`, `validate`
-
-**Decision: Airflow vs simple cron.**
-Airflow is overkill for MVP. A cron job calling a Python script is sufficient. See Direction F for the planned migration to systemd timers.
-
-### Milestone 6: LLM Agent with Tool Use ✅
-
-**Goal:** Build an LLM agent that can query the database through structured tools and reason about the data.
-
-Tools to implement:
-- [x] `get_day_ahead_prices(zone: str, start: date, end: date)` — returns hourly prices
-- [x] `get_generation_mix(zone: str, date: date)` — returns generation by fuel type
-- [x] `get_wind_forecast(region: str, start: date, end: date)` — returns wind speed/generation forecast
-- [x] `get_outages(zone: str, fuel_type: str | None)` — returns active REMIT outage messages
-- [x] `get_cross_border_flows(from_zone: str, to_zone: str, start: date, end: date)` — returns scheduled/actual flows
-- [x] `get_load_forecast(zone: str, start: date, end: date)` — returns total load forecast
-- [x] `calculate_spread(zone_1: str, zone_2: str, start: date, end: date)` — computes price spread time series
-- [x] `get_historical_similar_days(zone: str, conditions: dict)` — finds past days with similar wind/temp/outage patterns and returns their prices
-
-Agent design:
-- [x] Use Claude API with tool use
-- [x] System prompt with domain knowledge:
-  - Interconnector capacities (SE4-LT: ~700 MW, FI-EE: ~1000 MW, EE-LV: ~800 MW, LT-PL: ~500 MW)
-  - Key generation assets (Olkiluoto 1&2: ~1.7 GW nuclear, Narva oil shale: ~1.1 GW, Kruonis pumped storage: 900 MW)
-  - Market coupling mechanics (how day-ahead auction works, price convergence when interconnectors not congested)
-  - Seasonal patterns (spring flood drives Nordic hydro, winter demand peaks in Baltics, wind seasonality)
-- [x] Multi-step reasoning: agent should call multiple tools, compare results, and synthesize
-- [x] Grounding: all numbers in the output must come from tool calls, not from the LLM
-
-### Milestone 7: Daily Briefing Generation ✅
-
-**Goal:** Automated morning briefing generated by the LLM agent.
-
-- [x] Briefing generation script that:
-  1. Calls the agent with a structured prompt: "Generate a morning briefing for Baltic-Nordic day-ahead trading"
-  2. The agent autonomously decides which tools to call based on what's interesting
-  3. Agent produces a structured briefing with sections:
-     - **Key signal** — the single most important thing to know today
-     - **Price outlook** — day-ahead price expectations with drivers
-     - **Wind & weather** — forecast and how it compares to recent days
-     - **Outages** — any new or notable REMIT messages
-     - **Spreads** — cross-border spread analysis
-     - **Watch list** — things to monitor during the day
-- [x] Schedule briefing generation at 06:30 EET (after day-ahead results are published)
-- [x] Output format: structured text (Markdown) saved to file
-- [x] CLI command: `briefing` with `--date`, `--output`, `--model` options
-- [ ] Delivery mechanism to be decided (email, web UI, or other — see post-MVP directions)
-
-### Milestone 8: Testing, Documentation & Polish ✅
-
-- [x] Integration tests: mock API responses, verify ingestion writes correct data
-- [x] Unit tests for spread calculation, similar-day matching logic
-- [x] End-to-end test: seed DB with known data, run briefing generation, verify output references correct numbers
-- [x] README with:
-  - Architecture diagram
-  - Setup instructions
-  - Example briefing output
-  - CLI usage examples
-- [x] Clean up CLAUDE.md with actual build/test commands
 
 ---
 
 ## Post-MVP — Future Directions
 
-After the MVP is working and delivering daily briefings, there are several directions to expand. These are not sequential — pick based on interest and feedback.
-
 ### Direction A: Interactive Chat Interface ✅ (basic)
-
-Add a conversational interface so users can ask follow-up questions about the market.
 
 - [x] Streamlit chat page with `st.chat_input()` / `st.chat_message()`
 - [x] Tool call visibility in expanders, token/cost display
 - [ ] Persistent conversation context — the agent remembers what was discussed earlier in the session (requires `Agent.run()` refactor to accept message history)
-- Example queries:
-  - "What's driving the FI-EE spread today?"
-  - "How does tomorrow compare to last Tuesday?"
-  - "What happens if Olkiluoto comes back online Thursday?"
 
 ### Direction B: Anomaly Detection & Real-Time Alerts
 
@@ -199,7 +44,7 @@ Shift from scheduled briefings to continuous monitoring with alerts when somethi
 - Detect significant deviations from the baseline in near-real-time
 - LLM explains the anomaly: what's unusual and what might be causing it
 - Alert channels: email, webhook, dashboard notifications
-- Requires: more frequent data ingestion (every 5-15 min from TSO APIs), a baseline model (could be as simple as quantile regression or a gradient-boosted model), alert throttling to avoid fatigue
+- Requires: more frequent data ingestion (every 5-15 min from TSO APIs), a baseline model, alert throttling
 
 ### Direction C: Scenario Analysis & Backtesting
 
@@ -208,7 +53,7 @@ Enable counterfactual questions about the market.
 - "What would prices have been last January if Olkiluoto had been online?"
 - "How often does EE price exceed 100 EUR/MWh when wind < 2 GW and Narva is partially offline?"
 - "If 500 MW of new LT-PL interconnector capacity is added, what happens to LT price volatility?"
-- Requires: deep historical data (2+ years), a simulation or statistical model for counterfactuals, careful prompt engineering to distinguish "data says" from "model estimates"
+- Requires: deep historical data (2+ years), a simulation or statistical model for counterfactuals
 
 ### Direction D: Structured Report Generation
 
@@ -217,11 +62,9 @@ Generate weekly/monthly PDF reports suitable for distribution within a trading o
 - Professional formatting with charts, tables, and narrative
 - Sections: Price Review, Fundamental Drivers, Spread Analysis, Outage Calendar, Weather Outlook
 - Backtest mode: generate a report for any historical period and compare predictions vs actuals
-- Requires: PDF generation (WeasyPrint or similar), chart rendering (matplotlib/plotly exported as images), templating
+- Requires: PDF generation (WeasyPrint or similar), chart rendering (matplotlib/plotly), templating
 
 ### Direction E: Dashboard & Visualization ✅ (basic)
-
-Build a web dashboard with live charts and the briefing.
 
 - [x] Streamlit dashboard with Plotly charts: hourly prices, generation mix, cross-border flows, wind vs price, price heatmap
 - [x] Briefing viewer page with date selector
@@ -231,37 +74,27 @@ Build a web dashboard with live charts and the briefing.
 
 ### Direction F: Production Hardening (Single Server)
 
-Prepare the project for reliable production deployment on a single Linux server.
-
 **Critical:**
 - [ ] CI pipeline (GitHub Actions): ruff linting, mypy type checking, pytest on every push
 - [ ] Add authentication to Streamlit (nginx basic auth or built-in password)
 - [ ] Rate limit chat page to cap daily LLM spend
-- [ ] Structured logging (JSON format) captured by journald for log aggregation
+- [ ] Structured logging (JSON format) captured by journald
 - [ ] Failure alerting: systemd `OnFailure=` or wrapper script that posts to Slack/email
-- [ ] Daily health check: verify all jobs ran, latest `period_start` is within 24h, post summary to Slack
-- [ ] Automated daily DuckDB backup to S3 (30-day retention, prune older)
+- [ ] Daily health check: verify all jobs ran, latest `period_start` is within 24h
+- [ ] Automated daily DuckDB backup to S3 (30-day retention)
 - [ ] Add timeouts to ENTSO-E and Anthropic API calls
-- [ ] Validate environment variables at startup with clear error messages (not bare `KeyError`)
+- [ ] Validate environment variables at startup with clear error messages
 - [ ] Run validation *before* briefing generation so bad data doesn't produce a bad briefing
 
 **Scheduling — migrate from cron to systemd timers:**
-- [ ] Create `.service` and `.timer` units for each job (daily, weather, backfill, validate, briefing)
+- [ ] Create `.service` and `.timer` units for each job
 - [ ] Use `Persistent=true` so missed jobs run on boot
 - [ ] Use `OnFailure=` to trigger alert service on any failure
-- [ ] Use `ExecStartPre=` in briefing service to check that today's validation passed
-- [ ] Logs go to journald automatically (`journalctl -u grid-signals-daily`)
-- [ ] Consider Prefect later if DAG complexity grows beyond what systemd can express
+- [ ] Logs go to journald automatically
 
 **Code quality:**
 - [ ] Add ruff and mypy to project dev dependencies and CI
 - [ ] Add pytest coverage reporting
-- [ ] Secrets in a file with 0600 permissions loaded via systemd `EnvironmentFile=`
-
-**Nice-to-have:**
-- [ ] Audit logging for chat queries and LLM cost per session
-- [ ] Graceful degradation: briefing notes when weather data is stale instead of using it silently
-- [ ] logrotate config for any file-based logs alongside journald
 
 ### Direction G: Multi-Tenant SaaS
 
@@ -270,41 +103,13 @@ Turn the tool into a product that multiple trading desks can use.
 - User/org management, configurable zones and alert thresholds
 - Per-user conversation history and preferences
 - API access for integration with existing trading systems
-- Pricing model: monthly subscription per seat
-- Requires: auth, multi-tenancy, deployment infrastructure, uptime monitoring, significant additional engineering
+- Requires: auth, multi-tenancy, deployment infrastructure, significant additional engineering
 
 ### Direction H: Forecast Model
 
 Build a quantitative price forecasting model alongside the LLM agent.
 
 - Feature engineering: wind forecast, temperature, outage MW offline, day-of-week, season, lagged prices, hydro reservoir levels
-- Model: gradient-boosted trees (LightGBM) or similar, trained on historical data
+- Model: gradient-boosted trees (LightGBM) or similar
 - The LLM agent can call a `get_price_forecast(zone, date)` tool that returns the model's prediction with confidence intervals
 - Compare model forecast vs actual day-ahead price as a quality metric
-- Requires: ML pipeline, feature store, model training and evaluation, monitoring for model drift
-
----
-
-## Technical Stack (MVP)
-
-| Component | Choice | Rationale |
-|-----------|--------|-----------|
-| Language | Python 3.12+ | Ecosystem for data + LLM |
-| Database | DuckDB | Embedded analytical DB, parquet support, no server |
-| ENTSO-E client | entsoe-py | Wraps the painful XML API |
-| Weather data | Open-Meteo API | Free, no key, good forecast data |
-| LLM | Claude API (tool use) | Strong reasoning, native tool use |
-| Scheduling | cron + Python scripts | Simple, sufficient for MVP |
-| Delivery | TBD (email / web UI) | Decide post-MVP based on user feedback |
-| Testing | pytest | Standard |
-| Package mgmt | uv | Fast, modern Python package management |
-
----
-
-## Open Questions
-
-- **ENTSO-E API key:** Need to register and wait for approval. This is a blocker for Milestone 2. Can develop against cached/mock data in the meantime.
-- **Fingrid API:** Registration required. Evaluate whether data adds enough value over ENTSO-E alone for MVP.
-- **Historical backfill depth:** 3 months is minimal for "similar day" matching. 6-12 months is better but takes longer to ingest (ENTSO-E rate limits).
-- **LLM cost:** Claude API calls for daily briefing + occasional chat. Estimate: ~$1-3/day depending on tool call volume. Acceptable for a portfolio project.
-- **Delivery channel:** Email, web dashboard, or another push mechanism — decide based on who the early users are and what they prefer.
