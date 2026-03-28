@@ -291,11 +291,9 @@ def main(argv: list[str] | None = None) -> int:
 
         from grid_signals.agent.tools import execute_tool
         from grid_signals.db.connection import get_connection
-        from grid_signals.db.schema import create_tables
 
-        con = get_connection(db_path)
+        con = get_connection(db_path, read_only=True)
         try:
-            create_tables(con)
             tool_name, tool_input = _build_tool_input(args)
             result_json = execute_tool(tool_name, tool_input, con)
             print(json.dumps(json.loads(result_json), indent=2))
