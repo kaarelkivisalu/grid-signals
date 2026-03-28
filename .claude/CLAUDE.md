@@ -21,8 +21,8 @@ See `ROADMAP.md` for the full project plan and future directions.
 ## Build & Test Commands
 
 ```bash
-uv sync --all-extras   # install dependencies
-uv run pytest tests/    # run tests
+uv sync          # install dependencies
+uv run pytest    # run tests
 ```
 
 ## CLI Commands
@@ -33,6 +33,7 @@ uv run grid-signals weather     # ingest weather forecasts
 uv run grid-signals backfill    # backfill date range
 uv run grid-signals validate    # run data quality checks
 uv run grid-signals briefing    # generate daily briefing (needs ANTHROPIC_API_KEY)
+uv run grid-signals ui          # launch Streamlit web interface
 ```
 
 ## DB Schema

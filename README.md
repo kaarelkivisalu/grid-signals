@@ -51,7 +51,7 @@ Nordic-Baltic Energy Intelligence Agent. Automated market analysis powered by st
 # Clone and install
 git clone <repo-url>
 cd grid-signals
-uv sync --all-extras
+uv sync
 
 # Set API keys
 export ENTSOE_API_KEY="your-key"       # Register at transparency.entsoe.eu
@@ -87,6 +87,13 @@ uv run grid-signals briefing --date 2024-03-15
 
 # Custom output directory
 uv run grid-signals briefing --output reports/
+```
+
+### Web interface
+
+```bash
+# Launch the Streamlit dashboard
+uv run grid-signals ui
 ```
 
 ### Interactive agent
@@ -159,7 +166,7 @@ interconnector capacity.
 ## Testing
 
 ```bash
-uv run pytest tests/
+uv run pytest
 ```
 
 ## Tech stack
