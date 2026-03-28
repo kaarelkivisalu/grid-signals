@@ -28,11 +28,11 @@ uv run pytest tests/    # run tests
 ## CLI Commands
 
 ```bash
-uv run python -m grid_signals daily       # ingest ENTSO-E data
-uv run python -m grid_signals weather     # ingest weather forecasts
-uv run python -m grid_signals backfill    # backfill date range
-uv run python -m grid_signals validate    # run data quality checks
-uv run python -m grid_signals briefing    # generate daily briefing (needs ANTHROPIC_API_KEY)
+uv run grid-signals daily       # ingest ENTSO-E data
+uv run grid-signals weather     # ingest weather forecasts
+uv run grid-signals backfill    # backfill date range
+uv run grid-signals validate    # run data quality checks
+uv run grid-signals briefing    # generate daily briefing (needs ANTHROPIC_API_KEY)
 ```
 
 ## DB Schema
