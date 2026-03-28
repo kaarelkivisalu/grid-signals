@@ -532,3 +532,70 @@ class TestAgentLoopMaxTurns:
 
         assert "maximum number of turns" in result.content
         assert len(result.tool_calls) == 3
+
+
+class TestAgentLoopConversationHistory:
+    def test_message_history_prepended(self, con):
+        """Passing message_history from a prior turn includes it in the API call."""
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = _make_response(
+            content=[_make_text_block("The average was 73 EUR/MWh.")],
+            stop_reason="end_turn",
+        )
+
+        # Simulate history from a prior turn
+        history = [
+            {"role": "user", "content": "What were EE prices on Jan 15?"},
+            {"role": "assistant", "content": "EE prices ranged from 50 to 96 EUR/MWh."},
+        ]
+
+        agent = Agent(con, client=mock_client, model="test-model")
+        result = agent.run("What was the average?", message_history=history)
+
+        # Verify the API received history + new message
+        call_args = mock_client.messages.create.call_args
+        sent_messages = call_args.kwargs["messages"]
+        assert len(sent_messages) == 3
+        assert sent_messages[0] == history[0]
+        assert sent_messages[1] == history[1]
+        assert sent_messages[2] == {"role": "user", "content": "What was the average?"}
+
+        assert result.content == "The average was 73 EUR/MWh."
+
+    def test_no_history_backward_compatible(self, con):
+        """Without message_history, only the new user message is sent."""
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = _make_response(
+            content=[_make_text_block("Hello!")],
+            stop_reason="end_turn",
+        )
+
+        agent = Agent(con, client=mock_client, model="test-model")
+        result = agent.run("Hi")
+
+        call_args = mock_client.messages.create.call_args
+        sent_messages = call_args.kwargs["messages"]
+        assert len(sent_messages) == 1
+        assert sent_messages[0] == {"role": "user", "content": "Hi"}
+        assert result.content == "Hello!"
+
+    def test_messages_field_contains_turn_only(self, con):
+        """AgentResult.messages contains only this turn's messages, not history."""
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = _make_response(
+            content=[_make_text_block("Sure, the average was 73.")],
+            stop_reason="end_turn",
+        )
+
+        history = [
+            {"role": "user", "content": "First question"},
+            {"role": "assistant", "content": "First answer"},
+        ]
+
+        agent = Agent(con, client=mock_client, model="test-model")
+        result = agent.run("Second question", message_history=history)
+
+        # messages should only contain this turn's user message (no assistant
+        # message appended since model responded with end_turn on first call)
+        assert len(result.messages) == 1
+        assert result.messages[0] == {"role": "user", "content": "Second question"}

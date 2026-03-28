@@ -13,6 +13,8 @@ st.title("Energy Intelligence Chat")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "api_messages" not in st.session_state:
+    st.session_state.api_messages = []
 
 # Check for API key
 if not os.environ.get("ANTHROPIC_API_KEY"):
@@ -47,7 +49,10 @@ if prompt := st.chat_input("Ask about Baltic-Nordic energy markets..."):
         with st.spinner("Thinking..."):
             con = get_chat_db()
             agent = Agent(con)
-            result: AgentResult = agent.run(prompt)
+            result: AgentResult = agent.run(
+                prompt,
+                message_history=st.session_state.api_messages or None,
+            )
 
         st.markdown(result.content)
 
@@ -70,3 +75,4 @@ if prompt := st.chat_input("Ask about Baltic-Nordic energy markets..."):
         "tool_calls": tool_info,
         "cost": cost_str,
     })
+    st.session_state.api_messages.extend(result.messages)

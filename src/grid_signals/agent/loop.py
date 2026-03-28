@@ -35,6 +35,7 @@ class AgentResult:
     input_tokens: int = 0
     output_tokens: int = 0
     model: str = ""
+    messages: list[dict] = field(default_factory=list)
 
     @property
     def estimated_cost_usd(self) -> float:
@@ -74,9 +75,20 @@ class Agent:
         self.model = model
         self.max_turns = max_turns
 
-    def run(self, user_message: str) -> AgentResult:
+    def run(
+        self,
+        user_message: str,
+        *,
+        message_history: list[dict] | None = None,
+    ) -> AgentResult:
         """Run a conversation loop until the model stops or max_turns is hit."""
-        messages: list[dict] = [{"role": "user", "content": user_message}]
+        if message_history:
+            messages: list[dict] = list(message_history) + [
+                {"role": "user", "content": user_message}
+            ]
+        else:
+            messages: list[dict] = [{"role": "user", "content": user_message}]
+        history_len = len(messages) - 1  # messages before this turn
         tool_log: list[ToolCallRecord] = []
         total_input_tokens = 0
         total_output_tokens = 0
@@ -103,6 +115,7 @@ class Agent:
                     input_tokens=total_input_tokens,
                     output_tokens=total_output_tokens,
                     model=self.model,
+                    messages=messages[history_len:],
                 )
 
             if response.stop_reason == "tool_use":
@@ -143,6 +156,7 @@ class Agent:
                 input_tokens=total_input_tokens,
                 output_tokens=total_output_tokens,
                 model=self.model,
+                messages=messages[history_len:],
             )
 
         # Max turns exhausted
@@ -155,6 +169,7 @@ class Agent:
             input_tokens=total_input_tokens,
             output_tokens=total_output_tokens,
             model=self.model,
+            messages=messages[history_len:],
         )
 
 
@@ -173,7 +188,8 @@ def run_agent(
     *,
     model: str = DEFAULT_MODEL,
     max_turns: int = DEFAULT_MAX_TURNS,
+    message_history: list[dict] | None = None,
 ) -> AgentResult:
     """Convenience function: create an Agent and run a single message."""
     agent = Agent(con, model=model, max_turns=max_turns)
-    return agent.run(user_message)
+    return agent.run(user_message, message_history=message_history)
