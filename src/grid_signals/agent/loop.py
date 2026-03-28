@@ -13,7 +13,7 @@ from grid_signals.agent.tools import TOOLS, execute_tool
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "claude-haiku-4-5-20251001"
+DEFAULT_MODEL = "claude-haiku-4-5"
 DEFAULT_MAX_TURNS = 15
 
 
@@ -44,16 +44,16 @@ class AgentResult:
 
 # Pricing per million tokens (input, output) in USD.
 _MODEL_PRICING: dict[str, tuple[float, float]] = {
-    "claude-haiku-4-5-20251001": (1.00, 5.00),
-    "claude-sonnet-4-6-20250514": (3.00, 15.00),
-    "claude-opus-4-6-20250514": (5.00, 25.00),
+    "claude-haiku-4-5": (1.00, 5.00),
+    "claude-sonnet-4-6": (3.00, 15.00),
+    "claude-opus-4-6": (5.00, 25.00),
 }
 
 
 def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     """Estimate API cost in USD. Falls back to Sonnet pricing for unknown models."""
     input_price, output_price = _MODEL_PRICING.get(
-        model, _MODEL_PRICING["claude-sonnet-4-6-20250514"]
+        model, _MODEL_PRICING["claude-sonnet-4-6"]
     )
     return (input_tokens * input_price + output_tokens * output_price) / 1_000_000
 
