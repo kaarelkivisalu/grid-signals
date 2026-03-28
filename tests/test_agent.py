@@ -384,6 +384,77 @@ class TestUnknownTool:
 
 
 # ---------------------------------------------------------------------------
+# CLI query subcommand tests (uses _build_tool_input + execute_tool)
+# ---------------------------------------------------------------------------
+
+
+class TestCLIBuildToolInput:
+    """Test that CLI args map correctly to tool names and inputs."""
+
+    def _parse(self, argv: list[str]):
+        from grid_signals.cli import _build_tool_input, _parse_args
+
+        args = _parse_args(argv)
+        return _build_tool_input(args)
+
+    def test_prices(self):
+        name, inp = self._parse(["query", "prices", "EE", "2024-01-15", "2024-01-16"])
+        assert name == "get_day_ahead_prices"
+        assert inp == {"zone": "EE", "start_date": "2024-01-15", "end_date": "2024-01-16"}
+
+    def test_generation_with_fuel_type(self):
+        name, inp = self._parse(
+            ["query", "generation", "EE", "2024-01-15", "2024-01-16", "--fuel-type", "wind_onshore"]
+        )
+        assert name == "get_generation_mix"
+        assert inp["fuel_type"] == "wind_onshore"
+
+    def test_weather(self):
+        name, inp = self._parse(["query", "weather", "EE_tallinn", "2024-01-15", "2024-01-16"])
+        assert name == "get_wind_forecast"
+        assert inp["location"] == "EE_tallinn"
+
+    def test_outages(self):
+        name, inp = self._parse(["query", "outages", "FI", "--fuel-type", "nuclear"])
+        assert name == "get_outages"
+        assert inp == {"zone": "FI", "fuel_type": "nuclear"}
+
+    def test_flows(self):
+        name, inp = self._parse(["query", "flows", "EE", "FI", "2024-01-15", "2024-01-16"])
+        assert name == "get_cross_border_flows"
+        assert inp["from_zone"] == "EE"
+        assert inp["to_zone"] == "FI"
+
+    def test_load(self):
+        name, inp = self._parse(["query", "load", "EE", "2024-01-15", "2024-01-16"])
+        assert name == "get_load_forecast"
+
+    def test_spread(self):
+        name, inp = self._parse(["query", "spread", "EE", "FI", "2024-01-15", "2024-01-16"])
+        assert name == "calculate_spread"
+        assert inp["zone_1"] == "EE"
+        assert inp["zone_2"] == "FI"
+
+    def test_similar_days(self):
+        name, inp = self._parse(
+            ["query", "similar-days", "EE", "EE_tallinn", "--wind", "7.0", "--temp", "-5.0"]
+        )
+        assert name == "get_historical_similar_days"
+        assert inp["target_wind_ms"] == 7.0
+        assert inp["target_temp_c"] == -5.0
+        assert inp["wind_tolerance_ms"] == 2.0  # default
+        assert inp["limit"] == 10  # default
+
+    def test_query_prices_end_to_end(self, con):
+        """Full round-trip: CLI args → tool name/input → execute_tool → JSON."""
+        name, inp = self._parse(["query", "prices", "EE", "2024-01-15", "2024-01-16"])
+        result = json.loads(execute_tool(name, inp, con))
+        assert len(result) >= 1
+        assert result[0]["zone"] == "EE"
+        assert result[0]["min"] == 50.0
+
+
+# ---------------------------------------------------------------------------
 # Agent loop tests (mocked Anthropic client)
 # ---------------------------------------------------------------------------
 

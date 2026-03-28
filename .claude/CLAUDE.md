@@ -34,6 +34,16 @@ uv run grid-signals backfill    # backfill date range
 uv run grid-signals validate    # run data quality checks
 uv run grid-signals briefing    # generate daily briefing (needs ANTHROPIC_API_KEY)
 uv run grid-signals ui          # launch Streamlit web interface
+
+# Query subcommands (direct tool access, no LLM needed)
+uv run grid-signals query prices EE 2024-01-15 2024-01-16
+uv run grid-signals query generation EE 2024-01-15 2024-01-16 --fuel-type wind_onshore
+uv run grid-signals query weather EE_tallinn 2024-01-15 2024-01-16
+uv run grid-signals query outages FI --fuel-type nuclear --active-at 2024-01-15
+uv run grid-signals query flows EE FI 2024-01-15 2024-01-16
+uv run grid-signals query load EE 2024-01-15 2024-01-16
+uv run grid-signals query spread EE FI 2024-01-15 2024-01-16
+uv run grid-signals query similar-days EE EE_tallinn --wind 7.0 --temp -5.0
 ```
 
 ## DB Schema
