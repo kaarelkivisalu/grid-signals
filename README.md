@@ -64,39 +64,39 @@ export ANTHROPIC_API_KEY="your-key"    # For the LLM agent
 
 ```bash
 # Pull yesterday/today/tomorrow data from ENTSO-E
-uv run python -m grid_signals daily
+uv run grid-signals daily
 
 # Update weather forecasts (7-day ahead)
-uv run python -m grid_signals weather
+uv run grid-signals weather
 
 # Backfill a specific date range
-uv run python -m grid_signals backfill --start 2024-01-01 --end 2024-03-31
+uv run grid-signals backfill --start 2024-01-01 --end 2024-03-31
 
 # Run data validation checks
-uv run python -m grid_signals validate
+uv run grid-signals validate
 ```
 
 ### Morning briefing
 
 ```bash
 # Generate today's briefing (saved to briefings/YYYY-MM-DD.md)
-uv run python -m grid_signals briefing
+uv run grid-signals briefing
 
 # Generate for a specific date
-uv run python -m grid_signals briefing --date 2024-03-15
+uv run grid-signals briefing --date 2024-03-15
 
 # Custom output directory
-uv run python -m grid_signals briefing --output reports/
+uv run grid-signals briefing --output reports/
 ```
 
 ### Interactive agent
 
 ```bash
 # Ask a question
-uv run python -m grid_signals agent "What are the key drivers for EE prices today?"
+uv run grid-signals agent "What are the key drivers for EE prices today?"
 
 # Use a specific model
-uv run python -m grid_signals agent "Compare FI and EE spreads this week" --model claude-sonnet-4-20250514
+uv run grid-signals agent "Compare FI and EE spreads this week" --model claude-sonnet-4-20250514
 ```
 
 ### Scheduling
