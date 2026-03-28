@@ -116,7 +116,7 @@ Implementation:
 - [x] CLI commands: `daily`, `weather`, `backfill`, `validate`
 
 **Decision: Airflow vs simple cron.**
-Airflow is overkill for MVP. A cron job calling a Python script is sufficient. Move to Airflow later if the DAG complexity grows.
+Airflow is overkill for MVP. A cron job calling a Python script is sufficient. See Direction F for the planned migration to systemd timers.
 
 ### Milestone 6: LLM Agent with Tool Use ✅
 
@@ -229,7 +229,41 @@ Build a web dashboard with live charts and the briefing.
 - [ ] Interconnector flow visualization (map-based)
 - [ ] Spread evolution over time chart
 
-### Direction F: Multi-Tenant SaaS
+### Direction F: Production Hardening (Single Server)
+
+Prepare the project for reliable production deployment on a single Linux server.
+
+**Critical:**
+- [ ] CI pipeline (GitHub Actions): ruff linting, mypy type checking, pytest on every push
+- [ ] Add authentication to Streamlit (nginx basic auth or built-in password)
+- [ ] Rate limit chat page to cap daily LLM spend
+- [ ] Structured logging (JSON format) captured by journald for log aggregation
+- [ ] Failure alerting: systemd `OnFailure=` or wrapper script that posts to Slack/email
+- [ ] Daily health check: verify all jobs ran, latest `period_start` is within 24h, post summary to Slack
+- [ ] Automated daily DuckDB backup to S3 (30-day retention, prune older)
+- [ ] Add timeouts to ENTSO-E and Anthropic API calls
+- [ ] Validate environment variables at startup with clear error messages (not bare `KeyError`)
+- [ ] Run validation *before* briefing generation so bad data doesn't produce a bad briefing
+
+**Scheduling — migrate from cron to systemd timers:**
+- [ ] Create `.service` and `.timer` units for each job (daily, weather, backfill, validate, briefing)
+- [ ] Use `Persistent=true` so missed jobs run on boot
+- [ ] Use `OnFailure=` to trigger alert service on any failure
+- [ ] Use `ExecStartPre=` in briefing service to check that today's validation passed
+- [ ] Logs go to journald automatically (`journalctl -u grid-signals-daily`)
+- [ ] Consider Prefect later if DAG complexity grows beyond what systemd can express
+
+**Code quality:**
+- [ ] Add ruff and mypy to project dev dependencies and CI
+- [ ] Add pytest coverage reporting
+- [ ] Secrets in a file with 0600 permissions loaded via systemd `EnvironmentFile=`
+
+**Nice-to-have:**
+- [ ] Audit logging for chat queries and LLM cost per session
+- [ ] Graceful degradation: briefing notes when weather data is stale instead of using it silently
+- [ ] logrotate config for any file-based logs alongside journald
+
+### Direction G: Multi-Tenant SaaS
 
 Turn the tool into a product that multiple trading desks can use.
 
@@ -239,7 +273,7 @@ Turn the tool into a product that multiple trading desks can use.
 - Pricing model: monthly subscription per seat
 - Requires: auth, multi-tenancy, deployment infrastructure, uptime monitoring, significant additional engineering
 
-### Direction G: Forecast Model
+### Direction H: Forecast Model
 
 Build a quantitative price forecasting model alongside the LLM agent.
 
