@@ -53,7 +53,7 @@ _MODEL_PRICING: dict[str, tuple[float, float]] = {
 def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     """Estimate API cost in USD. Falls back to Sonnet pricing for unknown models."""
     input_price, output_price = _MODEL_PRICING.get(
-        model, _MODEL_PRICING["claude-sonnet-4-6"]
+        model, _MODEL_PRICING[DEFAULT_MODEL]
     )
     return (input_tokens * input_price + output_tokens * output_price) / 1_000_000
 
