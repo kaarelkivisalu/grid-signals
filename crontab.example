@@ -1,5 +1,8 @@
 # Grid Signals — example crontab
 #
+# DEPRECATED: Scheduling has moved to Prefect. See flows.py and prefect.yaml.
+# This file is kept for reference only.
+#
 # Install with: crontab crontab.example
 # Edit paths to match your setup.
 #
