@@ -25,8 +25,9 @@ ZONE_TO_ENTSOE: dict[BiddingZone, str] = {
     BiddingZone.DK2: "DK_2",
 }
 
-# Cross-border interconnectors in the Nordic-Baltic region.
-BORDERS: list[tuple[BiddingZone, BiddingZone]] = [
+# Cross-border interconnectors in the Nordic-Baltic region (one pair per
+# physical link — BORDER_PAIRS expands to both directions for flow ingestion).
+_BORDER_LINKS: list[tuple[BiddingZone, BiddingZone]] = [
     # Baltic
     (BiddingZone.EE, BiddingZone.FI),
     (BiddingZone.EE, BiddingZone.LV),
@@ -55,6 +56,11 @@ BORDERS: list[tuple[BiddingZone, BiddingZone]] = [
     (BiddingZone.DK1, BiddingZone.NO2),
     (BiddingZone.DK1, BiddingZone.SE3),
     (BiddingZone.DK2, BiddingZone.SE4),
+]
+
+# Both directions for each link — ENTSO-E reports A→B and B→A separately.
+BORDERS: list[tuple[BiddingZone, BiddingZone]] = [
+    pair for a, b in _BORDER_LINKS for pair in ((a, b), (b, a))
 ]
 
 
