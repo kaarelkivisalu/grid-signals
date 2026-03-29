@@ -72,7 +72,7 @@ class TestLocations:
             assert loc.name
 
     def test_expected_count(self):
-        assert len(LOCATIONS) == 14
+        assert len(LOCATIONS) == 16
 
 
 # ---------------------------------------------------------------------------

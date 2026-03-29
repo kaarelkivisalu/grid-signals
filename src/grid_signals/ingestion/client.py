@@ -12,8 +12,10 @@ ZONE_TO_ENTSOE: dict[BiddingZone, str] = {
     BiddingZone.LV: "LV",
     BiddingZone.LT: "LT",
     BiddingZone.FI: "FI",
-    BiddingZone.SE4: "SE_4",
+    BiddingZone.SE1: "SE_1",
+    BiddingZone.SE2: "SE_2",
     BiddingZone.SE3: "SE_3",
+    BiddingZone.SE4: "SE_4",
     BiddingZone.NO1: "NO_1",
     BiddingZone.NO2: "NO_2",
     BiddingZone.NO3: "NO_3",
@@ -33,6 +35,8 @@ BORDERS: list[tuple[BiddingZone, BiddingZone]] = [
     (BiddingZone.LT, BiddingZone.SE4),
     (BiddingZone.FI, BiddingZone.SE3),
     # Sweden internal
+    (BiddingZone.SE1, BiddingZone.SE2),
+    (BiddingZone.SE2, BiddingZone.SE3),
     (BiddingZone.SE3, BiddingZone.SE4),
     # Norway internal
     (BiddingZone.NO1, BiddingZone.NO2),
@@ -42,7 +46,10 @@ BORDERS: list[tuple[BiddingZone, BiddingZone]] = [
     (BiddingZone.NO3, BiddingZone.NO4),
     # Norway–Sweden/Finland
     (BiddingZone.NO1, BiddingZone.SE3),
+    (BiddingZone.NO3, BiddingZone.SE2),
+    (BiddingZone.NO4, BiddingZone.SE1),
     (BiddingZone.NO4, BiddingZone.FI),
+    (BiddingZone.FI, BiddingZone.SE1),
     # Denmark
     (BiddingZone.DK1, BiddingZone.DK2),
     (BiddingZone.DK1, BiddingZone.NO2),

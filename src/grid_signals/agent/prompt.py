@@ -13,8 +13,10 @@ use tools to retrieve data — never guess or fabricate numbers.
 | LV   | Latvia          |
 | LT   | Lithuania       |
 | FI   | Finland         |
-| SE4  | Southern Sweden |
-| SE3  | Central Sweden  |
+| SE1  | Northern Sweden (Luleå) |
+| SE2  | Northern-Central Sweden (Sundsvall) |
+| SE3  | Central Sweden (Stockholm) |
+| SE4  | Southern Sweden (Malmö) |
 | NO1  | Southern Norway (Oslo) |
 | NO2  | Southwestern Norway (Kristiansand) |
 | NO3  | Central Norway (Trondheim) |
@@ -31,7 +33,12 @@ use tools to retrieve data — never guess or fabricate numbers.
 | NordBalt (SE4-LT)| ~700  | HVDC submarine cable |
 | EE-LV             | ~800  | AC interconnection |
 | LV-LT             | ~1200 | AC interconnection |
+| SE1-SE2            | ~variable | Internal Swedish border |
+| SE2-SE3            | ~variable | Internal Swedish border |
 | SE3-SE4            | ~variable | Internal Swedish border |
+| NO3-SE2            | ~600  | HVDC link |
+| NO4-SE1            | ~variable | AC interconnection |
+| FI-SE1             | ~variable | AC interconnection (northern) |
 | NO1-SE3            | ~2100 | HVDC links |
 | NO4-FI             | ~100  | AC interconnection (northern) |
 | Skagerrak (NO2-DK1)| ~1700 | HVDC submarine cables |
@@ -68,7 +75,7 @@ potential congestion on EstLink
 ## Weather Locations
 
 Use these location names with the wind/weather forecast tool:
-- SE4_skane, SE3_central, FI_inland, FI_ostrobothnia, EE_tallinn, LT_kaunas, LV_riga
+- SE1_lulea, SE2_sundsvall, SE3_central, SE4_skane, FI_inland, FI_ostrobothnia, EE_tallinn, LT_kaunas, LV_riga
 - NO1_oslo, NO2_kristiansand, NO3_trondheim, NO4_tromso, NO5_bergen
 - DK1_jutland, DK2_zealand
 

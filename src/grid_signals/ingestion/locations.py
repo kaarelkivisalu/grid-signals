@@ -14,8 +14,10 @@ class WeatherLocation:
 
 # Key wind/solar generation regions per bidding zone.
 LOCATIONS: list[WeatherLocation] = [
-    WeatherLocation("SE4_skane", 56.0, 14.0),
+    WeatherLocation("SE1_lulea", 65.6, 22.1),
+    WeatherLocation("SE2_sundsvall", 62.4, 17.3),
     WeatherLocation("SE3_central", 59.0, 16.0),
+    WeatherLocation("SE4_skane", 56.0, 14.0),
     WeatherLocation("FI_inland", 61.5, 24.0),
     WeatherLocation("FI_ostrobothnia", 63.0, 21.0),
     WeatherLocation("EE_tallinn", 59.0, 25.0),

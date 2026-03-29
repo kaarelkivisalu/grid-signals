@@ -17,7 +17,7 @@ from grid_signals.db.connection import DEFAULT_DB_PATH
 st.set_page_config(page_title="Dashboard — Grid Signals", page_icon="⚡", layout="wide")
 st.title("Dashboard")
 
-ZONES = ["EE", "LV", "LT", "FI", "SE4", "SE3", "NO1", "NO2", "NO3", "NO4", "NO5", "DK1", "DK2"]
+ZONES = ["EE", "LV", "LT", "FI", "SE1", "SE2", "SE3", "SE4", "NO1", "NO2", "NO3", "NO4", "NO5", "DK1", "DK2"]
 INTERCONNECTORS = [
     ("FI", "EE"),
     ("EE", "LV"),
@@ -35,8 +35,10 @@ WEATHER_LOCATIONS = [
     "LT_kaunas",
     "FI_inland",
     "FI_ostrobothnia",
-    "SE4_skane",
+    "SE1_lulea",
+    "SE2_sundsvall",
     "SE3_central",
+    "SE4_skane",
     "NO1_oslo",
     "NO2_kristiansand",
     "NO3_trondheim",
