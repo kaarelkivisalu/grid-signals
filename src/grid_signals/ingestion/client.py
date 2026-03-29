@@ -45,10 +45,12 @@ _BORDER_LINKS: list[tuple[BiddingZone, BiddingZone]] = [
     (BiddingZone.NO1, BiddingZone.NO5),
     (BiddingZone.NO2, BiddingZone.NO5),
     (BiddingZone.NO3, BiddingZone.NO4),
+    (BiddingZone.NO3, BiddingZone.NO5),
     # Norway–Sweden/Finland
     (BiddingZone.NO1, BiddingZone.SE3),
     (BiddingZone.NO3, BiddingZone.SE2),
     (BiddingZone.NO4, BiddingZone.SE1),
+    (BiddingZone.NO4, BiddingZone.SE2),
     (BiddingZone.NO4, BiddingZone.FI),
     (BiddingZone.FI, BiddingZone.SE1),
     # Denmark
