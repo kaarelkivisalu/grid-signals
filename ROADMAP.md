@@ -72,29 +72,30 @@ Generate weekly/monthly PDF reports suitable for distribution within a trading o
 - [x] Interconnector flow visualization (map-based)
 - [ ] Spread evolution over time chart
 
-### Direction F: Production Hardening (Single Server)
+### Direction F: Production Hardening (Single Server) ✅
 
 **Critical:**
-- [ ] CI pipeline (GitHub Actions): ruff linting, mypy type checking, pytest on every push
+- [x] CI pipeline (GitHub Actions): ruff linting, mypy type checking, pytest on every push
 - [ ] Add authentication to Streamlit (nginx basic auth or built-in password)
-- [ ] Rate limit chat page to cap daily LLM spend
-- [ ] Structured logging (JSON format) captured by journald
-- [ ] Failure alerting: systemd `OnFailure=` or wrapper script that posts to Slack/email
-- [ ] Daily health check: verify all jobs ran, latest `period_start` is within 24h
-- [ ] Automated daily DuckDB backup to S3 (30-day retention)
-- [ ] Add timeouts to ENTSO-E and Anthropic API calls
-- [ ] Validate environment variables at startup with clear error messages
-- [ ] Run validation *before* briefing generation so bad data doesn't produce a bad briefing
+- [x] Rate limit chat page to cap daily LLM spend
+- [x] Structured logging (JSON format) — stdlib JSONFormatter, auto-detect TTY
+- [x] Failure alerting: Prefect automations (configurable via Prefect UI)
+- [x] Daily health check: verify all jobs ran, latest `period_start` is within 26h
+- [x] Automated daily DuckDB backup to S3 (30-day retention via S3 lifecycle policy)
+- [x] Add timeouts to ENTSO-E (60s) and Anthropic (120s) API calls
+- [x] Validate environment variables at startup with clear error messages
+- [x] Run validation *before* briefing generation so bad data doesn't produce a bad briefing
 
-**Scheduling — migrate from cron to systemd timers:**
-- [ ] Create `.service` and `.timer` units for each job
-- [ ] Use `Persistent=true` so missed jobs run on boot
-- [ ] Use `OnFailure=` to trigger alert service on any failure
-- [ ] Logs go to journald automatically
+**Scheduling — migrated from cron to Prefect:**
+- [x] Prefect flows and tasks wrapping existing pipeline functions
+- [x] Cron-based schedules with catchup for missed runs
+- [x] Built-in retries, timeouts, and failure handling per task
+- [x] Docker Compose deployment (Prefect server + worker)
+- [x] Prefect UI dashboard for observability at localhost:4200
 
 **Code quality:**
-- [ ] Add ruff and mypy to project dev dependencies and CI
-- [ ] Add pytest coverage reporting
+- [x] Add ruff and mypy to project dev dependencies and CI
+- [x] Add pytest coverage reporting (pytest-cov)
 
 ### Direction G: Multi-Tenant SaaS
 
