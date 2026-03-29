@@ -81,6 +81,7 @@ def generate_briefing(
     model: str = DEFAULT_MODEL,
     max_turns: int = DEFAULT_MAX_TURNS,
     client: anthropic.Anthropic | None = None,
+    validate_first: bool = True,
 ) -> BriefingResult:
     """Generate a daily briefing by running the agent with a structured prompt.
 
@@ -100,6 +101,17 @@ def generate_briefing(
 
     prompt = build_briefing_prompt(target_date)
     logger.info("Generating briefing for %s", target_date.isoformat())
+
+    if validate_first:
+        from grid_signals.validation import run_all_validations
+
+        results = run_all_validations(con)
+        failures = [r for r in results if not r.passed]
+        if failures:
+            logger.warning(
+                "Data validation found %d issue(s) before briefing generation",
+                len(failures),
+            )
 
     agent = Agent(con, client=client, model=model, max_turns=max_turns)
     agent_result = agent.run(prompt)
