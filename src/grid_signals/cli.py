@@ -8,6 +8,7 @@ from pathlib import Path
 
 from grid_signals.config import ConfigError
 from grid_signals.db.connection import DEFAULT_DB_PATH
+from grid_signals.logging_config import configure_logging
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -20,6 +21,19 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=str,
         default=str(DEFAULT_DB_PATH),
         help=f"Path to DuckDB file (default: {DEFAULT_DB_PATH})",
+    )
+    log_group = parser.add_mutually_exclusive_group()
+    log_group.add_argument(
+        "--json-log",
+        action="store_true",
+        default=None,
+        help="Force JSON log output",
+    )
+    log_group.add_argument(
+        "--no-json-log",
+        action="store_true",
+        default=None,
+        help="Force human-readable log output",
     )
 
     sub = parser.add_subparsers(dest="command", required=True)
@@ -219,17 +233,15 @@ def _build_tool_input(args: argparse.Namespace) -> tuple[str, dict]:
     raise ValueError(f"Unknown query command: {cmd!r}")
 
 
-def _configure_logging() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        datefmt="%Y-%m-%dT%H:%M:%S",
-    )
-
-
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    _configure_logging()
+
+    json_log: bool | None = None
+    if args.json_log:
+        json_log = True
+    elif args.no_json_log:
+        json_log = False
+    configure_logging(json_output=json_log)
 
     db_path = Path(args.db)
 
