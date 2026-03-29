@@ -56,7 +56,6 @@ def _make_hourly_prices(zone: BiddingZone, day: datetime) -> list[DayAheadPrice]
 def test_validate_date_range(con):
     """Validation over a multi-day range checks each day."""
     day1 = datetime(2024, 1, 15, tzinfo=UTC)
-    day2 = datetime(2024, 1, 16, tzinfo=UTC)
     end = datetime(2024, 1, 17, tzinfo=UTC)
 
     # Insert prices only for day1, not day2

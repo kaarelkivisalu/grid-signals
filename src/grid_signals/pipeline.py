@@ -237,7 +237,7 @@ def run_backfill_gaps(
         weather_client = get_openmeteo_client()
         weather_gaps = _find_weather_gaps(con, start, end)
         for loc_name, missing in weather_gaps.items():
-            loc = next((l for l in LOCATIONS if l.name == loc_name), None)
+            loc = next((loc_ for loc_ in LOCATIONS if loc_.name == loc_name), None)
             if loc is None:
                 continue
             for rng_start, rng_end in _date_ranges(missing):

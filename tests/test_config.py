@@ -2,7 +2,12 @@
 
 import pytest
 
-from grid_signals.config import ConfigError, get_anthropic_api_key, get_entsoe_api_key, require_env
+from grid_signals.config import (
+    ConfigError,
+    get_anthropic_api_key,
+    get_entsoe_api_key,
+    require_env,
+)
 
 
 class TestRequireEnv:

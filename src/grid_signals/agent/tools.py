@@ -12,7 +12,7 @@ import duckdb
 # Day-ahead markets operate in CET/CEST (Europe/Berlin covers this).
 CET = ZoneInfo("Europe/Berlin")
 
-from grid_signals.db.queries import (
+from grid_signals.db.queries import (  # noqa: E402
     get_cross_border_flows,
     get_day_ahead_prices,
     get_generation_mix,
@@ -20,8 +20,8 @@ from grid_signals.db.queries import (
     get_total_load,
     get_weather_forecasts,
 )
-from grid_signals.ingestion.client import ZONE_TO_ENTSOE, _EXTERNAL_LINKS
-from grid_signals.models import BiddingZone
+from grid_signals.ingestion.client import ZONE_TO_ENTSOE, _EXTERNAL_LINKS  # noqa: E402
+from grid_signals.models import BiddingZone  # noqa: E402
 
 # Reverse map: ENTSO-E code → BiddingZone value (for "outside" detection).
 _ENTSOE_TO_ZONE = {v: k.value for k, v in ZONE_TO_ENTSOE.items()}
