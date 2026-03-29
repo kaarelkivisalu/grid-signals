@@ -21,8 +21,8 @@ Today is {date} ({weekday}).
 
 Autonomously decide which tools to call based on what data is available and \
 what is most relevant. At minimum, check prices, wind forecasts, and outages \
-for the key zones (EE, FI, LT, LV, SE4). Also check cross-border spreads \
-for the main interconnectors (FI-EE, SE4-LT, EE-LV).
+for the key zones (EE, FI, LT, LV, SE4, NO1, DK1). Also check cross-border spreads \
+for the main interconnectors (FI-EE, SE4-LT, EE-LV, NO1-SE3, DK1-DK2).
 
 Structure your briefing with the following sections:
 
@@ -43,7 +43,7 @@ returns from maintenance that affect prices.
 
 ## Spreads
 Cross-border price spread analysis for key interconnectors (FI-EE, SE4-LT, \
-EE-LV). Note congestion patterns.
+EE-LV, NO1-SE3, DK1-DK2, NO2-DK1). Note congestion patterns.
 
 ## Watch List
 2-4 bullet points of things to monitor during the day — upcoming events, \

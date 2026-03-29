@@ -84,13 +84,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     # prices
     q_prices = query_sub.add_parser("prices", help="Day-ahead electricity prices")
-    q_prices.add_argument("zone", help="Bidding zone (EE, LV, LT, FI, SE4, SE3, PL)")
+    q_prices.add_argument("zone", help="Bidding zone (EE, LV, LT, FI, SE4, SE3, NO1-NO5, DK1, DK2)")
     q_prices.add_argument("start_date", help="Start date (YYYY-MM-DD), inclusive")
     q_prices.add_argument("end_date", help="End date (YYYY-MM-DD), exclusive")
 
     # generation
     q_gen = query_sub.add_parser("generation", help="Generation mix by fuel type")
-    q_gen.add_argument("zone", help="Bidding zone (EE, LV, LT, FI, SE4, SE3, PL)")
+    q_gen.add_argument("zone", help="Bidding zone (EE, LV, LT, FI, SE4, SE3, NO1-NO5, DK1, DK2)")
     q_gen.add_argument("start_date", help="Start date (YYYY-MM-DD), inclusive")
     q_gen.add_argument("end_date", help="End date (YYYY-MM-DD), exclusive")
     q_gen.add_argument("--fuel-type", default=None, help="Filter by fuel type")
@@ -105,7 +105,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     # outages
     q_outages = query_sub.add_parser("outages", help="REMIT outage messages")
-    q_outages.add_argument("zone", help="Bidding zone (EE, LV, LT, FI, SE4, SE3, PL)")
+    q_outages.add_argument("zone", help="Bidding zone (EE, LV, LT, FI, SE4, SE3, NO1-NO5, DK1, DK2)")
     q_outages.add_argument("--fuel-type", default=None, help="Filter by fuel type")
     q_outages.add_argument(
         "--active-at", default=None, help="Find outages active at this time (YYYY-MM-DD or ISO datetime)"
@@ -120,7 +120,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     # load
     q_load = query_sub.add_parser("load", help="Load forecast summary")
-    q_load.add_argument("zone", help="Bidding zone (EE, LV, LT, FI, SE4, SE3, PL)")
+    q_load.add_argument("zone", help="Bidding zone (EE, LV, LT, FI, SE4, SE3, NO1-NO5, DK1, DK2)")
     q_load.add_argument("start_date", help="Start date (YYYY-MM-DD), inclusive")
     q_load.add_argument("end_date", help="End date (YYYY-MM-DD), exclusive")
 

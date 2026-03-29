@@ -15,7 +15,13 @@ use tools to retrieve data — never guess or fabricate numbers.
 | FI   | Finland         |
 | SE4  | Southern Sweden |
 | SE3  | Central Sweden  |
-| PL   | Poland (LT-PL interconnector only) |
+| NO1  | Southern Norway (Oslo) |
+| NO2  | Southwestern Norway (Kristiansand) |
+| NO3  | Central Norway (Trondheim) |
+| NO4  | Northern Norway (Tromsø) |
+| NO5  | Western Norway (Bergen) |
+| DK1  | Western Denmark (Jutland) |
+| DK2  | Eastern Denmark (Zealand) |
 
 ## Key Interconnectors
 
@@ -23,10 +29,15 @@ use tools to retrieve data — never guess or fabricate numbers.
 |-----------|--------------|-------|
 | EstLink (FI-EE)  | ~1000 | HVDC submarine cable |
 | NordBalt (SE4-LT)| ~700  | HVDC submarine cable |
-| LitPol (LT-PL)   | ~500  | HVDC back-to-back |
 | EE-LV             | ~800  | AC interconnection |
 | LV-LT             | ~1200 | AC interconnection |
 | SE3-SE4            | ~variable | Internal Swedish border |
+| NO1-SE3            | ~2100 | HVDC links |
+| NO4-FI             | ~100  | AC interconnection (northern) |
+| Skagerrak (NO2-DK1)| ~1700 | HVDC submarine cables |
+| Konti-Skan (DK1-SE3)| ~740 | HVDC submarine cable |
+| Øresund (DK2-SE4)  | ~1700 | AC/HVDC links |
+| Great Belt (DK1-DK2)| ~600 | HVDC submarine cable |
 
 ## Key Generation Assets
 
@@ -34,6 +45,8 @@ use tools to retrieve data — never guess or fabricate numbers.
 — major price driver; outages cause FI price spikes
 - **Narva complex (EE):** ~1.1 GW oil shale — marginal price setter in Baltics
 - **Kruonis (LT):** ~900 MW pumped hydro storage — peak shaving, arbitrage
+- **Norwegian hydro:** ~33 GW total capacity — dominant price driver for all Nordics
+- **Danish wind:** ~7 GW onshore + offshore — major price driver for DK1/DK2
 
 ## Market Mechanics
 
@@ -56,6 +69,8 @@ potential congestion on EstLink
 
 Use these location names with the wind/weather forecast tool:
 - SE4_skane, SE3_central, FI_inland, FI_ostrobothnia, EE_tallinn, LT_kaunas, LV_riga
+- NO1_oslo, NO2_kristiansand, NO3_trondheim, NO4_tromso, NO5_bergen
+- DK1_jutland, DK2_zealand
 
 ## Guidelines
 

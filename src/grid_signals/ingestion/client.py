@@ -6,7 +6,7 @@ from entsoe import EntsoePandasClient
 
 from grid_signals.models.zones import BiddingZone
 
-# entsoe-py uses underscored codes for Swedish zones; rest map 1:1.
+# entsoe-py uses underscored codes for Swedish/Norwegian/Danish zones; rest map 1:1.
 ZONE_TO_ENTSOE: dict[BiddingZone, str] = {
     BiddingZone.EE: "EE",
     BiddingZone.LV: "LV",
@@ -14,18 +14,40 @@ ZONE_TO_ENTSOE: dict[BiddingZone, str] = {
     BiddingZone.FI: "FI",
     BiddingZone.SE4: "SE_4",
     BiddingZone.SE3: "SE_3",
-    BiddingZone.PL: "PL",
+    BiddingZone.NO1: "NO_1",
+    BiddingZone.NO2: "NO_2",
+    BiddingZone.NO3: "NO_3",
+    BiddingZone.NO4: "NO_4",
+    BiddingZone.NO5: "NO_5",
+    BiddingZone.DK1: "DK_1",
+    BiddingZone.DK2: "DK_2",
 }
 
 # Cross-border interconnectors in the Nordic-Baltic region.
 BORDERS: list[tuple[BiddingZone, BiddingZone]] = [
+    # Baltic
     (BiddingZone.EE, BiddingZone.FI),
     (BiddingZone.EE, BiddingZone.LV),
     (BiddingZone.LV, BiddingZone.LT),
+    # Baltic–Nordics
     (BiddingZone.LT, BiddingZone.SE4),
     (BiddingZone.FI, BiddingZone.SE3),
+    # Sweden internal
     (BiddingZone.SE3, BiddingZone.SE4),
-    (BiddingZone.LT, BiddingZone.PL),
+    # Norway internal
+    (BiddingZone.NO1, BiddingZone.NO2),
+    (BiddingZone.NO1, BiddingZone.NO3),
+    (BiddingZone.NO1, BiddingZone.NO5),
+    (BiddingZone.NO2, BiddingZone.NO5),
+    (BiddingZone.NO3, BiddingZone.NO4),
+    # Norway–Sweden/Finland
+    (BiddingZone.NO1, BiddingZone.SE3),
+    (BiddingZone.NO4, BiddingZone.FI),
+    # Denmark
+    (BiddingZone.DK1, BiddingZone.DK2),
+    (BiddingZone.DK1, BiddingZone.NO2),
+    (BiddingZone.DK1, BiddingZone.SE3),
+    (BiddingZone.DK2, BiddingZone.SE4),
 ]
 
 

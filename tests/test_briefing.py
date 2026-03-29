@@ -104,7 +104,7 @@ FI-EE spread averaged 10.00 EUR/MWh (FI cheaper), indicating EstLink congestion.
 ## Watch List
 - Olkiluoto 2 return date — any delay extends FI price support
 - Wind forecast revision for SE4 expected this afternoon
-- LT-PL flow utilization near capacity
+- NO1-SE3 spread widening as Norwegian hydro reservoirs draw down
 """
 
 
