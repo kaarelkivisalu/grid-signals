@@ -29,8 +29,16 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     backfill = sub.add_parser("backfill", help="Backfill a date range")
     backfill.add_argument("--start", required=True, help="Start date (YYYY-MM-DD)")
     backfill.add_argument("--end", required=True, help="End date (YYYY-MM-DD)")
+    backfill.add_argument(
+        "--gaps-only",
+        action="store_true",
+        default=False,
+        help="Only backfill missing data (detect gaps first, then fetch only what is needed)",
+    )
 
-    sub.add_parser("validate", help="Run data validation checks")
+    validate_cmd = sub.add_parser("validate", help="Run data validation checks")
+    validate_cmd.add_argument("--start", default=None, help="Start date (YYYY-MM-DD, default: yesterday)")
+    validate_cmd.add_argument("--end", default=None, help="End date exclusive (YYYY-MM-DD, default: start + 1 day)")
     sub.add_parser("ui", help="Launch the Streamlit web interface")
 
     agent_cmd = sub.add_parser("agent", help="Ask the energy intelligence agent a question")
@@ -235,21 +243,33 @@ def main(argv: list[str] | None = None) -> int:
         run_weather(db_path)
 
     elif args.command == "backfill":
-        from grid_signals.pipeline import run_backfill
-
         start = datetime.strptime(args.start, "%Y-%m-%d").replace(tzinfo=UTC)
         end = datetime.strptime(args.end, "%Y-%m-%d").replace(tzinfo=UTC)
-        run_backfill(db_path, start, end)
+        if args.gaps_only:
+            from grid_signals.pipeline import run_backfill_gaps
+
+            run_backfill_gaps(db_path, start, end)
+        else:
+            from grid_signals.pipeline import run_backfill
+
+            run_backfill(db_path, start, end)
 
     elif args.command == "validate":
         from grid_signals.db.connection import get_connection
         from grid_signals.db.schema import create_tables
         from grid_signals.validation import run_all_validations
 
+        v_start = None
+        v_end = None
+        if args.start:
+            v_start = datetime.strptime(args.start, "%Y-%m-%d").replace(tzinfo=UTC)
+        if args.end:
+            v_end = datetime.strptime(args.end, "%Y-%m-%d").replace(tzinfo=UTC)
+
         con = get_connection(db_path)
         try:
             create_tables(con)
-            run_all_validations(con)
+            run_all_validations(con, start=v_start, end=v_end)
         finally:
             con.close()
 
