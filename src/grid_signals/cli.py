@@ -56,6 +56,22 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     validate_cmd.add_argument("--end", default=None, help="End date exclusive (YYYY-MM-DD, default: start + 1 day)")
     sub.add_parser("ui", help="Launch the Streamlit web interface")
 
+    health_cmd = sub.add_parser("health", help="Check data freshness across all tables")
+    health_cmd.add_argument(
+        "--max-age",
+        type=int,
+        default=26,
+        help="Maximum acceptable age in hours (default: 26)",
+    )
+
+    backup_cmd = sub.add_parser("backup", help="Backup DuckDB to S3")
+    backup_cmd.add_argument("--bucket", required=True, help="S3 bucket name")
+    backup_cmd.add_argument(
+        "--prefix",
+        default="grid-signals/backups",
+        help="S3 key prefix (default: grid-signals/backups)",
+    )
+
     agent_cmd = sub.add_parser("agent", help="Ask the energy intelligence agent a question")
     agent_cmd.add_argument("question", help="Question to ask the agent")
     agent_cmd.add_argument(
@@ -381,5 +397,27 @@ def _run_command(args: argparse.Namespace, db_path: Path) -> int:
             )
         finally:
             con.close()
+
+    elif args.command == "health":
+        from grid_signals.db.connection import get_connection
+        from grid_signals.db.schema import create_tables
+        from grid_signals.health import check_data_freshness
+
+        con = get_connection(db_path, read_only=True)
+        try:
+            create_tables(con)
+            status = check_data_freshness(con, max_age_hours=args.max_age)
+            if not status.healthy:
+                print("UNHEALTHY: some tables have stale data", file=sys.stderr)
+                return 1
+            print("HEALTHY: all tables within freshness threshold")
+        finally:
+            con.close()
+
+    elif args.command == "backup":
+        from grid_signals.backup import backup_database
+
+        uri = backup_database(db_path, s3_bucket=args.bucket, prefix=args.prefix)
+        print(f"Backup uploaded: {uri}")
 
     return 0

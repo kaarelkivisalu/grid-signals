@@ -58,6 +58,30 @@ def validate_data(db_path: Path = DEFAULT_DB_PATH) -> int:
         con.close()
 
 
+@task(retries=1, retry_delay_seconds=30, timeout_seconds=300)
+def backup_db(db_path: Path, s3_bucket: str, prefix: str = "grid-signals/backups") -> str:
+    """Backup the DuckDB database to S3."""
+    from grid_signals.backup import backup_database
+
+    return backup_database(db_path, s3_bucket=s3_bucket, prefix=prefix)
+
+
+@task(timeout_seconds=60)
+def health_check(db_path: Path = DEFAULT_DB_PATH, max_age_hours: int = 26) -> bool:
+    """Check data freshness. Returns True if healthy."""
+    from grid_signals.db.connection import get_connection
+    from grid_signals.db.schema import create_tables
+    from grid_signals.health import check_data_freshness
+
+    con = get_connection(db_path, read_only=True)
+    try:
+        create_tables(con)
+        status = check_data_freshness(con, max_age_hours=max_age_hours)
+        return status.healthy
+    finally:
+        con.close()
+
+
 @task(retries=1, retry_delay_seconds=30, timeout_seconds=600)
 def generate_briefing(db_path: Path = DEFAULT_DB_PATH) -> str:
     """Generate the morning briefing. Returns briefing content."""
@@ -81,8 +105,11 @@ def generate_briefing(db_path: Path = DEFAULT_DB_PATH) -> str:
 
 
 @flow(name="morning-pipeline", log_prints=True)
-def morning_pipeline(db_path: Path = DEFAULT_DB_PATH) -> None:
-    """Full morning pipeline: ingest → backfill → validate → briefing.
+def morning_pipeline(
+    db_path: Path = DEFAULT_DB_PATH,
+    s3_bucket: str | None = None,
+) -> None:
+    """Full morning pipeline: ingest → backfill → validate → briefing → backup → health.
 
     Tasks run sequentially because DuckDB has a single-writer lock.
     """
@@ -101,6 +128,13 @@ def morning_pipeline(db_path: Path = DEFAULT_DB_PATH) -> None:
 
     briefing = generate_briefing(db_path)
     logger.info("Briefing generated: %d chars", len(briefing))
+
+    if s3_bucket:
+        backup_db(db_path, s3_bucket)
+
+    healthy = health_check(db_path)
+    if not healthy:
+        logger.warning("Health check: some tables have stale data")
 
 
 @flow(name="weather-update", log_prints=True)
