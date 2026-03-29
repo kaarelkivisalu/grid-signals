@@ -255,6 +255,32 @@ class TestZoneMapping:
             assert a in all_codes, f"{a} not a known ENTSO-E code"
             assert b in all_codes, f"{b} not a known ENTSO-E code"
 
+    def test_all_neighbours_accounted_for(self):
+        """Every NEIGHBOURS link touching our zones is in BORDERS, except RU/BY."""
+        from entsoe.mappings import NEIGHBOURS
+
+        from grid_signals.ingestion.client import _EXTERNAL_LINKS, _INTERNAL_LINKS
+
+        EXCLUDED = {"RU", "RU_KGD", "BY"}
+        our_zones = set(ZONE_TO_ENTSOE.values())
+
+        expected = set()
+        for zone, neighbours in NEIGHBOURS.items():
+            if zone not in our_zones:
+                continue
+            for n in neighbours:
+                if n in EXCLUDED:
+                    continue
+                expected.add(tuple(sorted([zone, n])))
+
+        actual = {
+            tuple(sorted(pair))
+            for pair in _INTERNAL_LINKS + _EXTERNAL_LINKS
+        }
+
+        missing = expected - actual
+        assert not missing, f"Missing border links: {sorted(missing)}"
+
 
 # ---------------------------------------------------------------------------
 # Integration tests (mocked client + in-memory DuckDB)
