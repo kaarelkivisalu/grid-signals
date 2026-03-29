@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 import duckdb
 import pytest
 
-from grid_signals.agent.loop import Agent, AgentResult
+from grid_signals.agent.loop import Agent
 from grid_signals.agent.tools import execute_tool
 from grid_signals.db.queries import (
     insert_cross_border_flows,

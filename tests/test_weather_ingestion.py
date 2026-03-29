@@ -12,7 +12,7 @@ import duckdb
 import httpx
 import pytest
 
-from grid_signals.db.queries import get_weather_forecasts, insert_weather_forecasts
+from grid_signals.db.queries import get_weather_forecasts
 from grid_signals.db.schema import create_tables
 from grid_signals.ingestion.locations import LOCATIONS, WeatherLocation
 from grid_signals.ingestion.openmeteo import (
