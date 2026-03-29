@@ -230,28 +230,43 @@ _MAP_LINKS: list[tuple[str, str]] = [
 ]
 
 
-def _arrowhead(lat1: float, lon1: float, lat2: float, lon2: float,
-               frac: float = 0.35, spread: float = 0.4
-               ) -> tuple[list[float | None], list[float | None]]:
-    """Return lat/lon lists for a small arrowhead near the midpoint."""
-    mx = (lat1 + lat2) / 2
-    my = (lon1 + lon2) / 2
-    dx = lat2 - lat1
-    dy = lon2 - lon1
-    length = math.hypot(dx, dy)
-    if length == 0:
-        return [mx], [my]
-    ux, uy = dx / length, dy / length
-    # Two wing points behind the midpoint
-    bx = mx - ux * frac
-    by = my - uy * frac
-    px, py = -uy * spread, ux * spread
-    return [mx, bx + px, None, mx, bx - px], [my, by + py, None, my, by - py]
+def _arrow_triangle(
+    src_lat: float, src_lon: float, dst_lat: float, dst_lon: float,
+    pos: float = 0.55, size: float = 0.25, width: float = 0.12,
+) -> tuple[list[float], list[float]]:
+    """Filled-arrowhead triangle at *pos* fraction along the line."""
+    tip_lat = src_lat + pos * (dst_lat - src_lat)
+    tip_lon = src_lon + pos * (dst_lon - src_lon)
+    dlat = dst_lat - src_lat
+    dlon = dst_lon - src_lon
+    length = math.hypot(dlat, dlon)
+    if length < 0.01:
+        return [], []
+    ulat, ulon = dlat / length, dlon / length
+    base_lat = tip_lat - ulat * size
+    base_lon = tip_lon - ulon * size
+    return (
+        [base_lat - ulon * width, tip_lat, base_lat + ulon * width],
+        [base_lon + ulat * width, tip_lon, base_lon - ulat * width],
+    )
+
+
+def _label_pos(
+    lat1: float, lon1: float, lat2: float, lon2: float, offset: float = 0.25,
+) -> tuple[float, float]:
+    """Midpoint shifted perpendicular to the line for label placement."""
+    mid_lat = (lat1 + lat2) / 2
+    mid_lon = (lon1 + lon2) / 2
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    length = math.hypot(dlat, dlon)
+    if length < 0.01:
+        return mid_lat, mid_lon
+    return mid_lat + (-dlon / length) * offset, mid_lon + (dlat / length) * offset
 
 
 def flow_map(con: duckdb.DuckDBPyConnection, start: str, end: str) -> go.Figure:
-    """Map of Nordic-Baltic zones with interconnector flows."""
-    # Fetch average net flow for each link.
+    """Map of Nordic-Baltic zones with interconnector flows on real geography."""
     rows = con.execute(
         """
         SELECT from_zone, to_zone, avg(flow_mw) AS avg_mw
@@ -262,12 +277,10 @@ def flow_map(con: duckdb.DuckDBPyConnection, start: str, end: str) -> go.Figure:
         [start, end],
     ).fetchall()
 
-    # Build lookup: (from, to) -> avg MW.  Combine both directions into net.
     raw: dict[tuple[str, str], float] = {}
     for fz, tz, avg_mw in rows:
         raw[(fz, tz)] = avg_mw
 
-    # For each link compute net flow (positive = from→to direction).
     link_flows: dict[tuple[str, str], float] = {}
     for a, b in _MAP_LINKS:
         fwd = raw.get((a, b), 0.0)
@@ -278,92 +291,97 @@ def flow_map(con: duckdb.DuckDBPyConnection, start: str, end: str) -> go.Figure:
 
     fig = go.Figure()
 
-    # Draw interconnector lines.
+    label_lats: list[float] = []
+    label_lons: list[float] = []
+    label_texts: list[str] = []
+
     for (a, b), net in link_flows.items():
         lat_a, lon_a = _ZONE_COORDS[a]
         lat_b, lon_b = _ZONE_COORDS[b]
+        abs_net = abs(net)
+        ratio = abs_net / max_flow
+        width = max(2.0, 5.0 * ratio)
 
-        # Color: blue = flow towards first zone, red = towards second.
-        if abs(net) < 1:
-            color = "gray"
-            width = 1
+        if abs_net < 1:
+            color = "rgba(0,121,107,0.25)"
         else:
-            ratio = abs(net) / max_flow
-            width = max(1.5, 5 * ratio)
-            if net > 0:
-                # Flow a→b: draw from a to b, red
-                color = f"rgba(239,83,80,{0.3 + 0.7 * ratio})"
-            else:
-                # Flow b→a: draw from b to a, blue
-                color = f"rgba(66,165,245,{0.3 + 0.7 * ratio})"
+            color = f"rgba(0,121,107,{0.35 + 0.65 * ratio})"
 
-        direction = f"{a}→{b}" if net >= 0 else f"{b}→{a}"
-        label = f"{direction}: {abs(net):.0f} MW avg"
+        # Orient source→destination along net flow direction.
+        if net >= 0:
+            s_lat, s_lon, d_lat, d_lon = lat_a, lon_a, lat_b, lon_b
+            direction = f"{a}→{b}"
+        else:
+            s_lat, s_lon, d_lat, d_lon = lat_b, lon_b, lat_a, lon_a
+            direction = f"{b}→{a}"
 
-        # Line segment.
-        fig.add_trace(go.Scattergeo(
-            lat=[lat_a, lat_b],
-            lon=[lon_a, lon_b],
+        hover = f"{direction}: {abs_net:.0f} MW avg"
+
+        # Flow line.
+        fig.add_trace(go.Scattermapbox(
+            lat=[s_lat, d_lat], lon=[s_lon, d_lon],
             mode="lines",
             line=dict(color=color, width=width),
+            hovertext=hover,
             hoverinfo="text",
-            text=label,
             showlegend=False,
         ))
 
-        # Arrowhead pointing in flow direction.
-        if abs(net) >= 1:
-            if net > 0:
-                ah_lat, ah_lon = _arrowhead(lat_a, lon_a, lat_b, lon_b)
-            else:
-                ah_lat, ah_lon = _arrowhead(lat_b, lon_b, lat_a, lon_a)
-            fig.add_trace(go.Scattergeo(
-                lat=ah_lat, lon=ah_lon,
-                mode="lines",
-                line=dict(color=color, width=width),
-                hoverinfo="skip",
-                showlegend=False,
-            ))
+        # Filled arrowhead triangle.
+        if abs_net >= 1:
+            ah_lat, ah_lon = _arrow_triangle(s_lat, s_lon, d_lat, d_lon)
+            if ah_lat:
+                fig.add_trace(go.Scattermapbox(
+                    lat=ah_lat, lon=ah_lon,
+                    mode="lines",
+                    line=dict(color=color, width=1),
+                    fill="toself",
+                    fillcolor=color,
+                    hoverinfo="skip",
+                    showlegend=False,
+                ))
 
-    # Draw zone nodes.
+            # Collect MW label at offset midpoint.
+            ol, on = _label_pos(s_lat, s_lon, d_lat, d_lon)
+            label_lats.append(ol)
+            label_lons.append(on)
+            label_texts.append(f"{abs_net:.0f}")
+
+    # MW labels — single trace for performance.
+    if label_lats:
+        fig.add_trace(go.Scattermapbox(
+            lat=label_lats, lon=label_lons,
+            mode="text",
+            text=label_texts,
+            textfont=dict(size=11, color="#004D40", family="Arial Black"),
+            hoverinfo="skip",
+            showlegend=False,
+        ))
+
+    # Zone markers.
     zone_lats = [c[0] for c in _ZONE_COORDS.values()]
     zone_lons = [c[1] for c in _ZONE_COORDS.values()]
     zone_names = list(_ZONE_COORDS.keys())
-    fig.add_trace(go.Scattergeo(
+    fig.add_trace(go.Scattermapbox(
         lat=zone_lats, lon=zone_lons,
         mode="markers+text",
-        marker=dict(size=10, color="#1E88E5", line=dict(width=1, color="white")),
+        marker=dict(size=10, color="#1565C0", opacity=0.9),
         text=zone_names,
+        textfont=dict(size=12, color="#0D47A1", family="Arial Black"),
         textposition="top center",
-        textfont=dict(size=11, color="white"),
         hoverinfo="text",
         hovertext=zone_names,
         showlegend=False,
     ))
 
-    fig.update_geos(
-        scope="europe",
-        projection_type="mercator",
-        center=dict(lat=61, lon=16),
-        lonaxis_range=[-2, 32],
-        lataxis_range=[53, 72],
-        showland=True,
-        landcolor="#1a1a2e",
-        showocean=True,
-        oceancolor="#0d1b2a",
-        showlakes=True,
-        lakecolor="#0d1b2a",
-        showcountries=True,
-        countrycolor="#333",
-        showcoastlines=True,
-        coastlinecolor="#444",
-    )
     fig.update_layout(
+        mapbox=dict(
+            style="carto-positron",
+            center=dict(lat=62, lon=16),
+            zoom=3.5,
+        ),
         title="Interconnector Flows (avg MW)",
         height=700,
         margin=dict(l=0, r=0, t=40, b=0),
-        paper_bgcolor="#0e1117",
-        plot_bgcolor="#0e1117",
-        font_color="white",
     )
     return fig
