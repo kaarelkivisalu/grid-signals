@@ -71,7 +71,7 @@ class Agent:
         max_turns: int = DEFAULT_MAX_TURNS,
     ) -> None:
         self.con = con
-        self.client = client or anthropic.Anthropic()
+        self.client = client or anthropic.Anthropic(timeout=120.0)
         self.model = model
         self.max_turns = max_turns
 

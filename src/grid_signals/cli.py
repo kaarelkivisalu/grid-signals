@@ -6,6 +6,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from grid_signals.config import ConfigError
 from grid_signals.db.connection import DEFAULT_DB_PATH
 
 
@@ -232,6 +233,14 @@ def main(argv: list[str] | None = None) -> int:
 
     db_path = Path(args.db)
 
+    try:
+        return _run_command(args, db_path)
+    except ConfigError as exc:
+        print(f"Configuration error: {exc}", file=sys.stderr)
+        return 1
+
+
+def _run_command(args: argparse.Namespace, db_path: Path) -> int:
     if args.command == "daily":
         from grid_signals.pipeline import run_daily
 

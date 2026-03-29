@@ -1,9 +1,8 @@
 """ENTSO-E client factory, zone mapping, and border definitions."""
 
-import os
-
 from entsoe import EntsoePandasClient
 
+from grid_signals.config import get_entsoe_api_key
 from grid_signals.models.zones import BiddingZone
 
 # entsoe-py uses underscored codes for Swedish/Norwegian/Danish zones; rest map 1:1.
@@ -87,5 +86,5 @@ BORDERS: list[tuple[str, str]] = [
 
 def get_entsoe_client() -> EntsoePandasClient:
     """Create an EntsoePandasClient from the ENTSOE_API_KEY env var."""
-    api_key = os.environ["ENTSOE_API_KEY"]
-    return EntsoePandasClient(api_key=api_key, retry_count=3, retry_delay=10)
+    api_key = get_entsoe_api_key()
+    return EntsoePandasClient(api_key=api_key, retry_count=3, retry_delay=10, timeout=60)
