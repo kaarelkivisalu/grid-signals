@@ -7,6 +7,7 @@ import streamlit as st
 
 from grid_signals.app.charts import (
     cross_border_flows,
+    flow_map,
     generation_mix,
     hourly_prices,
     price_heatmap,
@@ -68,11 +69,12 @@ start_str = start_date.isoformat()
 end_str = end_date.isoformat()
 
 # --- Tabs for chart types ---
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
+tab1, tab2, tab3, tab_map, tab4, tab5 = st.tabs(
     [
         "Hourly Prices",
         "Generation Mix",
         "Cross-Border Flows",
+        "Flow Map",
         "Wind vs Price",
         "Price Heatmap",
     ]
@@ -100,6 +102,10 @@ with tab3:
     f_zone, t_zone = INTERCONNECTORS[ic_idx]
     fig = cross_border_flows(con, f_zone, t_zone, start_str, end_str)
     st.plotly_chart(fig, width="stretch")
+
+with tab_map:
+    fig = flow_map(con, start_str, end_str)
+    st.plotly_chart(fig, use_container_width=True)
 
 with tab4:
     wcol1, wcol2 = st.columns(2)

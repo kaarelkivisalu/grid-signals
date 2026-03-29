@@ -69,7 +69,7 @@ Generate weekly/monthly PDF reports suitable for distribution within a trading o
 - [x] Streamlit dashboard with Plotly charts: hourly prices, generation mix, cross-border flows, wind vs price, price heatmap
 - [x] Briefing viewer page with date selector
 - [x] CLI command: `uv run python -m grid_signals ui`
-- [ ] Interconnector flow visualization (map-based)
+- [x] Interconnector flow visualization (map-based)
 - [ ] Spread evolution over time chart
 
 ### Direction F: Production Hardening (Single Server)
