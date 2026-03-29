@@ -37,8 +37,8 @@ class TotalLoad(BaseModel):
 class CrossBorderFlow(BaseModel):
     """Scheduled or actual cross-border flow between two zones (hourly or 15-min)."""
 
-    from_zone: BiddingZone
-    to_zone: BiddingZone
+    from_zone: str  # BiddingZone code or external ENTSO-E code (e.g. "DE_LU")
+    to_zone: str
     period_start: datetime  # UTC, inclusive
     period_end: datetime  # UTC, exclusive
     flow_mw: float  # positive = from → to

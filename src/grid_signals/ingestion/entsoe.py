@@ -121,17 +121,19 @@ def ingest_total_load(
 def ingest_cross_border_flows(
     con: duckdb.DuckDBPyConnection,
     client: EntsoePandasClient,
-    borders: list[tuple[BiddingZone, BiddingZone]],
+    borders: list[tuple[str, str]],
     start: pd.Timestamp,
     end: pd.Timestamp,
 ) -> int:
-    """Fetch and store cross-border flows for the given borders."""
+    """Fetch and store cross-border flows for the given borders.
+
+    Borders are ENTSO-E zone code pairs (e.g. ``("EE", "FI")``)."""
     total = 0
     for from_zone, to_zone in borders:
         try:
             series = client.query_crossborder_flows(
-                ZONE_TO_ENTSOE[from_zone],
-                ZONE_TO_ENTSOE[to_zone],
+                from_zone,
+                to_zone,
                 start=start,
                 end=end,
             )

@@ -25,44 +25,63 @@ ZONE_TO_ENTSOE: dict[BiddingZone, str] = {
     BiddingZone.DK2: "DK_2",
 }
 
-# Cross-border interconnectors in the Nordic-Baltic region (one pair per
-# physical link — BORDER_PAIRS expands to both directions for flow ingestion).
-_BORDER_LINKS: list[tuple[BiddingZone, BiddingZone]] = [
+# Cross-border interconnectors between zones we track (one pair per physical
+# link — BORDERS expands to both directions for flow ingestion).
+_INTERNAL_LINKS: list[tuple[str, str]] = [
     # Baltic
-    (BiddingZone.EE, BiddingZone.FI),
-    (BiddingZone.EE, BiddingZone.LV),
-    (BiddingZone.LV, BiddingZone.LT),
+    ("EE", "FI"),
+    ("EE", "LV"),
+    ("LV", "LT"),
     # Baltic–Nordics
-    (BiddingZone.LT, BiddingZone.SE4),
-    (BiddingZone.FI, BiddingZone.SE3),
+    ("LT", "SE_4"),
+    ("FI", "SE_3"),
     # Sweden internal
-    (BiddingZone.SE1, BiddingZone.SE2),
-    (BiddingZone.SE2, BiddingZone.SE3),
-    (BiddingZone.SE3, BiddingZone.SE4),
+    ("SE_1", "SE_2"),
+    ("SE_2", "SE_3"),
+    ("SE_3", "SE_4"),
     # Norway internal
-    (BiddingZone.NO1, BiddingZone.NO2),
-    (BiddingZone.NO1, BiddingZone.NO3),
-    (BiddingZone.NO1, BiddingZone.NO5),
-    (BiddingZone.NO2, BiddingZone.NO5),
-    (BiddingZone.NO3, BiddingZone.NO4),
-    (BiddingZone.NO3, BiddingZone.NO5),
+    ("NO_1", "NO_2"),
+    ("NO_1", "NO_3"),
+    ("NO_1", "NO_5"),
+    ("NO_2", "NO_5"),
+    ("NO_3", "NO_4"),
+    ("NO_3", "NO_5"),
     # Norway–Sweden/Finland
-    (BiddingZone.NO1, BiddingZone.SE3),
-    (BiddingZone.NO3, BiddingZone.SE2),
-    (BiddingZone.NO4, BiddingZone.SE1),
-    (BiddingZone.NO4, BiddingZone.SE2),
-    (BiddingZone.NO4, BiddingZone.FI),
-    (BiddingZone.FI, BiddingZone.SE1),
+    ("NO_1", "SE_3"),
+    ("NO_3", "SE_2"),
+    ("NO_4", "SE_1"),
+    ("NO_4", "SE_2"),
+    ("NO_4", "FI"),
+    ("FI", "SE_1"),
     # Denmark
-    (BiddingZone.DK1, BiddingZone.DK2),
-    (BiddingZone.DK1, BiddingZone.NO2),
-    (BiddingZone.DK1, BiddingZone.SE3),
-    (BiddingZone.DK2, BiddingZone.SE4),
+    ("DK_1", "DK_2"),
+    ("DK_1", "NO_2"),
+    ("DK_1", "SE_3"),
+    ("DK_2", "SE_4"),
+]
+
+# Interconnectors to zones outside our scope (one of our zones ↔ external zone).
+_EXTERNAL_LINKS: list[tuple[str, str]] = [
+    ("DK_1", "DE_AT_LU"),
+    ("DK_1", "DE_LU"),
+    ("DK_1", "GB"),
+    ("DK_1", "NL"),
+    ("DK_2", "DE_AT_LU"),
+    ("DK_2", "DE_LU"),
+    ("LT", "PL"),
+    ("NO_2", "DE_LU"),
+    ("NO_2", "GB"),
+    ("NO_2", "NL"),
+    ("SE_4", "DE_AT_LU"),
+    ("SE_4", "DE_LU"),
+    ("SE_4", "PL"),
 ]
 
 # Both directions for each link — ENTSO-E reports A→B and B→A separately.
-BORDERS: list[tuple[BiddingZone, BiddingZone]] = [
-    pair for a, b in _BORDER_LINKS for pair in ((a, b), (b, a))
+BORDERS: list[tuple[str, str]] = [
+    pair
+    for a, b in _INTERNAL_LINKS + _EXTERNAL_LINKS
+    for pair in ((a, b), (b, a))
 ]
 
 

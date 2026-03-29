@@ -155,16 +155,16 @@ class TestTransformCrossBorderFlows:
     def test_basic(self):
         idx = pd.date_range("2024-03-01", periods=3, freq="h", tz="UTC")
         series = pd.Series([400.0, -50.0, 300.0], index=idx)
-        rows = transform_cross_border_flows(series, BiddingZone.EE, BiddingZone.FI)
+        rows = transform_cross_border_flows(series, "EE", "FI")
         assert len(rows) == 3
-        assert rows[0].from_zone == BiddingZone.EE
-        assert rows[0].to_zone == BiddingZone.FI
+        assert rows[0].from_zone == "EE"
+        assert rows[0].to_zone == "FI"
         assert rows[1].flow_mw == -50.0
 
     def test_nan_skipped(self):
         idx = pd.date_range("2024-03-01", periods=2, freq="h", tz="UTC")
         series = pd.Series([np.nan, 100.0], index=idx)
-        rows = transform_cross_border_flows(series, BiddingZone.LV, BiddingZone.LT)
+        rows = transform_cross_border_flows(series, "LV", "LT")
         assert len(rows) == 1
 
 
@@ -245,10 +245,15 @@ class TestZoneMapping:
         assert ZONE_TO_ENTSOE[BiddingZone.SE4] == "SE_4"
         assert ZONE_TO_ENTSOE[BiddingZone.SE3] == "SE_3"
 
-    def test_borders_use_valid_zones(self):
+    def test_borders_use_valid_entsoe_codes(self):
+        from entsoe.mappings import NEIGHBOURS
+
+        all_codes = set(NEIGHBOURS.keys()) | {
+            n for neighbours in NEIGHBOURS.values() for n in neighbours
+        }
         for a, b in BORDERS:
-            assert a in BiddingZone
-            assert b in BiddingZone
+            assert a in all_codes, f"{a} not a known ENTSO-E code"
+            assert b in all_codes, f"{b} not a known ENTSO-E code"
 
 
 # ---------------------------------------------------------------------------
@@ -354,7 +359,7 @@ class TestIngestCrossBorderFlows:
         count = ingest_cross_border_flows(
             con,
             client,
-            [(BiddingZone.EE, BiddingZone.FI)],
+            [("EE", "FI")],
             pd.Timestamp("2024-03-01", tz="UTC"),
             pd.Timestamp("2024-03-02", tz="UTC"),
         )

@@ -219,8 +219,8 @@ def get_total_load(
 
 def get_cross_border_flows(
     con: duckdb.DuckDBPyConnection,
-    from_zone: BiddingZone,
-    to_zone: BiddingZone,
+    from_zone: str,
+    to_zone: str,
     start: datetime,
     end: datetime,
 ) -> list[CrossBorderFlow]:

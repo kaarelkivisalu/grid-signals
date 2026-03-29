@@ -106,7 +106,7 @@ def transform_load(
 
 
 def transform_cross_border_flows(
-    series: pd.Series, from_zone: BiddingZone, to_zone: BiddingZone
+    series: pd.Series, from_zone: str, to_zone: str
 ) -> list[CrossBorderFlow]:
     """Convert entsoe-py cross-border flow Series to CrossBorderFlow models."""
     interval = _detect_interval(series.index)

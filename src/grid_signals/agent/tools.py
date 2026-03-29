@@ -20,7 +20,11 @@ from grid_signals.db.queries import (
     get_total_load,
     get_weather_forecasts,
 )
+from grid_signals.ingestion.client import ZONE_TO_ENTSOE, _EXTERNAL_LINKS
 from grid_signals.models import BiddingZone
+
+# Reverse map: ENTSO-E code → BiddingZone value (for "outside" detection).
+_ENTSOE_TO_ZONE = {v: k.value for k, v in ZONE_TO_ENTSOE.items()}
 
 # ---------------------------------------------------------------------------
 # Tool schemas (Anthropic API format)
@@ -154,13 +158,17 @@ TOOLS: list[dict] = [
             "properties": {
                 "from_zone": {
                     "type": "string",
-                    "enum": [z.value for z in BiddingZone],
-                    "description": "Exporting zone",
+                    "description": (
+                        "Exporting zone — use a BiddingZone code or 'outside' "
+                        "for flows to/from external zones"
+                    ),
                 },
                 "to_zone": {
                     "type": "string",
-                    "enum": [z.value for z in BiddingZone],
-                    "description": "Importing zone",
+                    "description": (
+                        "Importing zone — use a BiddingZone code or 'outside' "
+                        "for flows to/from external zones"
+                    ),
                 },
                 "start_date": {
                     "type": "string",
@@ -397,6 +405,46 @@ def _summarize_weather(rows: list) -> list[dict]:
     return result
 
 
+def _resolve_flow_pairs(from_input: str, to_input: str) -> list[tuple[str, str]]:
+    """Resolve agent zone inputs to DB zone code pairs.
+
+    Either side can be ``"outside"`` which expands to all external links
+    for the other zone.  Normal BiddingZone values are converted to their
+    ENTSO-E codes.
+    """
+    if from_input == "outside" and to_input == "outside":
+        return []
+
+    if from_input == "outside":
+        entsoe_to = ZONE_TO_ENTSOE[BiddingZone(to_input)]
+        return [
+            (ext, entsoe_to)
+            for our, ext in _EXTERNAL_LINKS
+            if our == entsoe_to
+        ] + [
+            (ext, entsoe_to)
+            for ext, our in _EXTERNAL_LINKS
+            if our == entsoe_to
+        ]
+
+    if to_input == "outside":
+        entsoe_from = ZONE_TO_ENTSOE[BiddingZone(from_input)]
+        return [
+            (entsoe_from, ext)
+            for our, ext in _EXTERNAL_LINKS
+            if our == entsoe_from
+        ] + [
+            (entsoe_from, ext)
+            for ext, our in _EXTERNAL_LINKS
+            if our == entsoe_from
+        ]
+
+    return [(
+        ZONE_TO_ENTSOE[BiddingZone(from_input)],
+        ZONE_TO_ENTSOE[BiddingZone(to_input)],
+    )]
+
+
 def _summarize_flows(rows: list) -> list[dict]:
     """Group flow rows by date; return daily summary stats."""
     by_date: dict[str, list] = defaultdict(list)
@@ -412,8 +460,8 @@ def _summarize_flows(rows: list) -> list[dict]:
         )
         result.append({
             "date": day,
-            "from_zone": entries[0].from_zone.value,
-            "to_zone": entries[0].to_zone.value,
+            "from_zone": entries[0].from_zone,
+            "to_zone": entries[0].to_zone,
             "count": len(vals),
             "mean_flow_mw": round(sum(vals) / len(vals), 1),
             "min_flow_mw": round(min(vals), 1),
@@ -645,14 +693,25 @@ def _dispatch(
         return [r.model_dump(mode="json") for r in rows]
 
     if name == "get_cross_border_flows":
-        rows = get_cross_border_flows(
-            con,
-            BiddingZone(tool_input["from_zone"]),
-            BiddingZone(tool_input["to_zone"]),
-            _parse_date(tool_input["start_date"]),
-            _parse_date(tool_input["end_date"]),
-        )
-        return _summarize_flows(rows)
+        from_input = tool_input["from_zone"]
+        to_input = tool_input["to_zone"]
+        start = _parse_date(tool_input["start_date"])
+        end = _parse_date(tool_input["end_date"])
+
+        # Resolve "outside" to all external zone pairs for the given zone.
+        pairs = _resolve_flow_pairs(from_input, to_input)
+        all_rows = []
+        for fz, tz in pairs:
+            all_rows.extend(get_cross_border_flows(con, fz, tz, start, end))
+
+        # In agent output, replace external zone codes with "outside".
+        for r in all_rows:
+            if r.from_zone not in _ENTSOE_TO_ZONE:
+                r.from_zone = "outside"
+            if r.to_zone not in _ENTSOE_TO_ZONE:
+                r.to_zone = "outside"
+
+        return _summarize_flows(all_rows)
 
     if name == "get_load_forecast":
         rows = get_total_load(
