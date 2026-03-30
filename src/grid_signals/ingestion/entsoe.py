@@ -2,9 +2,12 @@
 
 import logging
 import traceback
+from time import sleep
+from typing import Callable, TypeVar
 
 import duckdb
 import pandas as pd
+import requests.exceptions
 from entsoe import EntsoePandasClient
 from entsoe.exceptions import NoMatchingDataError
 
@@ -27,6 +30,39 @@ from grid_signals.models.zones import BiddingZone
 
 logger = logging.getLogger(__name__)
 
+T = TypeVar("T")
+
+_MAX_RETRIES = 3
+_INITIAL_DELAY = 5  # seconds
+
+
+def _retry_on_server_error(fn: Callable[..., T], *args, **kwargs) -> T:
+    """Call *fn* with retries on transient HTTP 5xx errors.
+
+    Uses exponential back-off (5 s, 10 s, 20 s).  Non-5xx errors and
+    non-HTTP exceptions propagate immediately.
+    """
+    delay = _INITIAL_DELAY
+    last_exc: requests.exceptions.HTTPError | None = None
+    for attempt in range(1, _MAX_RETRIES + 1):
+        try:
+            return fn(*args, **kwargs)
+        except requests.exceptions.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code >= 500:
+                last_exc = exc
+                logger.warning(
+                    "HTTP %s – retrying in %ds (attempt %d/%d)",
+                    exc.response.status_code,
+                    delay,
+                    attempt,
+                    _MAX_RETRIES,
+                )
+                sleep(delay)
+                delay *= 2
+            else:
+                raise
+    raise last_exc  # type: ignore[misc]
+
 
 def ingest_day_ahead_prices(
     con: duckdb.DuckDBPyConnection,
@@ -39,8 +75,9 @@ def ingest_day_ahead_prices(
     total = 0
     for zone in zones:
         try:
-            series = client.query_day_ahead_prices(
-                ZONE_TO_ENTSOE[zone], start=start, end=end
+            series = _retry_on_server_error(
+                client.query_day_ahead_prices,
+                ZONE_TO_ENTSOE[zone], start=start, end=end,
             )
             rows = transform_day_ahead_prices(series, zone)
             total += insert_day_ahead_prices(con, rows)
@@ -65,8 +102,9 @@ def ingest_generation_per_type(
     total = 0
     for zone in zones:
         try:
-            df = client.query_generation(
-                ZONE_TO_ENTSOE[zone], start=start, end=end
+            df = _retry_on_server_error(
+                client.query_generation,
+                ZONE_TO_ENTSOE[zone], start=start, end=end,
             )
             rows = transform_generation(df, zone)
             total += insert_generation_by_type(con, rows)
@@ -93,7 +131,9 @@ def ingest_total_load(
         entsoe_zone = ZONE_TO_ENTSOE[zone]
         # Actual load
         try:
-            df = client.query_load(entsoe_zone, start=start, end=end)
+            df = _retry_on_server_error(
+                client.query_load, entsoe_zone, start=start, end=end,
+            )
             rows = transform_load(df, zone, is_forecast=False)
             total += insert_total_load(con, rows)
             logger.info("load_actual: %s → %d rows", zone, len(rows))
@@ -105,7 +145,9 @@ def ingest_total_load(
             )
         # Load forecast
         try:
-            df = client.query_load_forecast(entsoe_zone, start=start, end=end)
+            df = _retry_on_server_error(
+                client.query_load_forecast, entsoe_zone, start=start, end=end,
+            )
             rows = transform_load(df, zone, is_forecast=True)
             total += insert_total_load(con, rows)
             logger.info("load_forecast: %s → %d rows", zone, len(rows))
@@ -131,7 +173,8 @@ def ingest_cross_border_flows(
     total = 0
     for from_zone, to_zone in borders:
         try:
-            series = client.query_crossborder_flows(
+            series = _retry_on_server_error(
+                client.query_crossborder_flows,
                 from_zone,
                 to_zone,
                 start=start,
@@ -165,8 +208,9 @@ def ingest_outages(
     total = 0
     for zone in zones:
         try:
-            df = client.query_unavailability_of_generation_units(
-                ZONE_TO_ENTSOE[zone], start=start, end=end
+            df = _retry_on_server_error(
+                client.query_unavailability_of_generation_units,
+                ZONE_TO_ENTSOE[zone], start=start, end=end,
             )
             rows = transform_outages(df, zone)
             total += insert_outages(con, rows)

@@ -6,7 +6,7 @@
 """
 
 from datetime import UTC, datetime
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import duckdb
 import numpy as np
@@ -14,10 +14,13 @@ import pandas as pd
 import pytest
 from entsoe.exceptions import NoMatchingDataError
 
+import requests.exceptions
+
 from grid_signals.db.queries import get_day_ahead_prices, get_outages
 from grid_signals.db.schema import create_tables
 from grid_signals.ingestion.client import BORDERS, ZONE_TO_ENTSOE
 from grid_signals.ingestion.entsoe import (
+    _retry_on_server_error,
     ingest_cross_border_flows,
     ingest_day_ahead_prices,
     ingest_generation_per_type,
@@ -432,3 +435,31 @@ class TestIngestOutages:
             pd.Timestamp("2024-06-01", tz="UTC"),
         )
         assert count == 0
+
+
+class TestRetryOnServerError:
+    def _make_http_error(self, status_code: int):
+        response = MagicMock()
+        response.status_code = status_code
+        return requests.exceptions.HTTPError(response=response)
+
+    @patch("grid_signals.ingestion.entsoe.sleep")
+    def test_retries_on_503_then_succeeds(self, mock_sleep):
+        fn = MagicMock(side_effect=[self._make_http_error(503), "ok"])
+        result = _retry_on_server_error(fn, "arg1", key="val")
+        assert result == "ok"
+        assert fn.call_count == 2
+        mock_sleep.assert_called_once_with(5)
+
+    @patch("grid_signals.ingestion.entsoe.sleep")
+    def test_raises_after_max_retries(self, mock_sleep):
+        fn = MagicMock(side_effect=[self._make_http_error(502)] * 3)
+        with pytest.raises(requests.exceptions.HTTPError):
+            _retry_on_server_error(fn)
+        assert fn.call_count == 3
+
+    def test_does_not_retry_on_4xx(self):
+        fn = MagicMock(side_effect=self._make_http_error(404))
+        with pytest.raises(requests.exceptions.HTTPError):
+            _retry_on_server_error(fn)
+        assert fn.call_count == 1
