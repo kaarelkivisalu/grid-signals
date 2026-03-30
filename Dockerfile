@@ -13,4 +13,4 @@ COPY src/ src/
 COPY prefect.yaml ./
 RUN uv sync --frozen --no-dev
 
-CMD ["uv", "run", "prefect", "worker", "start", "--pool", "default-agent-pool"]
+CMD ["uv", "run", "prefect", "worker", "start", "--pool", "grid-signals"]

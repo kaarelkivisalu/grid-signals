@@ -1,0 +1,23 @@
+services:
+  prefect-server:
+    image: prefecthq/prefect:3-python3.12
+    command: prefect server start --host 0.0.0.0
+    ports:
+      - "127.0.0.1:4200:4200"
+    volumes:
+      - prefect-data:/root/.prefect
+
+  prefect-worker:
+    build: .
+    command: uv run prefect worker start --pool grid-signals
+    depends_on:
+      - prefect-server
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+volumes:
+  prefect-data:
