@@ -21,6 +21,7 @@ services:
         condition: service_healthy
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_LOGGING_EXTRA_LOGGERS: grid_signals
       ENTSOE_API_KEY: ${ENTSOE_API_KEY}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
     volumes:
