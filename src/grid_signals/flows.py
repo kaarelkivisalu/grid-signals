@@ -13,6 +13,18 @@ from grid_signals.db.connection import DEFAULT_DB_PATH
 logger = logging.getLogger(__name__)
 
 
+def _setup_library_logging() -> None:
+    """Ensure grid_signals loggers emit at INFO inside Prefect runs.
+
+    PREFECT_LOGGING_EXTRA_LOGGERS attaches the API handler but leaves
+    the level at NOTSET, so the effective level falls back to the root
+    logger's WARNING.  Explicitly lowering it to INFO lets pipeline /
+    ingestion logs reach the Prefect UI.
+    """
+    lib_logger = logging.getLogger("grid_signals")
+    lib_logger.setLevel(logging.INFO)
+
+
 # ---------------------------------------------------------------------------
 # Tasks
 # ---------------------------------------------------------------------------
@@ -113,6 +125,7 @@ def morning_pipeline(
 
     Tasks run sequentially because DuckDB has a single-writer lock.
     """
+    _setup_library_logging()
     rows = ingest_daily(db_path)
     logger.info("Daily ingestion: %d rows", rows)
 
@@ -140,5 +153,6 @@ def morning_pipeline(
 @flow(name="weather-update", log_prints=True)
 def weather_update(db_path: Path = DEFAULT_DB_PATH) -> None:
     """Weather forecast update flow."""
+    _setup_library_logging()
     rows = ingest_weather(db_path)
     logger.info("Weather update: %d rows", rows)
