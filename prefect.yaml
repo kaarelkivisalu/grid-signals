@@ -1,14 +1,16 @@
+pull:
+  - prefect.deployments.steps.set_working_directory:
+      directory: /app
+
 deployments:
   - name: morning-pipeline
     entrypoint: src/grid_signals/flows.py:morning_pipeline
     schedule:
       cron: "0 5 * * *"
       timezone: "Europe/Tallinn"
-      catchup: true
 
   - name: weather-update
     entrypoint: src/grid_signals/flows.py:weather_update
     schedule:
       cron: "0 */6 * * *"
       timezone: "UTC"
-      catchup: true
