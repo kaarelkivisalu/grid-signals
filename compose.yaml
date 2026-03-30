@@ -6,12 +6,19 @@ services:
       - "127.0.0.1:4200:4200"
     volumes:
       - prefect-data:/root/.prefect
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:4200/api/health', timeout=1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   prefect-worker:
     build: .
     command: uv run prefect worker start --pool grid-signals
     depends_on:
-      - prefect-server
+      prefect-server:
+        condition: service_healthy
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
       ENTSOE_API_KEY: ${ENTSOE_API_KEY}
