@@ -14,7 +14,8 @@ services:
       - prefect-server
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
-    env_file: .env
+      ENTSOE_API_KEY: ${ENTSOE_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
     volumes:
       - ./data:/app/data
     restart: unless-stopped
