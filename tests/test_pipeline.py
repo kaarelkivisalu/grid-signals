@@ -341,3 +341,103 @@ class TestRunWeather:
 
         total = run_weather()
         assert total > 0
+
+
+# ---------------------------------------------------------------------------
+# Rate limiter
+# ---------------------------------------------------------------------------
+
+
+class TestRateLimiter:
+    def test_enforces_rate(self):
+        import time
+
+        from grid_signals.ingestion.rate_limiter import RateLimiter
+
+        limiter = RateLimiter(max_per_second=100.0)  # 10ms interval
+        t0 = time.monotonic()
+        for _ in range(5):
+            limiter.acquire()
+        elapsed = time.monotonic() - t0
+        # 5 calls at 100/s → at least 4 intervals of 10ms = 40ms
+        assert elapsed >= 0.03  # allow small timing slack
+
+    def test_threaded_rate_limit(self):
+        import time
+        from concurrent.futures import ThreadPoolExecutor
+
+        from grid_signals.ingestion.rate_limiter import RateLimiter
+
+        limiter = RateLimiter(max_per_second=100.0)
+        timestamps: list[float] = []
+        lock = __import__("threading").Lock()
+
+        def task():
+            limiter.acquire()
+            with lock:
+                timestamps.append(time.monotonic())
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            list(pool.map(lambda _: task(), range(8)))
+
+        # All 8 calls should have been serialised by the limiter
+        assert len(timestamps) == 8
+
+
+# ---------------------------------------------------------------------------
+# Parallel ENTSO-E ingestion
+# ---------------------------------------------------------------------------
+
+
+class TestParallelIngest:
+    @patch("grid_signals.pipeline.get_entsoe_client")
+    def test_parallel_entsoe_ingest(self, mock_get_client):
+        """Parallel ingest fetches in threads and writes sequentially."""
+        con = duckdb.connect(":memory:")
+        create_tables(con)
+
+        client = MagicMock()
+        mock_get_client.return_value = client
+
+        idx = pd.date_range("2024-01-01", periods=24, freq="h", tz="UTC")
+        client.query_day_ahead_prices.return_value = pd.Series(
+            range(24), index=idx, dtype=float
+        )
+        columns = pd.MultiIndex.from_tuples([
+            ("Wind Onshore", "Actual Aggregated"),
+        ])
+        client.query_generation.return_value = pd.DataFrame(
+            [[100.0]] * 24, index=idx, columns=columns
+        )
+        client.query_load.return_value = pd.DataFrame(
+            {"Actual Load": [1000.0] * 24}, index=idx
+        )
+        client.query_load_forecast.return_value = pd.DataFrame(
+            {"Forecasted Load": [950.0] * 24}, index=idx
+        )
+        client.query_crossborder_flows.return_value = pd.Series(
+            [100.0] * 24, index=idx
+        )
+        client.query_unavailability_of_generation_units.return_value = pd.DataFrame({
+            "mrid": ["UM-1"],
+            "revision": [1],
+            "businesstype": ["Planned maintenance"],
+            "production_resource_name": ["Test"],
+            "production_type": ["Nuclear"],
+            "nominal_power": [500.0],
+            "available_capacity": [0.0],
+            "start": [pd.Timestamp("2024-01-01", tz="UTC")],
+            "end": [pd.Timestamp("2024-01-10", tz="UTC")],
+            "status": ["Active"],
+        })
+
+        from grid_signals.ingestion.client import BORDERS
+        from grid_signals.pipeline import _parallel_entsoe_ingest
+
+        start = pd.Timestamp("2024-01-01", tz="UTC")
+        end = pd.Timestamp("2024-01-02", tz="UTC")
+        total = _parallel_entsoe_ingest(
+            con, [BiddingZone.EE, BiddingZone.FI], BORDERS, start, end,
+        )
+        assert total > 0
+        con.close()

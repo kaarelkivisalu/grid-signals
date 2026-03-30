@@ -1,9 +1,17 @@
-"""Orchestrator functions: fetch from ENTSO-E, transform, insert into DuckDB."""
+"""Orchestrator functions: fetch from ENTSO-E, transform, insert into DuckDB.
+
+The ``fetch_*`` functions handle API calls and transformation only (no DB
+writes) so they can be called from multiple threads.  The ``ingest_*``
+functions combine fetch + insert and are kept for sequential / gap-backfill
+use.
+"""
+
+from __future__ import annotations
 
 import logging
 import traceback
 from time import sleep
-from typing import Callable, TypeVar
+from typing import TYPE_CHECKING, Callable, TypeVar
 
 import duckdb
 import pandas as pd
@@ -27,6 +35,9 @@ from grid_signals.ingestion.transformers import (
     transform_outages,
 )
 from grid_signals.models.zones import BiddingZone
+
+if TYPE_CHECKING:
+    from grid_signals.ingestion.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -222,3 +233,121 @@ def ingest_outages(
                 "outages: error for %s\n%s", zone, traceback.format_exc()
             )
     return total
+
+
+# ---------------------------------------------------------------------------
+# Fetch-only functions (API call + transform, no DB write).
+# Thread-safe — suitable for use with concurrent.futures.
+# ---------------------------------------------------------------------------
+
+
+def _rate_limit(limiter: RateLimiter | None) -> None:
+    if limiter is not None:
+        limiter.acquire()
+
+
+def fetch_day_ahead_prices(
+    client: EntsoePandasClient,
+    zone: BiddingZone,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    limiter: RateLimiter | None = None,
+) -> list:
+    """Fetch and transform day-ahead prices for a single zone."""
+    _rate_limit(limiter)
+    series = _retry_on_server_error(
+        client.query_day_ahead_prices,
+        ZONE_TO_ENTSOE[zone], start=start, end=end,
+    )
+    rows = transform_day_ahead_prices(series, zone)
+    logger.info("day_ahead_prices: %s → %d rows", zone, len(rows))
+    return rows
+
+
+def fetch_generation(
+    client: EntsoePandasClient,
+    zone: BiddingZone,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    limiter: RateLimiter | None = None,
+) -> list:
+    """Fetch and transform generation per type for a single zone."""
+    _rate_limit(limiter)
+    df = _retry_on_server_error(
+        client.query_generation,
+        ZONE_TO_ENTSOE[zone], start=start, end=end,
+    )
+    rows = transform_generation(df, zone)
+    logger.info("generation: %s → %d rows", zone, len(rows))
+    return rows
+
+
+def fetch_load_actual(
+    client: EntsoePandasClient,
+    zone: BiddingZone,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    limiter: RateLimiter | None = None,
+) -> list:
+    """Fetch and transform actual load for a single zone."""
+    _rate_limit(limiter)
+    df = _retry_on_server_error(
+        client.query_load, ZONE_TO_ENTSOE[zone], start=start, end=end,
+    )
+    rows = transform_load(df, zone, is_forecast=False)
+    logger.info("load_actual: %s → %d rows", zone, len(rows))
+    return rows
+
+
+def fetch_load_forecast(
+    client: EntsoePandasClient,
+    zone: BiddingZone,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    limiter: RateLimiter | None = None,
+) -> list:
+    """Fetch and transform load forecast for a single zone."""
+    _rate_limit(limiter)
+    df = _retry_on_server_error(
+        client.query_load_forecast, ZONE_TO_ENTSOE[zone], start=start, end=end,
+    )
+    rows = transform_load(df, zone, is_forecast=True)
+    logger.info("load_forecast: %s → %d rows", zone, len(rows))
+    return rows
+
+
+def fetch_cross_border_flows(
+    client: EntsoePandasClient,
+    from_zone: str,
+    to_zone: str,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    limiter: RateLimiter | None = None,
+) -> list:
+    """Fetch and transform cross-border flows for a single border pair."""
+    _rate_limit(limiter)
+    series = _retry_on_server_error(
+        client.query_crossborder_flows, from_zone, to_zone,
+        start=start, end=end,
+    )
+    rows = transform_cross_border_flows(series, from_zone, to_zone)
+    logger.info("cross_border: %s→%s → %d rows", from_zone, to_zone, len(rows))
+    return rows
+
+
+def fetch_outages(
+    client: EntsoePandasClient,
+    zone: BiddingZone,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    limiter: RateLimiter | None = None,
+) -> list:
+    """Fetch and transform outages for a single zone."""
+    _rate_limit(limiter)
+    df = _retry_on_server_error(
+        client.query_unavailability_of_generation_units,
+        ZONE_TO_ENTSOE[zone], start=start, end=end,
+    )
+    rows = transform_outages(df, zone)
+    logger.info("outages: %s → %d rows", zone, len(rows))
+    return rows
