@@ -82,12 +82,10 @@ def backup_db(db_path: Path, s3_bucket: str, prefix: str = "grid-signals/backups
 def health_check(db_path: Path = DEFAULT_DB_PATH, max_age_hours: int = 26) -> bool:
     """Check data freshness. Returns True if healthy."""
     from grid_signals.db.connection import get_connection
-    from grid_signals.db.schema import create_tables
     from grid_signals.health import check_data_freshness
 
     con = get_connection(db_path, read_only=True)
     try:
-        create_tables(con)
         status = check_data_freshness(con, max_age_hours=max_age_hours)
         return status.healthy
     finally:
