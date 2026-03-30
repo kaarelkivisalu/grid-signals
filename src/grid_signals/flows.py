@@ -159,3 +159,56 @@ def weather_update(db_path: Path = DEFAULT_DB_PATH) -> None:
     _setup_library_logging()
     rows = ingest_weather(db_path)
     logger.info("Weather update: %d rows", rows)
+
+
+@task(retries=2, retry_delay_seconds=120, timeout_seconds=3600)
+def backfill_chunk(
+    db_path: Path, start: datetime, end: datetime, chunk_label: str
+) -> int:
+    """Backfill a single date range chunk."""
+    from grid_signals.pipeline import run_backfill
+
+    logger.info("Backfill chunk %s: %s → %s", chunk_label, start, end)
+    return run_backfill(db_path, start, end)
+
+
+@flow(name="initial-seed", log_prints=True, timeout_seconds=7200)
+def initial_seed(
+    db_path: Path = DEFAULT_DB_PATH,
+    days: int = 90,
+) -> None:
+    """One-time data seed: backfill historical data and weather, then validate.
+
+    Run this manually after first deploy to populate the database.
+    Splits the backfill into 30-day chunks to stay within ENTSO-E rate limits
+    and avoid timeouts.
+    """
+    _setup_library_logging()
+
+    now = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    end = now + timedelta(days=1)
+    start = now - timedelta(days=days)
+
+    # Split into 30-day chunks (sequential — DuckDB single-writer lock)
+    chunk_start = start
+    chunk_num = 0
+    total_rows = 0
+    while chunk_start < end:
+        chunk_end = min(chunk_start + timedelta(days=30), end)
+        chunk_num += 1
+        rows = backfill_chunk(db_path, chunk_start, chunk_end, f"{chunk_num}")
+        total_rows += rows
+        chunk_start = chunk_end
+
+    logger.info("Backfill complete: %d total rows across %d chunks", total_rows, chunk_num)
+
+    # Weather forecasts (next 7 days)
+    weather_rows = ingest_weather(db_path)
+    logger.info("Weather seed: %d rows", weather_rows)
+
+    # Validate
+    failures = validate_data(db_path)
+    if failures:
+        logger.warning("Validation: %d failures after seed", failures)
+    else:
+        logger.info("Validation: all checks passed")

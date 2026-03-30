@@ -18,3 +18,10 @@ deployments:
     schedule:
       cron: "0 */6 * * *"
       timezone: "UTC"
+
+  - name: initial-seed
+    entrypoint: src/grid_signals/flows.py:initial_seed
+    work_pool:
+      name: grid-signals
+    parameters:
+      days: 90

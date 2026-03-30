@@ -82,6 +82,21 @@ docker compose -f compose.yaml exec prefect-worker uv run prefect deploy --all
 This reads `prefect.yaml` and registers:
 - **morning-pipeline** — daily at 05:00 Europe/Tallinn
 - **weather-update** — every 6 hours
+- **initial-seed** — no schedule (manual trigger only)
+
+## Step 7: Seed Historical Data
+
+On a fresh deploy the database is empty. The `initial-seed` flow backfills 90 days of ENTSO-E data and weather forecasts in 30-day chunks:
+
+```bash
+docker compose -f compose.yaml exec prefect-worker uv run prefect deployment run 'initial-seed/initial-seed'
+```
+
+Or trigger it from the Prefect UI under Deployments → initial-seed → Quick Run.
+
+This takes ~20–40 minutes depending on ENTSO-E API response times. You can monitor progress in the Prefect UI. Once complete, the briefing agent and similar-days tool will have enough historical context to produce useful results.
+
+**Note:** You only need to run this once. The daily `morning-pipeline` keeps data current after that.
 
 ## Architecture
 
