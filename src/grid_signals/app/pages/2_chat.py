@@ -9,7 +9,7 @@ import duckdb
 import streamlit as st
 
 from grid_signals.agent.loop import Agent, AgentResult
-from grid_signals.db.connection import DEFAULT_DB_PATH
+from grid_signals.db.connection import get_read_connection
 
 DAILY_COST_LIMIT_USD = float(os.environ.get("CHAT_DAILY_LIMIT_USD", "5.0"))
 _USAGE_FILE = Path("data/chat_usage.json")
@@ -49,7 +49,7 @@ if not os.environ.get("ANTHROPIC_API_KEY"):
 @st.cache_resource
 def get_chat_db() -> duckdb.DuckDBPyConnection:
     """Read-only DB connection for the chat agent."""
-    return duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
+    return get_read_connection()
 
 
 # Display conversation history
@@ -83,7 +83,14 @@ if prompt := st.chat_input("Ask about Baltic-Nordic energy markets..."):
 
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            con = get_chat_db()
+            try:
+                con = get_chat_db()
+            except duckdb.IOException:
+                st.warning(
+                    "Data ingestion is currently running. Please try again shortly.",
+                    icon="\u23f3",
+                )
+                st.stop()
             agent = Agent(con)
             result: AgentResult = agent.run(
                 prompt,

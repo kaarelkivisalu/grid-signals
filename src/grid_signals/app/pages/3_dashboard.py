@@ -13,7 +13,7 @@ from grid_signals.app.charts import (
     price_heatmap,
     wind_vs_price,
 )
-from grid_signals.db.connection import DEFAULT_DB_PATH
+from grid_signals.db.connection import get_read_connection
 
 st.set_page_config(page_title="Dashboard — Grid Signals", page_icon="⚡", layout="wide")
 st.title("Dashboard")
@@ -53,10 +53,18 @@ WEATHER_LOCATIONS = [
 @st.cache_resource
 def get_dash_db() -> duckdb.DuckDBPyConnection:
     """Read-only DB connection for the dashboard."""
-    return duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
+    return get_read_connection()
 
 
-con = get_dash_db()
+try:
+    con = get_dash_db()
+except duckdb.IOException:
+    st.warning(
+        "Data ingestion is currently running. The dashboard will be available "
+        "once ingestion completes. Refresh the page to retry.",
+        icon="\u23f3",
+    )
+    st.stop()
 
 # --- Date range selector (shared) ---
 col1, col2 = st.columns(2)
