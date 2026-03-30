@@ -79,32 +79,55 @@ def generation_mix(con: duckdb.DuckDBPyConnection, zone: str,
     return fig
 
 
-def cross_border_flows(con: duckdb.DuckDBPyConnection, from_zone: str,
-                       to_zone: str, start: str, end: str) -> go.Figure:
-    """Line chart of cross-border flows in MW."""
+def cross_border_flows(con: duckdb.DuckDBPyConnection, zone: str,
+                       start: str, end: str) -> go.Figure:
+    """Line chart of cross-border flows for all interconnections of a zone.
+
+    For each neighbour, net flow = (zone→neighbour) − (neighbour→zone).
+    Positive means export from the selected zone; negative means import.
+    """
     rows = con.execute(
         """
-        SELECT period_start, flow_mw
+        SELECT from_zone, to_zone, period_start, flow_mw
         FROM cross_border_flows
-        WHERE from_zone = ? AND to_zone = ? AND period_start >= ? AND period_start < ?
+        WHERE (from_zone = ? OR to_zone = ?) AND period_start >= ? AND period_start < ?
         ORDER BY period_start
         """,
-        [from_zone, to_zone, start, end],
+        [zone, zone, start, end],
     ).fetchall()
+
+    # Build per-neighbour time series: {neighbour: {timestamp: net_mw}}
+    neighbours: dict[str, dict] = {}
+    for fz, tz, ts, mw in rows:
+        if fz == zone:
+            nbr = tz
+            neighbours.setdefault(nbr, {})[ts] = neighbours.get(nbr, {}).get(ts, 0.0) + mw
+        else:
+            nbr = fz
+            neighbours.setdefault(nbr, {})[ts] = neighbours.get(nbr, {}).get(ts, 0.0) - mw
+
+    display = _display_zone  # short alias
     fig = go.Figure()
-    if rows:
-        times = [r[0] for r in rows]
-        flows = [r[1] for r in rows]
+    for nbr in sorted(neighbours):
+        series = neighbours[nbr]
+        times = sorted(series)
+        flows = [series[t] for t in times]
         fig.add_trace(go.Scatter(x=times, y=flows, mode="lines",
-                                 name=f"{from_zone} → {to_zone}"))
-        fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
+                                 name=f"{display(zone)} ↔ {display(nbr)}"))
+
+    fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
     fig.update_layout(
-        title=f"Cross-Border Flows: {from_zone} → {to_zone}",
+        title=f"Cross-Border Flows: {display(zone)}",
         xaxis_title="Time (UTC)",
-        yaxis_title="MW (positive = export)",
+        yaxis_title=f"MW (positive = export from {display(zone)})",
         hovermode="x unified",
     )
     return fig
+
+
+def _display_zone(code: str) -> str:
+    """Convert DB zone code to display label (e.g. 'SE_4' → 'SE4')."""
+    return code.replace("_", "")
 
 
 def wind_vs_price(con: duckdb.DuckDBPyConnection, zone: str, location: str,
