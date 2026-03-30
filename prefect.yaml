@@ -5,12 +5,16 @@ pull:
 deployments:
   - name: morning-pipeline
     entrypoint: src/grid_signals/flows.py:morning_pipeline
+    work_pool:
+      name: grid-signals
     schedule:
       cron: "0 5 * * *"
       timezone: "Europe/Tallinn"
 
   - name: weather-update
     entrypoint: src/grid_signals/flows.py:weather_update
+    work_pool:
+      name: grid-signals
     schedule:
       cron: "0 */6 * * *"
       timezone: "UTC"

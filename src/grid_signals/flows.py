@@ -123,6 +123,11 @@ def morning_pipeline(
 
     Tasks run sequentially because DuckDB has a single-writer lock.
     """
+    import os
+
+    if s3_bucket is None:
+        s3_bucket = os.environ.get("S3_BUCKET") or None
+
     _setup_library_logging()
     rows = ingest_daily(db_path)
     logger.info("Daily ingestion: %d rows", rows)
