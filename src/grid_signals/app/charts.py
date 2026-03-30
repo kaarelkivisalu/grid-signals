@@ -25,7 +25,8 @@ def hourly_prices(con: duckdb.DuckDBPyConnection, zones: list[str],
         if rows:
             times = [r[0] for r in rows]
             prices = [r[1] for r in rows]
-            fig.add_trace(go.Scatter(x=times, y=prices, name=zone, mode="lines"))
+            fig.add_trace(go.Scatter(x=times, y=prices, name=zone, mode="lines",
+                                     line_shape="hv"))
     fig.update_layout(
         title="Day-Ahead Prices",
         xaxis_title="Time (UTC)",
@@ -113,7 +114,8 @@ def cross_border_flows(con: duckdb.DuckDBPyConnection, zone: str,
         times = sorted(series)
         flows = [series[t] for t in times]
         fig.add_trace(go.Scatter(x=times, y=flows, mode="lines",
-                                 name=f"{display(zone)} ↔ {display(nbr)}"))
+                                 name=f"{display(zone)} ↔ {display(nbr)}",
+                                 line_shape="hv"))
 
     fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
     fig.update_layout(
@@ -161,13 +163,15 @@ def wind_vs_price(con: duckdb.DuckDBPyConnection, zone: str, location: str,
     if weather:
         fig.add_trace(
             go.Scatter(x=[r[0] for r in weather], y=[r[1] for r in weather],
-                       name="Wind (m/s)", mode="lines", line=dict(color="#26A69A")),
+                       name="Wind (m/s)", mode="lines", line=dict(color="#26A69A"),
+                       line_shape="hv"),
             secondary_y=False,
         )
     if prices:
         fig.add_trace(
             go.Scatter(x=[r[0] for r in prices], y=[r[1] for r in prices],
-                       name="Price (EUR/MWh)", mode="lines", line=dict(color="#EF5350")),
+                       name="Price (EUR/MWh)", mode="lines", line=dict(color="#EF5350"),
+                       line_shape="hv"),
             secondary_y=True,
         )
     fig.update_layout(
