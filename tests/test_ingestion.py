@@ -12,9 +12,8 @@ import duckdb
 import numpy as np
 import pandas as pd
 import pytest
-from entsoe.exceptions import NoMatchingDataError
-
 import requests.exceptions
+from entsoe.exceptions import NoMatchingDataError
 
 from grid_signals.db.queries import get_day_ahead_prices, get_outages
 from grid_signals.db.schema import create_tables
@@ -36,7 +35,6 @@ from grid_signals.ingestion.transformers import (
     transform_outages,
 )
 from grid_signals.models import BiddingZone
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -107,11 +105,13 @@ class TestTransformGeneration:
     def test_multiindex_columns(self):
         """entsoe-py returns MultiIndex (fuel_type, aggregation) columns."""
         idx = pd.date_range("2024-06-01", periods=2, freq="h", tz="UTC")
-        columns = pd.MultiIndex.from_tuples([
-            ("Wind Onshore", "Actual Aggregated"),
-            ("Wind Onshore", "Actual Consumption"),
-            ("Fossil Gas", "Actual Aggregated"),
-        ])
+        columns = pd.MultiIndex.from_tuples(
+            [
+                ("Wind Onshore", "Actual Aggregated"),
+                ("Wind Onshore", "Actual Consumption"),
+                ("Fossil Gas", "Actual Aggregated"),
+            ]
+        )
         data = [[100.0, 10.0, 200.0], [110.0, 11.0, 210.0]]
         df = pd.DataFrame(data, index=idx, columns=columns)
 
@@ -174,30 +174,32 @@ class TestTransformCrossBorderFlows:
 class TestTransformOutages:
     def _make_outage_df(self):
         """Create a sample outage DataFrame mimicking entsoe-py output."""
-        return pd.DataFrame({
-            "mrid": ["UM-001", "UM-001", "UM-002"],
-            "revision": [1, 2, 1],
-            "businesstype": [
-                "Unplanned outage of a generation unit",
-                "Unplanned outage of a generation unit",
-                "Planned maintenance",
-            ],
-            "production_resource_name": ["Plant A", "Plant A", "Plant B"],
-            "production_type": ["Fossil Gas", "Fossil Gas", "Nuclear"],
-            "nominal_power": [500.0, 500.0, 1000.0],
-            "available_capacity": [0.0, 100.0, 200.0],
-            "start": [
-                pd.Timestamp("2024-05-01", tz="UTC"),
-                pd.Timestamp("2024-05-01", tz="UTC"),
-                pd.Timestamp("2024-06-01", tz="UTC"),
-            ],
-            "end": [
-                pd.Timestamp("2024-05-10", tz="UTC"),
-                pd.Timestamp("2024-05-12", tz="UTC"),
-                pd.NaT,
-            ],
-            "status": ["Active", "Active", "Active"],
-        })
+        return pd.DataFrame(
+            {
+                "mrid": ["UM-001", "UM-001", "UM-002"],
+                "revision": [1, 2, 1],
+                "businesstype": [
+                    "Unplanned outage of a generation unit",
+                    "Unplanned outage of a generation unit",
+                    "Planned maintenance",
+                ],
+                "production_resource_name": ["Plant A", "Plant A", "Plant B"],
+                "production_type": ["Fossil Gas", "Fossil Gas", "Nuclear"],
+                "nominal_power": [500.0, 500.0, 1000.0],
+                "available_capacity": [0.0, 100.0, 200.0],
+                "start": [
+                    pd.Timestamp("2024-05-01", tz="UTC"),
+                    pd.Timestamp("2024-05-01", tz="UTC"),
+                    pd.Timestamp("2024-06-01", tz="UTC"),
+                ],
+                "end": [
+                    pd.Timestamp("2024-05-10", tz="UTC"),
+                    pd.Timestamp("2024-05-12", tz="UTC"),
+                    pd.NaT,
+                ],
+                "status": ["Active", "Active", "Active"],
+            }
+        )
 
     def test_dedup_by_latest_revision(self):
         df = self._make_outage_df()
@@ -264,7 +266,8 @@ class TestZoneMapping:
 
         from grid_signals.ingestion.client import _EXTERNAL_LINKS, _INTERNAL_LINKS
 
-        EXCLUDED = {"RU", "RU_KGD", "BY"}
+        # RU, RU_KGD, BY desyncronised around feb 2025, DE_AT_LU renamed to DE_LU around oct 2018
+        EXCLUDED = {"RU", "RU_KGD", "BY", "DE_AT_LU"}
         our_zones = set(ZONE_TO_ENTSOE.values())
 
         expected = set()
@@ -276,10 +279,7 @@ class TestZoneMapping:
                     continue
                 expected.add(tuple(sorted([zone, n])))
 
-        actual = {
-            tuple(sorted(pair))
-            for pair in _INTERNAL_LINKS + _EXTERNAL_LINKS
-        }
+        actual = {tuple(sorted(pair)) for pair in _INTERNAL_LINKS + _EXTERNAL_LINKS}
 
         missing = expected - actual
         assert not missing, f"Missing border links: {sorted(missing)}"
@@ -342,10 +342,12 @@ class TestIngestGeneration:
     def test_happy_path(self, con):
         client = MagicMock()
         idx = pd.date_range("2024-06-01", periods=2, freq="h", tz="UTC")
-        columns = pd.MultiIndex.from_tuples([
-            ("Wind Onshore", "Actual Aggregated"),
-            ("Fossil Gas", "Actual Aggregated"),
-        ])
+        columns = pd.MultiIndex.from_tuples(
+            [
+                ("Wind Onshore", "Actual Aggregated"),
+                ("Fossil Gas", "Actual Aggregated"),
+            ]
+        )
         df = pd.DataFrame([[100.0, 200.0], [110.0, 210.0]], index=idx, columns=columns)
         client.query_generation.return_value = df
         count = ingest_generation_per_type(
@@ -398,18 +400,20 @@ class TestIngestCrossBorderFlows:
 class TestIngestOutages:
     def test_happy_path(self, con):
         client = MagicMock()
-        client.query_unavailability_of_generation_units.return_value = pd.DataFrame({
-            "mrid": ["UM-100"],
-            "revision": [1],
-            "businesstype": ["Planned maintenance"],
-            "production_resource_name": ["Test Plant"],
-            "production_type": ["Nuclear"],
-            "nominal_power": [1000.0],
-            "available_capacity": [0.0],
-            "start": [pd.Timestamp("2024-05-01", tz="UTC")],
-            "end": [pd.Timestamp("2024-05-15", tz="UTC")],
-            "status": ["Active"],
-        })
+        client.query_unavailability_of_generation_units.return_value = pd.DataFrame(
+            {
+                "mrid": ["UM-100"],
+                "revision": [1],
+                "businesstype": ["Planned maintenance"],
+                "production_resource_name": ["Test Plant"],
+                "production_type": ["Nuclear"],
+                "nominal_power": [1000.0],
+                "available_capacity": [0.0],
+                "start": [pd.Timestamp("2024-05-01", tz="UTC")],
+                "end": [pd.Timestamp("2024-05-15", tz="UTC")],
+                "status": ["Active"],
+            }
+        )
         count = ingest_outages(
             con,
             client,
