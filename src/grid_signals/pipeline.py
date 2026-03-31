@@ -118,7 +118,10 @@ def _parallel_entsoe_ingest(
         ))
 
     # Phase 1: fetch in parallel
+    num_tasks = len(tasks)
+    logger.info("ENTSO-E fetch: starting %d tasks with %d workers", num_tasks, max_workers)
     results: list[tuple[str, Callable, list[Any]]] = []
+    completed = 0
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         future_to_meta = {
             pool.submit(fetch_fn): (label, insert_fn)
@@ -126,20 +129,28 @@ def _parallel_entsoe_ingest(
         }
         for future in as_completed(future_to_meta):
             label, insert_fn = future_to_meta[future]
+            completed += 1
             try:
                 rows = future.result()
                 if rows:
                     results.append((label, insert_fn, rows))
+                    logger.info("[%d/%d] %s: fetched %d rows", completed, num_tasks, label, len(rows))
+                else:
+                    logger.info("[%d/%d] %s: empty result", completed, num_tasks, label)
             except NoMatchingDataError:
-                logger.warning("%s: no data", label)
+                logger.warning("[%d/%d] %s: no data", completed, num_tasks, label)
             except Exception:
-                logger.error("%s: error\n%s", label, traceback.format_exc())
+                logger.error("[%d/%d] %s: error\n%s", completed, num_tasks, label, traceback.format_exc())
+
+    logger.info("ENTSO-E fetch complete: %d/%d tasks returned data", len(results), num_tasks)
 
     # Phase 2: write sequentially (DuckDB single-writer lock)
     total = 0
-    for label, insert_fn, rows in results:
+    for i, (label, insert_fn, rows) in enumerate(results, 1):
         count = insert_fn(con, rows)
         total += count
+        logger.info("[%d/%d] %s: inserted %d rows", i, len(results), label, count)
+    logger.info("ENTSO-E insert complete: %d total rows", total)
     return total
 
 
