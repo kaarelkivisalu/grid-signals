@@ -41,7 +41,7 @@ services:
         condition: service_healthy
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      CHAT_DAILY_LIMIT_USD: ${CHAT_DAILY_LIMIT_USD:-5.0}
+      CHAT_DAILY_LIMIT_USD: ${CHAT_DAILY_LIMIT_USD:-1.0}
     volumes:
       - grid-data:/app/data:ro
       - grid-briefings:/app/briefings:ro
