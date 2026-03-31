@@ -43,8 +43,8 @@ services:
     volumes:
       - grid-data:/app/data:ro
       - grid-briefings:/app/briefings:ro
-    ports:
-      - "8501:8501"
+    expose:
+      - "8501"
     restart: unless-stopped
 
 volumes:
