@@ -10,6 +10,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    ports:
+      - "127.0.0.1:4200:4200"
 
   prefect-worker:
     build: .
