@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import anthropic
 import duckdb
 
-from grid_signals.agent.loop import Agent, AgentResult, DEFAULT_MODEL, DEFAULT_MAX_TURNS
+from grid_signals.agent.loop import DEFAULT_MAX_TURNS, DEFAULT_MODEL, Agent, AgentResult
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +99,7 @@ def generate_briefing(
         BriefingResult with the briefing content and metadata.
     """
     if target_date is None:
-        target_date = datetime.now(timezone.utc).date()
+        target_date = datetime.now(UTC).date()
 
     prompt = build_briefing_prompt(target_date)
     logger.info("Generating briefing for %s", target_date.isoformat())

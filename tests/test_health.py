@@ -8,7 +8,7 @@ import pytest
 from grid_signals.health import check_data_freshness
 
 
-@pytest.fixture()
+@pytest.fixture
 def con() -> duckdb.DuckDBPyConnection:
     c = duckdb.connect(":memory:")
     c.execute("""

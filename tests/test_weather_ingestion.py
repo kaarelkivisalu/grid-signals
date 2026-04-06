@@ -27,7 +27,6 @@ from grid_signals.ingestion.weather_client import (
 )
 from grid_signals.ingestion.weather_transformers import transform_weather_response
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

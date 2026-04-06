@@ -4,17 +4,17 @@ import contextvars
 import logging
 import threading
 import traceback
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import duckdb
 import pandas as pd
 from entsoe.exceptions import NoMatchingDataError
 
 from grid_signals.db.connection import DEFAULT_DB_PATH, get_connection
-from grid_signals.db.schema import create_tables
 from grid_signals.db.queries import (
     insert_cross_border_flows,
     insert_day_ahead_prices,
@@ -22,6 +22,7 @@ from grid_signals.db.queries import (
     insert_outages,
     insert_total_load,
 )
+from grid_signals.db.schema import create_tables
 from grid_signals.ingestion.client import BORDERS, get_entsoe_client
 from grid_signals.ingestion.entsoe import (
     fetch_cross_border_flows,
@@ -33,7 +34,6 @@ from grid_signals.ingestion.entsoe import (
     ingest_cross_border_flows,
     ingest_day_ahead_prices,
     ingest_generation_per_type,
-    ingest_outages,
     ingest_total_load,
 )
 from grid_signals.ingestion.locations import LOCATIONS

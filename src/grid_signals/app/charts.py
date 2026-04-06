@@ -383,13 +383,13 @@ def flow_map(con: duckdb.DuckDBPyConnection, start: str, end: str) -> go.Figure:
 
     raw: dict[tuple[str, str], float] = {}
     for fz, tz, avg_mw in rows:
-        raw[(fz, tz)] = avg_mw
+        raw[fz, tz] = avg_mw
 
     link_flows: dict[tuple[str, str], float] = {}
     for a, b in _MAP_LINKS:
         fwd = raw.get((a, b), 0.0)
         rev = raw.get((b, a), 0.0)
-        link_flows[(a, b)] = fwd - rev
+        link_flows[a, b] = fwd - rev
 
     max_flow = max((abs(v) for v in link_flows.values()), default=1.0) or 1.0
 

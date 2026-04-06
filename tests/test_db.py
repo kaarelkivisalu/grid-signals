@@ -5,7 +5,6 @@ from datetime import UTC, datetime, timedelta
 import duckdb
 import pytest
 
-from grid_signals.db.schema import create_tables
 from grid_signals.db.queries import (
     get_cross_border_flows,
     get_day_ahead_prices,
@@ -20,6 +19,7 @@ from grid_signals.db.queries import (
     insert_total_load,
     insert_weather_forecasts,
 )
+from grid_signals.db.schema import create_tables
 from grid_signals.models import (
     BiddingZone,
     CrossBorderFlow,

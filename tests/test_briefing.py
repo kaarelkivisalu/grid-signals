@@ -1,6 +1,6 @@
 """Tests for the daily briefing generation module."""
 
-from datetime import date, datetime, timedelta, UTC
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import MagicMock
 
 import duckdb
@@ -15,7 +15,6 @@ from grid_signals.briefing import (
 from grid_signals.db.queries import insert_day_ahead_prices
 from grid_signals.db.schema import create_tables
 from grid_signals.models import BiddingZone, DayAheadPrice
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -163,9 +162,8 @@ class TestGenerateBriefing:
             _mock_agent_run("briefing content"),
         )
         result = generate_briefing(con, output_dir=None)
-        from datetime import timezone
 
-        assert result.date == datetime.now(timezone.utc).date()
+        assert result.date == datetime.now(UTC).date()
 
     def test_passes_prompt_with_date(self, con, monkeypatch):
         mock_cls = _mock_agent_run("content")

@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import logging
 import traceback
+from collections.abc import Callable
 from time import sleep
-from typing import TYPE_CHECKING, Callable, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 import duckdb
 import pandas as pd
@@ -186,7 +187,8 @@ def ingest_cross_border_flows(
 ) -> int:
     """Fetch and store cross-border flows for the given borders.
 
-    Borders are ENTSO-E zone code pairs (e.g. ``("EE", "FI")``)."""
+    Borders are ENTSO-E zone code pairs (e.g. ``("EE", "FI")``).
+    """
     total = 0
     for from_zone, to_zone in borders:
         try:

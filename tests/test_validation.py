@@ -6,10 +6,10 @@ import duckdb
 import pytest
 
 from grid_signals.db.queries import (
+    insert_cross_border_flows,
     insert_day_ahead_prices,
     insert_generation_by_type,
     insert_total_load,
-    insert_cross_border_flows,
 )
 from grid_signals.db.schema import create_tables
 from grid_signals.models import (

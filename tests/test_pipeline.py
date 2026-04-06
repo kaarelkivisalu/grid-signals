@@ -12,9 +12,9 @@ import httpx
 import pandas as pd
 import pytest
 
+from grid_signals.db.queries import insert_day_ahead_prices, insert_weather_forecasts
 from grid_signals.db.schema import create_tables
 from grid_signals.models import BiddingZone, DayAheadPrice, WeatherForecast
-from grid_signals.db.queries import insert_day_ahead_prices, insert_weather_forecasts
 from grid_signals.validation import (
     validate_price_bounds,
     validate_price_completeness,

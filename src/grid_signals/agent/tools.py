@@ -20,7 +20,7 @@ from grid_signals.db.queries import (  # noqa: E402
     get_total_load,
     get_weather_forecasts,
 )
-from grid_signals.ingestion.client import ZONE_TO_ENTSOE, _EXTERNAL_LINKS  # noqa: E402
+from grid_signals.ingestion.client import _EXTERNAL_LINKS, ZONE_TO_ENTSOE  # noqa: E402
 from grid_signals.models import BiddingZone  # noqa: E402
 
 # Reverse map: ENTSO-E code → BiddingZone value (for "outside" detection).
@@ -724,7 +724,7 @@ def _dispatch(
 
     if name == "get_outages":
         active_at = None
-        if "active_at" in tool_input and tool_input["active_at"]:
+        if tool_input.get("active_at"):
             active_at = _parse_datetime(tool_input["active_at"])
         rows = get_outages(
             con,

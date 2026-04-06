@@ -98,7 +98,6 @@ def health_check(db_path: Path = DEFAULT_DB_PATH, max_age_hours: int = 26) -> bo
 def generate_briefing(db_path: Path = DEFAULT_DB_PATH) -> str:
     """Generate the morning briefing. Returns briefing content."""
     from grid_signals.briefing import generate_briefing as _generate
-
     from grid_signals.db.connection import get_connection
     from grid_signals.db.schema import create_tables
 

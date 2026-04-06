@@ -253,7 +253,8 @@ class TestEndToEndBriefing:
 
     def test_briefing_references_correct_data(self, con, tmp_path):
         """The agent makes tool calls against real DB data and produces
-        a briefing that references the correct numbers."""
+        a briefing that references the correct numbers.
+        """
         mock_client = MagicMock()
 
         # Turn 1: agent requests prices for EE and FI, and outages for FI
