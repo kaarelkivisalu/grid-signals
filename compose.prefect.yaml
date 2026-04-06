@@ -1,42 +1,48 @@
 services:
-  prefect-server:
-    image: prefecthq/prefect:3-python3.12
-    command: prefect server start --host 0.0.0.0
-    volumes:
-      - prefect-data:/root/.prefect
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:4200/api/health', timeout=1)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    ports:
-      - "127.0.0.1:4200:4200"
+    prefect-server:
+        image: prefecthq/prefect:3-python3.12
+        command: prefect server start --host 0.0.0.0
+        volumes:
+            - prefect-data:/root/.prefect
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "python",
+                    "-c",
+                    "import urllib.request as u; u.urlopen('http://localhost:4200/api/health', timeout=1)",
+                ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 60s
+        ports:
+            - "127.0.0.1:4200:4200"
 
-  prefect-worker:
-    build: .
-    command: uv run prefect worker start --pool grid-signals
-    depends_on:
-      prefect-server:
-        condition: service_healthy
-    environment:
-      PREFECT_API_URL: http://prefect-server:4200/api
-      PREFECT_LOGGING_EXTRA_LOGGERS: grid_signals
-      ENTSOE_API_KEY: ${ENTSOE_API_KEY}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      S3_BUCKET: ${S3_BUCKET:-}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-}
-    volumes:
-      - grid-data:/app/data
-      - grid-briefings:/app/briefings
-    restart: unless-stopped
-    stop_grace_period: 120s
+    prefect-worker:
+        build: .
+        command: uv run prefect worker start --pool grid-signals
+        depends_on:
+            prefect-server:
+                condition: service_healthy
+        environment:
+            PREFECT_API_URL: http://prefect-server:4200/api
+            PREFECT_LOGGING_EXTRA_LOGGERS: grid_signals
+            ENTSOE_API_KEY: ${ENTSOE_API_KEY}
+            ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+            S3_BUCKET: ${S3_BUCKET:-}
+            AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+            AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+            AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-}
+        volumes:
+            - gridsignals_grid-data:/app/data
+            - gridsignals_grid-briefings:/app/briefings
+        restart: unless-stopped
+        stop_grace_period: 120s
 
 volumes:
-  prefect-data:
-  grid-data:
-    external: true
-  grid-briefings:
-    external: true
+    prefect-data:
+    gridsignals_grid-data:
+        external: true
+    gridsignals_grid-briefings:
+        external: true
