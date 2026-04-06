@@ -3,7 +3,7 @@ FROM python:3.12-slim
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # AWS CLI for S3 backups
-RUN apt-get update && apt-get install -y --no-install-recommends awscli \
+RUN apt-get update && apt-get install -y --no-install-recommends awscli git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
