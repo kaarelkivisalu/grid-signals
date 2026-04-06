@@ -1,30 +1,33 @@
 name: CI
 
 on:
-  push:
-    branches: [main, prod-hardening]
-  pull_request:
-    branches: [main]
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/ruff-action@v3
+    lint:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - name: Lint check (Ruff)
+              uses: astral-sh/ruff-action@v3
+            - name: Format check (Ruff)
+              run: ruff format --check --diff
 
-  typecheck:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - run: uv sync --frozen
-      - run: uv run mypy src/grid_signals/
+    typecheck:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: astral-sh/setup-uv@v5
+            - run: uv sync --frozen
+            - run: uv run mypy src/grid_signals/
 
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - run: uv sync --frozen
-      - run: uv run pytest --tb=short --cov=grid_signals --cov-report=term-missing
+    test:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: astral-sh/setup-uv@v5
+            - run: uv sync --frozen
+            - run: uv run pytest --tb=short --cov=grid_signals --cov-report=term-missing
