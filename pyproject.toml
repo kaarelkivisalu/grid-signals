@@ -32,12 +32,58 @@ grid-signals = "grid_signals.cli:main"
 requires = ["uv_build>=0.11.2, <0.12"]
 build-backend = "uv_build"
 
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
 [tool.ruff]
 target-version = "py312"
+
+[tool.ruff.lint]
+select = ["ALL"]
+preview = true
+ignore = [
+    # "CPY001", # Missing copyright notice at top of file
+    # "D100",   # Missing docstring in public module
+    # "D101",   # Missing docstring in public class
+    # "D102",   # Missing docstring in public method
+    # "D103",   # Missing docstring in public function
+    # "D104",   # Missing docstring in public package
+    # "DOC402", # Docstring missing yields
+    # "EM101",  # Raw string in exception
+    # "TRY003", # Raise vanilla args
+    # "FBT003", # Boolean positional value in call
+    # "ANN401", # Any type
+    # "EXE",    # Shebang/executable rules (not consistent across OSes)
+    # "D105",   # Missing docstring in magic method
+    # "ANN201", # Missing return type annotation for public function
+    # "S311",   # Standard pseudo-random generators are not suitable for cryptographic purposes
+    # "T201",   # print found
+
+    # https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules
+    "W191",   # tab-indentation
+    "E111",   # indentation-with-invalid-multiple
+    "E114",   # indentation-with-invalid-multiple-comment
+    "E117",   # over-indented
+    "D206",   # docstring-tab-indentation
+    "D300",   # triple-single-quotes
+    "Q000",   # bad-quotes-inline-string
+    "Q001",   # bad-quotes-multiline-string
+    "Q002",   # bad-quotes-docstring
+    "Q003",   # avoidable-escaped-quote
+    "Q004",   # unnecessary-escaped-quote
+    "COM812", # missing-trailing-comma
+    "COM819", # prohibited-trailing-comma
+    "E501",   # line-too-long
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+docstring-code-format = true
 
 [tool.mypy]
 python_version = "3.12"
