@@ -145,10 +145,9 @@ def _parallel_entsoe_ingest(
     )
     results: list[tuple[str, Callable, list[Any]]] = []
     completed = 0
-    ctx = contextvars.copy_context()
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         future_to_meta = {
-            pool.submit(ctx.run, fetch_fn): (label, insert_fn)
+            pool.submit(contextvars.copy_context().run, fetch_fn): (label, insert_fn)
             for label, fetch_fn, insert_fn in tasks
         }
         for future in as_completed(future_to_meta):
