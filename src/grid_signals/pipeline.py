@@ -1,6 +1,5 @@
 """Pipeline orchestration: run ingestion jobs for ENTSO-E and Open-Meteo."""
 
-import contextvars
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -147,7 +146,7 @@ def _parallel_entsoe_ingest(
     completed = 0
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         future_to_meta = {
-            pool.submit(contextvars.copy_context().run, fetch_fn): (label, insert_fn)
+            pool.submit(fetch_fn): (label, insert_fn)
             for label, fetch_fn, insert_fn in tasks
         }
         for future in as_completed(future_to_meta):
