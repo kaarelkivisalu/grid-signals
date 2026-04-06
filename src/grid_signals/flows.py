@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from pathlib import (
+    Path,  # noqa: TC003 — Pydantic needs Path at runtime for flow parameter validation
+)
 
 from prefect import flow, task
 
