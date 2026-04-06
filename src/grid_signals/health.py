@@ -40,7 +40,7 @@ def check_data_freshness(
     all_ok = True
 
     for table in _TABLES:
-        row = con.execute(f"SELECT MAX(period_start) FROM {table}").fetchone()  # noqa: S608
+        row = con.execute(f"SELECT MAX(period_start) FROM {table}").fetchone()
         latest = row[0] if row else None
 
         if latest is None:

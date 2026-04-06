@@ -220,7 +220,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _build_tool_input(args: argparse.Namespace) -> tuple[str, dict]:
+def _build_tool_input(args: argparse.Namespace) -> tuple[str, dict]:  # noqa: PLR0911
     """Map parsed query subcommand args to (tool_name, tool_input) pair."""
     cmd = args.query_command
     if cmd == "prices":
@@ -281,7 +281,8 @@ def _build_tool_input(args: argparse.Namespace) -> tuple[str, dict]:
             "temp_tolerance_c": args.temp_tolerance,
             "limit": args.limit,
         }
-    raise ValueError(f"Unknown query command: {cmd!r}")
+    msg = f"Unknown query command: {cmd!r}"
+    raise ValueError(msg)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -346,10 +347,10 @@ def _run_command(args: argparse.Namespace, db_path: Path) -> int:
             con.close()
 
     elif args.command == "ui":
-        import subprocess
+        import subprocess  # noqa: S404
 
         app_path = Path(__file__).parent / "app" / "main.py"
-        subprocess.run(
+        subprocess.run(  # noqa: S603
             ["streamlit", "run", str(app_path)],
             check=True,
         )
@@ -362,7 +363,7 @@ def _run_command(args: argparse.Namespace, db_path: Path) -> int:
         con = get_connection(db_path)
         try:
             create_tables(con)
-            agent_kwargs: dict = dict(model=args.model)
+            agent_kwargs: dict = {"model": args.model}
             if args.max_turns is not None:
                 agent_kwargs["max_turns"] = args.max_turns
             result = run_agent(args.question, con, **agent_kwargs)
@@ -399,7 +400,9 @@ def _run_command(args: argparse.Namespace, db_path: Path) -> int:
 
         target_date = None
         if args.date:
-            target_date = datetime.strptime(args.date, "%Y-%m-%d").date()
+            target_date = (
+                datetime.strptime(args.date, "%Y-%m-%d").replace(tzinfo=UTC).date()
+            )
 
         if args.no_save:
             output_dir = None
@@ -411,11 +414,11 @@ def _run_command(args: argparse.Namespace, db_path: Path) -> int:
         con = get_connection(db_path)
         try:
             create_tables(con)
-            kwargs = dict(
-                target_date=target_date,
-                output_dir=output_dir,
-                model=args.model,
-            )
+            kwargs = {
+                "target_date": target_date,
+                "output_dir": output_dir,
+                "model": args.model,
+            }
             if args.max_turns is not None:
                 kwargs["max_turns"] = args.max_turns
             result = generate_briefing(con, **kwargs)

@@ -6,9 +6,11 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import anthropic
-import duckdb
+if TYPE_CHECKING:
+    import anthropic
+    import duckdb
 
 from grid_signals.agent.loop import DEFAULT_MAX_TURNS, DEFAULT_MODEL, Agent, AgentResult
 
@@ -94,6 +96,7 @@ def generate_briefing(
         model: Claude model to use.
         max_turns: Maximum agent turns.
         client: Anthropic client (optional, for testing).
+        validate_first: Run data validation before generating (default True).
 
     Returns:
         BriefingResult with the briefing content and metadata.

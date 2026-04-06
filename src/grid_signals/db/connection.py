@@ -29,4 +29,5 @@ def get_read_connection(
         except duckdb.IOException:
             if attempt < retries - 1:
                 time.sleep(delay)
-    raise duckdb.IOException("Database is locked by a running ingestion process.")
+    msg = "Database is locked by a running ingestion process."
+    raise duckdb.IOException(msg)

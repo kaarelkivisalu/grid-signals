@@ -3,12 +3,13 @@
 import contextvars
 import logging
 import threading
-import traceback
-from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 import duckdb
 import pandas as pd
@@ -83,44 +84,42 @@ def _parallel_entsoe_ingest(
     tasks: list[tuple[str, Callable[[], list[Any]], Callable]] = []
 
     for zone in zones:
-        tasks.append(
-            (
-                f"prices/{zone.value}",
-                lambda z=zone: fetch_day_ahead_prices(
-                    _get_client(), z, start, end, limiter
+        tasks.extend(
+            [
+                (
+                    f"prices/{zone.value}",
+                    lambda z=zone: fetch_day_ahead_prices(
+                        _get_client(), z, start, end, limiter
+                    ),
+                    insert_day_ahead_prices,
                 ),
-                insert_day_ahead_prices,
-            )
-        )
-        tasks.append(
-            (
-                f"generation/{zone.value}",
-                lambda z=zone: fetch_generation(_get_client(), z, start, end, limiter),
-                insert_generation_by_type,
-            )
-        )
-        tasks.append(
-            (
-                f"load_actual/{zone.value}",
-                lambda z=zone: fetch_load_actual(_get_client(), z, start, end, limiter),
-                insert_total_load,
-            )
-        )
-        tasks.append(
-            (
-                f"load_forecast/{zone.value}",
-                lambda z=zone: fetch_load_forecast(
-                    _get_client(), z, start, end, limiter
+                (
+                    f"generation/{zone.value}",
+                    lambda z=zone: fetch_generation(
+                        _get_client(), z, start, end, limiter
+                    ),
+                    insert_generation_by_type,
                 ),
-                insert_total_load,
-            )
-        )
-        tasks.append(
-            (
-                f"outages/{zone.value}",
-                lambda z=zone: fetch_outages(_get_client(), z, start, end, limiter),
-                insert_outages,
-            )
+                (
+                    f"load_actual/{zone.value}",
+                    lambda z=zone: fetch_load_actual(
+                        _get_client(), z, start, end, limiter
+                    ),
+                    insert_total_load,
+                ),
+                (
+                    f"load_forecast/{zone.value}",
+                    lambda z=zone: fetch_load_forecast(
+                        _get_client(), z, start, end, limiter
+                    ),
+                    insert_total_load,
+                ),
+                (
+                    f"outages/{zone.value}",
+                    lambda z=zone: fetch_outages(_get_client(), z, start, end, limiter),
+                    insert_outages,
+                ),
+            ]
         )
 
     for from_zone, to_zone in borders:
@@ -171,12 +170,11 @@ def _parallel_entsoe_ingest(
             except NoMatchingDataError:
                 logger.warning("[%d/%d] %s: no data", completed, num_tasks, label)
             except Exception:
-                logger.error(
-                    "[%d/%d] %s: error\n%s",
+                logger.exception(
+                    "[%d/%d] %s: error",
                     completed,
                     num_tasks,
                     label,
-                    traceback.format_exc(),
                 )
 
     logger.info(
@@ -246,7 +244,8 @@ def run_backfill(
     Returns total rows inserted.
     """
     if start is None or end is None:
-        raise ValueError("start and end are required for backfill")
+        msg = "start and end are required for backfill"
+        raise ValueError(msg)
 
     start_ts = pd.Timestamp(start)
     end_ts = pd.Timestamp(end)
@@ -257,7 +256,7 @@ def run_backfill(
         create_tables(con)
         total = 0
 
-        # ENTSO-E (parallel)
+        # ENTSO-E (parallel)  # noqa: ERA001
         total += _parallel_entsoe_ingest(con, zones, BORDERS, start_ts, end_ts)
 
         # Open-Meteo (sequential — free API, no parallelism needed)
@@ -301,7 +300,8 @@ def run_backfill_gaps(
     Returns total rows inserted.
     """
     if start is None or end is None:
-        raise ValueError("start and end are required for gap backfill")
+        msg = "start and end are required for gap backfill"
+        raise ValueError(msg)
 
     from grid_signals.validation import find_gaps
 

@@ -29,7 +29,8 @@ class TestJSONFormatter:
         import sys
 
         try:
-            raise ValueError("boom")
+            msg = "boom"
+            raise ValueError(msg)  # noqa: TRY301
         except ValueError:
             exc_info = sys.exc_info()
 

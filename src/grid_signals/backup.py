@@ -1,11 +1,16 @@
 """DuckDB backup: checkpoint and upload to S3."""
 
+from __future__ import annotations
+
 import logging
-import subprocess
-from datetime import date
-from pathlib import Path
+import subprocess  # noqa: S404
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import duckdb
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +31,11 @@ def backup_database(
     finally:
         con.close()
 
-    today = date.today().isoformat()
+    today = datetime.now(tz=UTC).date().isoformat()
     s3_uri = f"s3://{s3_bucket}/{prefix}/{today}.duckdb"
 
     logger.info("Uploading backup to %s", s3_uri)
-    subprocess.run(
+    subprocess.run(  # noqa: S603
         ["aws", "s3", "cp", str(db_path), s3_uri],
         check=True,
     )

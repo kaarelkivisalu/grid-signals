@@ -457,7 +457,7 @@ class TestCLIBuildToolInput:
     """Test that CLI args map correctly to tool names and inputs."""
 
     def _parse(self, argv: list[str]):
-        from grid_signals.cli import _build_tool_input, _parse_args
+        from grid_signals.cli import _build_tool_input, _parse_args  # noqa: PLC2701
 
         args = _parse_args(argv)
         return _build_tool_input(args)
@@ -507,7 +507,7 @@ class TestCLIBuildToolInput:
         assert inp["to_zone"] == "FI"
 
     def test_load(self):
-        name, inp = self._parse(["query", "load", "EE", "2024-01-15", "2024-01-16"])
+        name, _inp = self._parse(["query", "load", "EE", "2024-01-15", "2024-01-16"])
         assert name == "get_load_forecast"
 
     def test_spread(self):
@@ -696,7 +696,7 @@ class TestAgentLoopMaxTurns:
         mock_client = MagicMock()
 
         # Every response asks for another tool call
-        def always_tool_use(**kwargs):
+        def always_tool_use(**_kwargs):
             return _make_response(
                 content=[
                     _make_tool_use_block(

@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import anthropic
-import duckdb
 
 from grid_signals.agent.prompt import SYSTEM_PROMPT
 from grid_signals.agent.tools import TOOLS, execute_tool
+
+if TYPE_CHECKING:
+    import duckdb
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +86,9 @@ class Agent:
     ) -> AgentResult:
         """Run a conversation loop until the model stops or max_turns is hit."""
         if message_history:
-            messages: list[dict] = list(message_history) + [
-                {"role": "user", "content": user_message}
+            messages: list[dict] = [
+                *message_history,
+                {"role": "user", "content": user_message},
             ]
         else:
             messages: list[dict] = [{"role": "user", "content": user_message}]
@@ -175,10 +179,7 @@ class Agent:
 
 def _extract_text(content: list) -> str:
     """Extract text from response content blocks."""
-    parts = []
-    for block in content:
-        if hasattr(block, "text"):
-            parts.append(block.text)
+    parts = [block.text for block in content if hasattr(block, "text")]
     return "\n".join(parts)
 
 

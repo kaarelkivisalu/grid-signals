@@ -23,7 +23,7 @@ TABLES = {
 }
 
 
-def fix_period_end(con: duckdb.DuckDBPyConnection, dry_run: bool) -> None:
+def fix_period_end(con: duckdb.DuckDBPyConnection, *, dry_run: bool) -> None:
     for table, zone_col in TABLES.items():
         print(f"\n=== {table} ===")
 
@@ -103,7 +103,7 @@ def main() -> None:
 
     con = duckdb.connect(str(db_path))
     try:
-        fix_period_end(con, args.dry_run)
+        fix_period_end(con, dry_run=args.dry_run)
     finally:
         con.close()
 

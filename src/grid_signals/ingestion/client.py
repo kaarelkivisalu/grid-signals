@@ -31,7 +31,7 @@ _INTERNAL_LINKS: list[tuple[str, str]] = [
     ("EE", "FI"),
     ("EE", "LV"),
     ("LV", "LT"),
-    # Baltic–Nordics
+    # Baltic-Nordics
     ("LT", "SE_4"),
     ("FI", "SE_3"),
     # Sweden internal
@@ -45,7 +45,7 @@ _INTERNAL_LINKS: list[tuple[str, str]] = [
     ("NO_2", "NO_5"),
     ("NO_3", "NO_4"),
     ("NO_3", "NO_5"),
-    # Norway–Sweden/Finland
+    # Norway-Sweden/Finland
     ("NO_1", "SE_3"),
     ("NO_3", "SE_2"),
     ("NO_4", "SE_1"),

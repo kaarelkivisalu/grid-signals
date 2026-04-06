@@ -215,6 +215,7 @@ def get_total_load(
     zone: BiddingZone,
     start: datetime,
     end: datetime,
+    *,
     forecast_only: bool = False,
 ) -> list[TotalLoad]:
     if forecast_only:
@@ -289,10 +290,10 @@ def get_outages(
         conditions.append("fuel_type = ?")
         params.append(fuel_type)
     if active_at:
-        conditions.append("period_start <= ?")
-        params.append(active_at)
-        conditions.append("(period_end IS NULL OR period_end >= ?)")
-        params.append(active_at)
+        conditions.extend(
+            ["period_start <= ?", "(period_end IS NULL OR period_end >= ?)"]
+        )
+        params.extend((active_at, active_at))
     where = " AND ".join(conditions)
     rows = con.execute(
         f"""

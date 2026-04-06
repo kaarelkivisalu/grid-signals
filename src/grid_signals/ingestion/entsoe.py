@@ -9,15 +9,10 @@ use.
 from __future__ import annotations
 
 import logging
-import traceback
-from collections.abc import Callable
 from time import sleep
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING
 
-import duckdb
-import pandas as pd
 import requests.exceptions
-from entsoe import EntsoePandasClient
 from entsoe.exceptions import NoMatchingDataError
 
 from grid_signals.db.queries import (
@@ -35,20 +30,24 @@ from grid_signals.ingestion.transformers import (
     transform_load,
     transform_outages,
 )
-from grid_signals.models.zones import BiddingZone
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    import duckdb
+    import pandas as pd
+    from entsoe import EntsoePandasClient
+
     from grid_signals.ingestion.rate_limiter import RateLimiter
+    from grid_signals.models.zones import BiddingZone
 
 logger = logging.getLogger(__name__)
-
-T = TypeVar("T")
 
 _MAX_RETRIES = 3
 _INITIAL_DELAY = 5  # seconds
 
 
-def _retry_on_server_error(fn: Callable[..., T], *args, **kwargs) -> T:
+def _retry_on_server_error[T](fn: Callable[..., T], *args, **kwargs) -> T:
     """Call *fn* with retries on transient HTTP 5xx errors.
 
     Uses exponential back-off (5 s, 10 s, 20 s).  Non-5xx errors and
@@ -63,7 +62,7 @@ def _retry_on_server_error(fn: Callable[..., T], *args, **kwargs) -> T:
             if exc.response is not None and exc.response.status_code >= 500:
                 last_exc = exc
                 logger.warning(
-                    "HTTP %s – retrying in %ds (attempt %d/%d)",
+                    "HTTP %s - retrying in %ds (attempt %d/%d)",
                     exc.response.status_code,
                     delay,
                     attempt,
@@ -99,9 +98,7 @@ def ingest_day_ahead_prices(
         except NoMatchingDataError:
             logger.warning("day_ahead_prices: no data for %s", zone)
         except Exception:
-            logger.error(
-                "day_ahead_prices: error for %s\n%s", zone, traceback.format_exc()
-            )
+            logger.exception("day_ahead_prices: error for %s", zone)
     return total
 
 
@@ -128,7 +125,7 @@ def ingest_generation_per_type(
         except NoMatchingDataError:
             logger.warning("generation: no data for %s", zone)
         except Exception:
-            logger.error("generation: error for %s\n%s", zone, traceback.format_exc())
+            logger.exception("generation: error for %s", zone)
     return total
 
 
@@ -157,7 +154,7 @@ def ingest_total_load(
         except NoMatchingDataError:
             logger.warning("load_actual: no data for %s", zone)
         except Exception:
-            logger.error("load_actual: error for %s\n%s", zone, traceback.format_exc())
+            logger.exception("load_actual: error for %s", zone)
         # Load forecast
         try:
             df = _retry_on_server_error(
@@ -172,9 +169,7 @@ def ingest_total_load(
         except NoMatchingDataError:
             logger.warning("load_forecast: no data for %s", zone)
         except Exception:
-            logger.error(
-                "load_forecast: error for %s\n%s", zone, traceback.format_exc()
-            )
+            logger.exception("load_forecast: error for %s", zone)
     return total
 
 
@@ -205,12 +200,7 @@ def ingest_cross_border_flows(
         except NoMatchingDataError:
             logger.warning("cross_border: no data for %s→%s", from_zone, to_zone)
         except Exception:
-            logger.error(
-                "cross_border: error for %s→%s\n%s",
-                from_zone,
-                to_zone,
-                traceback.format_exc(),
-            )
+            logger.exception("cross_border: error for %s→%s", from_zone, to_zone)
     return total
 
 
@@ -237,7 +227,7 @@ def ingest_outages(
         except NoMatchingDataError:
             logger.warning("outages: no data for %s", zone)
         except Exception:
-            logger.error("outages: error for %s\n%s", zone, traceback.format_exc())
+            logger.exception("outages: error for %s", zone)
     return total
 
 

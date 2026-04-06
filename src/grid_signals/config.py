@@ -11,10 +11,11 @@ def require_env(name: str) -> str:
     """Return the value of an environment variable, or raise ConfigError if missing."""
     value = os.environ.get(name)
     if not value:
-        raise ConfigError(
+        msg = (
             f"Required environment variable {name!r} is not set. "
             f"Set it in your environment or .env file."
         )
+        raise ConfigError(msg)
     return value
 
 

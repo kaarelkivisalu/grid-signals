@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
-import duckdb
 import plotly.graph_objects as go
+
+if TYPE_CHECKING:
+    import duckdb
 
 
 def hourly_prices(
@@ -60,14 +63,14 @@ def generation_mix(
         fig.update_layout(
             title=f"Generation Mix — {zone}",
             annotations=[
-                dict(
-                    text="No data",
-                    xref="paper",
-                    yref="paper",
-                    x=0.5,
-                    y=0.5,
-                    showarrow=False,
-                )
+                {
+                    "text": "No data",
+                    "xref": "paper",
+                    "yref": "paper",
+                    "x": 0.5,
+                    "y": 0.5,
+                    "showarrow": False,
+                }
             ],
         )
         return fig
@@ -98,7 +101,7 @@ def cross_border_flows(
 ) -> go.Figure:
     """Line chart of cross-border flows for all interconnections of a zone.
 
-    For each neighbour, net flow = (zone→neighbour) − (neighbour→zone).
+    For each neighbour, net flow = (zone->neighbour) - (neighbour->zone).
     Positive means export from the selected zone; negative means import.
     """
     rows = con.execute(
@@ -193,7 +196,7 @@ def wind_vs_price(
                 y=[r[1] for r in weather],
                 name="Wind (m/s)",
                 mode="lines",
-                line=dict(color="#26A69A"),
+                line={"color": "#26A69A"},
                 line_shape="hv",
             ),
             secondary_y=False,
@@ -205,7 +208,7 @@ def wind_vs_price(
                 y=[r[1] for r in prices],
                 name="Price (EUR/MWh)",
                 mode="lines",
-                line=dict(color="#EF5350"),
+                line={"color": "#EF5350"},
                 line_shape="hv",
             ),
             secondary_y=True,
@@ -238,14 +241,14 @@ def price_heatmap(
         fig.update_layout(
             title="Price Heatmap",
             annotations=[
-                dict(
-                    text="No data",
-                    xref="paper",
-                    yref="paper",
-                    x=0.5,
-                    y=0.5,
-                    showarrow=False,
-                )
+                {
+                    "text": "No data",
+                    "xref": "paper",
+                    "yref": "paper",
+                    "x": 0.5,
+                    "y": 0.5,
+                    "showarrow": False,
+                }
             ],
         )
         return fig
@@ -427,7 +430,7 @@ def flow_map(con: duckdb.DuckDBPyConnection, start: str, end: str) -> go.Figure:
                 lat=[s_lat, d_lat],
                 lon=[s_lon, d_lon],
                 mode="lines",
-                line=dict(color=color, width=width),
+                line={"color": color, "width": width},
                 hovertext=hover,
                 hoverinfo="text",
                 showlegend=False,
@@ -443,7 +446,7 @@ def flow_map(con: duckdb.DuckDBPyConnection, start: str, end: str) -> go.Figure:
                         lat=ah_lat,
                         lon=ah_lon,
                         mode="lines",
-                        line=dict(color=color, width=1),
+                        line={"color": color, "width": 1},
                         fill="toself",
                         fillcolor=color,
                         hoverinfo="skip",
@@ -465,7 +468,7 @@ def flow_map(con: duckdb.DuckDBPyConnection, start: str, end: str) -> go.Figure:
                 lon=label_lons,
                 mode="text",
                 text=label_texts,
-                textfont=dict(size=11, color="#004D40", family="Arial Black"),
+                textfont={"size": 11, "color": "#004D40", "family": "Arial Black"},
                 hoverinfo="skip",
                 showlegend=False,
             )
@@ -480,9 +483,9 @@ def flow_map(con: duckdb.DuckDBPyConnection, start: str, end: str) -> go.Figure:
             lat=zone_lats,
             lon=zone_lons,
             mode="markers+text",
-            marker=dict(size=10, color="#1565C0", opacity=0.9),
+            marker={"size": 10, "color": "#1565C0", "opacity": 0.9},
             text=zone_names,
-            textfont=dict(size=12, color="#0D47A1", family="Arial Black"),
+            textfont={"size": 12, "color": "#0D47A1", "family": "Arial Black"},
             textposition="top center",
             hoverinfo="text",
             hovertext=zone_names,
@@ -491,13 +494,13 @@ def flow_map(con: duckdb.DuckDBPyConnection, start: str, end: str) -> go.Figure:
     )
 
     fig.update_layout(
-        mapbox=dict(
-            style="carto-positron",
-            center=dict(lat=62, lon=16),
-            zoom=3.5,
-        ),
+        mapbox={
+            "style": "carto-positron",
+            "center": {"lat": 62, "lon": 16},
+            "zoom": 3.5,
+        },
         title="Interconnector Flows (avg MW)",
         height=700,
-        margin=dict(l=0, r=0, t=40, b=0),
+        margin={"l": 0, "r": 0, "t": 40, "b": 0},
     )
     return fig

@@ -1,6 +1,6 @@
 """Dashboard page — interactive data visualizations."""
 
-from datetime import date, timedelta
+from datetime import UTC, datetime, timedelta
 
 import duckdb
 import streamlit as st
@@ -78,9 +78,13 @@ except duckdb.IOException:
 # --- Date range selector (shared) ---
 col1, col2 = st.columns(2)
 with col1:
-    start_date = st.date_input("Start date", value=date.today() - timedelta(days=7))
+    start_date = st.date_input(
+        "Start date", value=datetime.now(tz=UTC).date() - timedelta(days=7)
+    )
 with col2:
-    end_date = st.date_input("End date", value=date.today() + timedelta(days=1))
+    end_date = st.date_input(
+        "End date", value=datetime.now(tz=UTC).date() + timedelta(days=1)
+    )
 
 start_str = start_date.isoformat()
 end_str = end_date.isoformat()
@@ -128,7 +132,7 @@ with tab4:
 
 with tab5:
     hm_date = st.date_input(
-        "Date", value=date.today() - timedelta(days=1), key="hm_date"
+        "Date", value=datetime.now(tz=UTC).date() - timedelta(days=1), key="hm_date"
     )
     hm_zones = st.multiselect("Zones", ZONES, default=ZONES, key="hm_zones")
     if hm_zones:

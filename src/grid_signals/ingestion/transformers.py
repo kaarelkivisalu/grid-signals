@@ -57,7 +57,7 @@ def transform_generation(df: pd.DataFrame, zone: BiddingZone) -> list[Generation
         for col, value in row.items():
             if pd.isna(value):
                 continue
-            # MultiIndex: (fuel_type, aggregation_type)
+            # MultiIndex: (fuel_type, aggregation_type)  # noqa: ERA001
             if isinstance(col, tuple):
                 fuel_raw, agg_type = col
                 if agg_type != "Actual Aggregated":
@@ -77,7 +77,7 @@ def transform_generation(df: pd.DataFrame, zone: BiddingZone) -> list[Generation
 
 
 def transform_load(
-    df: pd.DataFrame, zone: BiddingZone, is_forecast: bool
+    df: pd.DataFrame, zone: BiddingZone, *, is_forecast: bool
 ) -> list[TotalLoad]:
     """Convert entsoe-py load DataFrame to TotalLoad models.
 

@@ -436,7 +436,7 @@ class TestParallelIngest:
         )
 
         from grid_signals.ingestion.client import BORDERS
-        from grid_signals.pipeline import _parallel_entsoe_ingest
+        from grid_signals.pipeline import _parallel_entsoe_ingest  # noqa: PLC2701
 
         start = pd.Timestamp("2024-01-01", tz="UTC")
         end = pd.Timestamp("2024-01-02", tz="UTC")

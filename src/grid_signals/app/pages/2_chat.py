@@ -2,7 +2,7 @@
 
 import json
 import os
-from datetime import date
+from datetime import UTC, datetime
 from pathlib import Path
 
 import duckdb
@@ -16,21 +16,21 @@ _USAGE_FILE = Path("data/chat_usage.json")
 
 
 def _get_daily_spend() -> float:
-    today = date.today().isoformat()
+    today = datetime.now(tz=UTC).date().isoformat()
     if _USAGE_FILE.exists():
-        data = json.loads(_USAGE_FILE.read_text())
+        data = json.loads(_USAGE_FILE.read_text(encoding="utf-8"))
         return data.get(today, 0.0)
     return 0.0
 
 
 def _record_spend(cost_usd: float) -> None:
-    today = date.today().isoformat()
+    today = datetime.now(tz=UTC).date().isoformat()
     data: dict = {}
     if _USAGE_FILE.exists():
-        data = json.loads(_USAGE_FILE.read_text())
+        data = json.loads(_USAGE_FILE.read_text(encoding="utf-8"))
     data[today] = data.get(today, 0.0) + cost_usd
     _USAGE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _USAGE_FILE.write_text(json.dumps(data))
+    _USAGE_FILE.write_text(json.dumps(data), encoding="utf-8")
 
 
 st.set_page_config(page_title="Chat — Grid Signals", page_icon="⚡", layout="wide")

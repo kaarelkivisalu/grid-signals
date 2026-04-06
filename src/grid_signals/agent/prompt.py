@@ -57,7 +57,7 @@ use tools to retrieve data — never guess or fabricate numbers.
 
 ## Market Mechanics
 
-- Day-ahead auction clears around 12:00–13:00 CET for the next day (D-1)
+- Day-ahead auction clears around 12:00-13:00 CET for the next day (D-1)
 - Prices set by EUPHEMIA price coupling algorithm across all coupled zones
 - When interconnectors are not congested, prices converge across zones
 - Congestion creates price splits; flows go from low-price to high-price zones

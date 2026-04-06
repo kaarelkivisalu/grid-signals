@@ -5,9 +5,8 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
-
-import duckdb
 
 # Day-ahead markets operate in CET/CEST (Europe/Berlin covers this).
 CET = ZoneInfo("Europe/Berlin")
@@ -22,6 +21,9 @@ from grid_signals.db.queries import (  # noqa: E402
 )
 from grid_signals.ingestion.client import _EXTERNAL_LINKS, ZONE_TO_ENTSOE  # noqa: E402
 from grid_signals.models import BiddingZone  # noqa: E402
+
+if TYPE_CHECKING:
+    import duckdb
 
 # Reverse map: ENTSO-E code → BiddingZone value (for "outside" detection).
 _ENTSOE_TO_ZONE = {v: k.value for k, v in ZONE_TO_ENTSOE.items()}
@@ -308,7 +310,8 @@ def _parse_datetime(s: str) -> datetime:
             return datetime.strptime(s, fmt).replace(tzinfo=UTC)
         except ValueError:
             continue
-    raise ValueError(f"Cannot parse datetime: {s!r}")
+    msg = f"Cannot parse datetime: {s!r}"
+    raise ValueError(msg)
 
 
 # ---------------------------------------------------------------------------
@@ -330,8 +333,8 @@ def _summarize_prices(rows: list) -> list[dict]:
         timestamps = [t.strftime("%H:%M") for t in times_cet]
         min_idx = vals.index(min(vals))
         max_idx = vals.index(max(vals))
-        peak = [v for v, h in zip(vals, hours) if 8 <= h < 20]
-        offpeak = [v for v, h in zip(vals, hours) if h < 8 or h >= 20]
+        peak = [v for v, h in zip(vals, hours, strict=False) if 8 <= h < 20]
+        offpeak = [v for v, h in zip(vals, hours, strict=False) if h < 8 or h >= 20]
         result.append(
             {
                 "date": day,
@@ -685,11 +688,11 @@ def execute_tool(
     try:
         result = _dispatch(name, tool_input, con)
         return json.dumps(result, default=str)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         return json.dumps({"error": f"{type(exc).__name__}: {exc}"})
 
 
-def _dispatch(
+def _dispatch(  # noqa: PLR0911
     name: str,
     tool_input: dict,
     con: duckdb.DuckDBPyConnection,
@@ -786,4 +789,5 @@ def _dispatch(
             limit=tool_input.get("limit", 10),
         )
 
-    raise ValueError(f"Unknown tool: {name!r}")
+    msg = f"Unknown tool: {name!r}"
+    raise ValueError(msg)

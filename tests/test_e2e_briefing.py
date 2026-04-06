@@ -66,11 +66,11 @@ def con():
 def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
     day = datetime(2024, 3, 15, tzinfo=UTC)
 
-    _1H = timedelta(hours=1)
-    _CET = ZoneInfo("Europe/Berlin")
+    one_hour = timedelta(hours=1)
+    cet_tz = ZoneInfo("Europe/Berlin")
     # Prices aligned to CET delivery day 2024-03-15.
     # CET 00:00 = UTC 23:00 on March 14 (March 15 is still CET, UTC+1).
-    cet_start = datetime(2024, 3, 15, tzinfo=_CET).astimezone(UTC)
+    cet_start = datetime(2024, 3, 15, tzinfo=cet_tz).astimezone(UTC)
     # Prices: EE 50..96, FI 40..86
     insert_day_ahead_prices(
         con,
@@ -78,7 +78,7 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
             DayAheadPrice(
                 zone=BiddingZone.EE,
                 period_start=cet_start + timedelta(hours=h),
-                period_end=cet_start + timedelta(hours=h) + _1H,
+                period_end=cet_start + timedelta(hours=h) + one_hour,
                 price_eur_mwh=50.0 + h * 2,
             )
             for h in range(24)
@@ -90,7 +90,7 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
             DayAheadPrice(
                 zone=BiddingZone.FI,
                 period_start=cet_start + timedelta(hours=h),
-                period_end=cet_start + timedelta(hours=h) + _1H,
+                period_end=cet_start + timedelta(hours=h) + one_hour,
                 price_eur_mwh=40.0 + h * 2,
             )
             for h in range(24)
@@ -105,14 +105,14 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
             GenerationByType(
                 zone=BiddingZone.EE,
                 period_start=ts,
-                period_end=ts + _1H,
+                period_end=ts + one_hour,
                 fuel_type="oil_shale",
                 generation_mw=750.0,
             ),
             GenerationByType(
                 zone=BiddingZone.EE,
                 period_start=ts,
-                period_end=ts + _1H,
+                period_end=ts + one_hour,
                 fuel_type="wind_onshore",
                 generation_mw=200.0,
             ),
@@ -126,7 +126,7 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
             TotalLoad(
                 zone=BiddingZone.EE,
                 period_start=datetime(2024, 3, 15, h, tzinfo=UTC),
-                period_end=datetime(2024, 3, 15, h, tzinfo=UTC) + _1H,
+                period_end=datetime(2024, 3, 15, h, tzinfo=UTC) + one_hour,
                 load_mw=950.0 + h * 10,
                 is_forecast=True,
             )
@@ -142,7 +142,7 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
                 from_zone=BiddingZone.FI,
                 to_zone=BiddingZone.EE,
                 period_start=datetime(2024, 3, 15, h, tzinfo=UTC),
-                period_end=datetime(2024, 3, 15, h, tzinfo=UTC) + _1H,
+                period_end=datetime(2024, 3, 15, h, tzinfo=UTC) + one_hour,
                 flow_mw=500.0,
             )
             for h in range(24)
@@ -166,7 +166,7 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
         ],
     )
 
-    # Weather: EE_tallinn
+    # Weather: EE_tallinn  # noqa: ERA001
     insert_weather_forecasts(
         con,
         [
@@ -175,7 +175,7 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
                 latitude=59.0,
                 longitude=25.0,
                 period_start=datetime(2024, 3, 15, h, tzinfo=UTC),
-                period_end=datetime(2024, 3, 15, h, tzinfo=UTC) + _1H,
+                period_end=datetime(2024, 3, 15, h, tzinfo=UTC) + one_hour,
                 fetched_at=day,
                 wind_speed_100m_ms=WIND_SPEED,
                 solar_irradiance_wm2=120.0,
@@ -252,8 +252,9 @@ class TestEndToEndBriefing:
     """Full pipeline: seed DB → agent with tool calls → verify output."""
 
     def test_briefing_references_correct_data(self, con, tmp_path):
-        """The agent makes tool calls against real DB data and produces
-        a briefing that references the correct numbers.
+        """The agent makes tool calls against real DB data and produces a briefing.
+
+        Verifies that the briefing references the correct numbers.
         """
         mock_client = MagicMock()
 

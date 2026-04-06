@@ -19,7 +19,7 @@ from grid_signals.db.queries import get_day_ahead_prices, get_outages
 from grid_signals.db.schema import create_tables
 from grid_signals.ingestion.client import BORDERS, ZONE_TO_ENTSOE
 from grid_signals.ingestion.entsoe import (
-    _retry_on_server_error,
+    _retry_on_server_error,  # noqa: PLC2701
     ingest_cross_border_flows,
     ingest_day_ahead_prices,
     ingest_generation_per_type,
@@ -116,7 +116,7 @@ class TestTransformGeneration:
         df = pd.DataFrame(data, index=idx, columns=columns)
 
         rows = transform_generation(df, BiddingZone.LT)
-        # Should only include "Actual Aggregated" entries: 2 fuel types × 2 hours = 4
+        # Should only include "Actual Aggregated" entries: 2 fuel types x 2 hours = 4
         assert len(rows) == 4
         fuel_types = {r.fuel_type for r in rows}
         assert fuel_types == {"wind_onshore", "gas"}
@@ -264,10 +264,13 @@ class TestZoneMapping:
         """Every NEIGHBOURS link touching our zones is in BORDERS, except RU/BY."""
         from entsoe.mappings import NEIGHBOURS
 
-        from grid_signals.ingestion.client import _EXTERNAL_LINKS, _INTERNAL_LINKS
+        from grid_signals.ingestion.client import (
+            _EXTERNAL_LINKS,  # noqa: PLC2701
+            _INTERNAL_LINKS,  # noqa: PLC2701
+        )
 
         # RU, RU_KGD, BY desyncronised around feb 2025, DE_AT_LU renamed to DE_LU around oct 2018
-        EXCLUDED = {"RU", "RU_KGD", "BY", "DE_AT_LU"}
+        excluded = {"RU", "RU_KGD", "BY", "DE_AT_LU"}
         our_zones = set(ZONE_TO_ENTSOE.values())
 
         expected = set()
@@ -275,7 +278,7 @@ class TestZoneMapping:
             if zone not in our_zones:
                 continue
             for n in neighbours:
-                if n in EXCLUDED:
+                if n in excluded:
                     continue
                 expected.add(tuple(sorted([zone, n])))
 
@@ -456,7 +459,7 @@ class TestRetryOnServerError:
         mock_sleep.assert_called_once_with(5)
 
     @patch("grid_signals.ingestion.entsoe.sleep")
-    def test_raises_after_max_retries(self, mock_sleep):
+    def test_raises_after_max_retries(self, mock_sleep):  # noqa: ARG002
         fn = MagicMock(side_effect=[self._make_http_error(502)] * 3)
         with pytest.raises(requests.exceptions.HTTPError):
             _retry_on_server_error(fn)

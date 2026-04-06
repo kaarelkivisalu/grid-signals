@@ -259,7 +259,7 @@ def _find_zone_date_gaps(
         FROM {table}
         WHERE period_start >= ? AND period_start < ?
         GROUP BY zone, d
-        """,  # noqa: S608
+        """,
         [start, end],
     ).fetchall()
 
