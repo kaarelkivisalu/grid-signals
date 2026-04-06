@@ -42,22 +42,35 @@ target-version = "py312"
 select = ["ALL"]
 preview = true
 ignore = [
-    # "CPY001", # Missing copyright notice at top of file
-    # "D100",   # Missing docstring in public module
-    # "D101",   # Missing docstring in public class
-    # "D102",   # Missing docstring in public method
-    # "D103",   # Missing docstring in public function
-    # "D104",   # Missing docstring in public package
-    # "DOC402", # Docstring missing yields
-    # "EM101",  # Raw string in exception
-    # "TRY003", # Raise vanilla args
-    # "FBT003", # Boolean positional value in call
-    # "ANN401", # Any type
-    # "EXE",    # Shebang/executable rules (not consistent across OSes)
-    # "D105",   # Missing docstring in magic method
-    # "ANN201", # Missing return type annotation for public function
-    # "S311",   # Standard pseudo-random generators are not suitable for cryptographic purposes
-    # "T201",   # print found
+    "ANN001",
+    "ANN002",
+    "ANN003",
+    "ANN201",
+    "ANN202",
+    "C901",
+    "CPY001", # Missing copyright notice at top of file
+    "D100",   # Missing docstring in public module
+    "D101",   # Missing docstring in public class
+    "D102",   # Missing docstring in public method
+    "D103",   # Missing docstring in public function
+    "D104",   # Missing docstring in public package
+    "D107",   # Missing docstring in __init__
+    "DOC201",
+    "DOC402",
+    "DOC501",
+    "N999",
+    "PLC0415",
+    "PLR0912",
+    "PLR0913",
+    "PLR0914",
+    "PLR0915",
+    "PLR0917",
+    "PLR2004",
+    "PLR6301",
+    "RUF069",
+    "S607",
+    "S608",
+    "T201",
 
     # https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules
     "W191",   # tab-indentation
@@ -78,6 +91,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
+"scripts/**" = ["INP001"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
