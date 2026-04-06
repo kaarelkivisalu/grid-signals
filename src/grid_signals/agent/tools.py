@@ -332,20 +332,24 @@ def _summarize_prices(rows: list) -> list[dict]:
         max_idx = vals.index(max(vals))
         peak = [v for v, h in zip(vals, hours) if 8 <= h < 20]
         offpeak = [v for v, h in zip(vals, hours) if h < 8 or h >= 20]
-        result.append({
-            "date": day,
-            "timezone": "CET/CEST",
-            "zone": prices[0].zone.value,
-            "count": len(vals),
-            "mean": round(sum(vals) / len(vals), 2),
-            "min": round(min(vals), 2),
-            "min_at": timestamps[min_idx],
-            "max": round(max(vals), 2),
-            "max_at": timestamps[max_idx],
-            "peak_avg": round(sum(peak) / len(peak), 2) if peak else None,
-            "offpeak_avg": round(sum(offpeak) / len(offpeak), 2) if offpeak else None,
-            "intervals": [round(v, 2) for v in vals],
-        })
+        result.append(
+            {
+                "date": day,
+                "timezone": "CET/CEST",
+                "zone": prices[0].zone.value,
+                "count": len(vals),
+                "mean": round(sum(vals) / len(vals), 2),
+                "min": round(min(vals), 2),
+                "min_at": timestamps[min_idx],
+                "max": round(max(vals), 2),
+                "max_at": timestamps[max_idx],
+                "peak_avg": round(sum(peak) / len(peak), 2) if peak else None,
+                "offpeak_avg": round(sum(offpeak) / len(offpeak), 2)
+                if offpeak
+                else None,
+                "intervals": [round(v, 2) for v in vals],
+            }
+        )
     return result
 
 
@@ -368,18 +372,36 @@ def _summarize_generation(rows: list) -> list[dict]:
         fuels = []
         for ft in sorted(fuel_totals.keys()):
             mwh = fuel_totals[ft]
-            fuels.append({
-                "fuel_type": ft,
-                "total_mwh": round(mwh, 1),
-                "avg_mw": round(mwh / (fuel_counts[ft] * ((entries[0].period_end - entries[0].period_start).total_seconds() / 3600)) if fuel_counts[ft] else 0, 1),
-                "share_pct": round(mwh / total_mwh * 100, 1) if total_mwh else 0,
-            })
-        result.append({
-            "date": day,
-            "zone": entries[0].zone.value,
-            "total_mwh": round(total_mwh, 1),
-            "fuels": fuels,
-        })
+            fuels.append(
+                {
+                    "fuel_type": ft,
+                    "total_mwh": round(mwh, 1),
+                    "avg_mw": round(
+                        mwh
+                        / (
+                            fuel_counts[ft]
+                            * (
+                                (
+                                    entries[0].period_end - entries[0].period_start
+                                ).total_seconds()
+                                / 3600
+                            )
+                        )
+                        if fuel_counts[ft]
+                        else 0,
+                        1,
+                    ),
+                    "share_pct": round(mwh / total_mwh * 100, 1) if total_mwh else 0,
+                }
+            )
+        result.append(
+            {
+                "date": day,
+                "zone": entries[0].zone.value,
+                "total_mwh": round(total_mwh, 1),
+                "fuels": fuels,
+            }
+        )
     return result
 
 
@@ -391,16 +413,37 @@ def _summarize_weather(rows: list) -> list[dict]:
         by_date[day].append(r)
     result = []
     for day, entries in sorted(by_date.items()):
-        winds = [e.wind_speed_100m_ms for e in entries if e.wind_speed_100m_ms is not None]
+        winds = [
+            e.wind_speed_100m_ms for e in entries if e.wind_speed_100m_ms is not None
+        ]
         temps = [e.temperature_c for e in entries if e.temperature_c is not None]
-        solars = [e.solar_irradiance_wm2 for e in entries if e.solar_irradiance_wm2 is not None]
-        summary: dict = {"date": day, "location": entries[0].location_name, "count": len(entries)}
+        solars = [
+            e.solar_irradiance_wm2
+            for e in entries
+            if e.solar_irradiance_wm2 is not None
+        ]
+        summary: dict = {
+            "date": day,
+            "location": entries[0].location_name,
+            "count": len(entries),
+        }
         if winds:
-            summary["wind"] = {"mean": round(sum(winds) / len(winds), 1), "min": round(min(winds), 1), "max": round(max(winds), 1)}
+            summary["wind"] = {
+                "mean": round(sum(winds) / len(winds), 1),
+                "min": round(min(winds), 1),
+                "max": round(max(winds), 1),
+            }
         if temps:
-            summary["temperature"] = {"mean": round(sum(temps) / len(temps), 1), "min": round(min(temps), 1), "max": round(max(temps), 1)}
+            summary["temperature"] = {
+                "mean": round(sum(temps) / len(temps), 1),
+                "min": round(min(temps), 1),
+                "max": round(max(temps), 1),
+            }
         if solars:
-            summary["solar"] = {"mean": round(sum(solars) / len(solars), 1), "max": round(max(solars), 1)}
+            summary["solar"] = {
+                "mean": round(sum(solars) / len(solars), 1),
+                "max": round(max(solars), 1),
+            }
         result.append(summary)
     return result
 
@@ -418,31 +461,21 @@ def _resolve_flow_pairs(from_input: str, to_input: str) -> list[tuple[str, str]]
     if from_input == "outside":
         entsoe_to = ZONE_TO_ENTSOE[BiddingZone(to_input)]
         return [
-            (ext, entsoe_to)
-            for our, ext in _EXTERNAL_LINKS
-            if our == entsoe_to
-        ] + [
-            (ext, entsoe_to)
-            for ext, our in _EXTERNAL_LINKS
-            if our == entsoe_to
-        ]
+            (ext, entsoe_to) for our, ext in _EXTERNAL_LINKS if our == entsoe_to
+        ] + [(ext, entsoe_to) for ext, our in _EXTERNAL_LINKS if our == entsoe_to]
 
     if to_input == "outside":
         entsoe_from = ZONE_TO_ENTSOE[BiddingZone(from_input)]
         return [
-            (entsoe_from, ext)
-            for our, ext in _EXTERNAL_LINKS
-            if our == entsoe_from
-        ] + [
-            (entsoe_from, ext)
-            for ext, our in _EXTERNAL_LINKS
-            if our == entsoe_from
-        ]
+            (entsoe_from, ext) for our, ext in _EXTERNAL_LINKS if our == entsoe_from
+        ] + [(entsoe_from, ext) for ext, our in _EXTERNAL_LINKS if our == entsoe_from]
 
-    return [(
-        ZONE_TO_ENTSOE[BiddingZone(from_input)],
-        ZONE_TO_ENTSOE[BiddingZone(to_input)],
-    )]
+    return [
+        (
+            ZONE_TO_ENTSOE[BiddingZone(from_input)],
+            ZONE_TO_ENTSOE[BiddingZone(to_input)],
+        )
+    ]
 
 
 def _summarize_flows(rows: list) -> list[dict]:
@@ -455,19 +488,20 @@ def _summarize_flows(rows: list) -> list[dict]:
     for day, entries in sorted(by_date.items()):
         vals = [e.flow_mw for e in entries]
         direction_changes = sum(
-            1 for i in range(1, len(vals))
-            if (vals[i] >= 0) != (vals[i - 1] >= 0)
+            1 for i in range(1, len(vals)) if (vals[i] >= 0) != (vals[i - 1] >= 0)
         )
-        result.append({
-            "date": day,
-            "from_zone": entries[0].from_zone,
-            "to_zone": entries[0].to_zone,
-            "count": len(vals),
-            "mean_flow_mw": round(sum(vals) / len(vals), 1),
-            "min_flow_mw": round(min(vals), 1),
-            "max_flow_mw": round(max(vals), 1),
-            "direction_changes": direction_changes,
-        })
+        result.append(
+            {
+                "date": day,
+                "from_zone": entries[0].from_zone,
+                "to_zone": entries[0].to_zone,
+                "count": len(vals),
+                "mean_flow_mw": round(sum(vals) / len(vals), 1),
+                "min_flow_mw": round(min(vals), 1),
+                "max_flow_mw": round(max(vals), 1),
+                "direction_changes": direction_changes,
+            }
+        )
     return result
 
 
@@ -483,16 +517,18 @@ def _summarize_load(rows: list) -> list[dict]:
         hours = [e.period_start.hour for e in entries]
         min_idx = vals.index(min(vals))
         max_idx = vals.index(max(vals))
-        result.append({
-            "date": day,
-            "zone": entries[0].zone.value,
-            "count": len(vals),
-            "mean_mw": round(sum(vals) / len(vals), 1),
-            "min_mw": round(min(vals), 1),
-            "min_hour": hours[min_idx],
-            "max_mw": round(max(vals), 1),
-            "max_hour": hours[max_idx],
-        })
+        result.append(
+            {
+                "date": day,
+                "zone": entries[0].zone.value,
+                "count": len(vals),
+                "mean_mw": round(sum(vals) / len(vals), 1),
+                "min_mw": round(min(vals), 1),
+                "min_hour": hours[min_idx],
+                "max_mw": round(max(vals), 1),
+                "max_hour": hours[max_idx],
+            }
+        )
     return result
 
 
@@ -517,12 +553,14 @@ def _calculate_spread(
     for p in prices_1:
         if p.period_start in lookup_2:
             spread = round(p.price_eur_mwh - lookup_2[p.period_start], 2)
-            hourly.append({
-                "period_start": p.period_start.isoformat(),
-                "zone_1_price": p.price_eur_mwh,
-                "zone_2_price": lookup_2[p.period_start],
-                "spread": spread,
-            })
+            hourly.append(
+                {
+                    "period_start": p.period_start.isoformat(),
+                    "zone_1_price": p.price_eur_mwh,
+                    "zone_2_price": lookup_2[p.period_start],
+                    "spread": spread,
+                }
+            )
 
     if not hourly:
         return {
@@ -596,8 +634,10 @@ def _get_historical_similar_days(
         """,
         [
             location,
-            target_wind_ms, wind_tolerance_ms,
-            target_temp_c, temp_tolerance_c,
+            target_wind_ms,
+            wind_tolerance_ms,
+            target_temp_c,
+            temp_tolerance_c,
             zone,
             limit,
         ],
@@ -605,7 +645,9 @@ def _get_historical_similar_days(
 
     days = [
         {
-            "date": r[0].strftime("%Y-%m-%d") if hasattr(r[0], "strftime") else str(r[0]),
+            "date": r[0].strftime("%Y-%m-%d")
+            if hasattr(r[0], "strftime")
+            else str(r[0]),
             "avg_wind_ms": round(r[1], 1),
             "avg_temp_c": round(r[2], 1),
             "avg_price_eur_mwh": round(r[3], 2),

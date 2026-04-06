@@ -46,14 +46,14 @@ def con():
 
 def _make_openmeteo_response(hours: int = 24) -> dict:
     """Build a minimal Open-Meteo JSON response."""
-    times = [
-        f"2024-07-01T{h:02d}:00" for h in range(hours)
-    ]
+    times = [f"2024-07-01T{h:02d}:00" for h in range(hours)]
     return {
         "hourly": {
             "time": times,
             "wind_speed_100m": [8.5 + i * 0.1 for i in range(hours)],
-            "shortwave_radiation": [max(0, 400 - abs(12 - i) * 50) for i in range(hours)],
+            "shortwave_radiation": [
+                max(0, 400 - abs(12 - i) * 50) for i in range(hours)
+            ],
             "temperature_2m": [18.0 + i * 0.2 for i in range(hours)],
         }
     }

@@ -215,7 +215,9 @@ def migrate(con: duckdb.DuckDBPyConnection) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Migrate DB to period_start/period_end schema")
+    parser = argparse.ArgumentParser(
+        description="Migrate DB to period_start/period_end schema"
+    )
     parser.add_argument(
         "--db",
         default=str(Path(__file__).parent.parent / "grid_signals.db"),
@@ -231,7 +233,9 @@ def main() -> None:
     con = duckdb.connect(str(db_path))
     try:
         if already_migrated(con):
-            print("Migration already applied (period_start column exists). Nothing to do.")
+            print(
+                "Migration already applied (period_start column exists). Nothing to do."
+            )
             return
         migrate(con)
     finally:

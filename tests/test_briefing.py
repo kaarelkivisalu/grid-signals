@@ -28,15 +28,18 @@ def con():
     c = duckdb.connect(":memory:")
     create_tables(c)
     # Seed minimal price data so tools return something
-    insert_day_ahead_prices(c, [
-        DayAheadPrice(
-            zone=BiddingZone.EE,
-            period_start=datetime(2024, 6, 10, h, tzinfo=UTC),
-            period_end=datetime(2024, 6, 10, h, tzinfo=UTC) + timedelta(hours=1),
-            price_eur_mwh=45.0 + h,
-        )
-        for h in range(24)
-    ])
+    insert_day_ahead_prices(
+        c,
+        [
+            DayAheadPrice(
+                zone=BiddingZone.EE,
+                period_start=datetime(2024, 6, 10, h, tzinfo=UTC),
+                period_end=datetime(2024, 6, 10, h, tzinfo=UTC) + timedelta(hours=1),
+                price_eur_mwh=45.0 + h,
+            )
+            for h in range(24)
+        ],
+    )
     yield c
     c.close()
 
@@ -161,6 +164,7 @@ class TestGenerateBriefing:
         )
         result = generate_briefing(con, output_dir=None)
         from datetime import timezone
+
         assert result.date == datetime.now(timezone.utc).date()
 
     def test_passes_prompt_with_date(self, con, monkeypatch):

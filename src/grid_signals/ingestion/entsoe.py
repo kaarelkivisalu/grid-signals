@@ -88,7 +88,9 @@ def ingest_day_ahead_prices(
         try:
             series = _retry_on_server_error(
                 client.query_day_ahead_prices,
-                ZONE_TO_ENTSOE[zone], start=start, end=end,
+                ZONE_TO_ENTSOE[zone],
+                start=start,
+                end=end,
             )
             rows = transform_day_ahead_prices(series, zone)
             total += insert_day_ahead_prices(con, rows)
@@ -115,7 +117,9 @@ def ingest_generation_per_type(
         try:
             df = _retry_on_server_error(
                 client.query_generation,
-                ZONE_TO_ENTSOE[zone], start=start, end=end,
+                ZONE_TO_ENTSOE[zone],
+                start=start,
+                end=end,
             )
             rows = transform_generation(df, zone)
             total += insert_generation_by_type(con, rows)
@@ -123,9 +127,7 @@ def ingest_generation_per_type(
         except NoMatchingDataError:
             logger.warning("generation: no data for %s", zone)
         except Exception:
-            logger.error(
-                "generation: error for %s\n%s", zone, traceback.format_exc()
-            )
+            logger.error("generation: error for %s\n%s", zone, traceback.format_exc())
     return total
 
 
@@ -143,7 +145,10 @@ def ingest_total_load(
         # Actual load
         try:
             df = _retry_on_server_error(
-                client.query_load, entsoe_zone, start=start, end=end,
+                client.query_load,
+                entsoe_zone,
+                start=start,
+                end=end,
             )
             rows = transform_load(df, zone, is_forecast=False)
             total += insert_total_load(con, rows)
@@ -151,13 +156,14 @@ def ingest_total_load(
         except NoMatchingDataError:
             logger.warning("load_actual: no data for %s", zone)
         except Exception:
-            logger.error(
-                "load_actual: error for %s\n%s", zone, traceback.format_exc()
-            )
+            logger.error("load_actual: error for %s\n%s", zone, traceback.format_exc())
         # Load forecast
         try:
             df = _retry_on_server_error(
-                client.query_load_forecast, entsoe_zone, start=start, end=end,
+                client.query_load_forecast,
+                entsoe_zone,
+                start=start,
+                end=end,
             )
             rows = transform_load(df, zone, is_forecast=True)
             total += insert_total_load(con, rows)
@@ -193,9 +199,7 @@ def ingest_cross_border_flows(
             )
             rows = transform_cross_border_flows(series, from_zone, to_zone)
             total += insert_cross_border_flows(con, rows)
-            logger.info(
-                "cross_border: %s→%s → %d rows", from_zone, to_zone, len(rows)
-            )
+            logger.info("cross_border: %s→%s → %d rows", from_zone, to_zone, len(rows))
         except NoMatchingDataError:
             logger.warning("cross_border: no data for %s→%s", from_zone, to_zone)
         except Exception:
@@ -221,7 +225,9 @@ def ingest_outages(
         try:
             df = _retry_on_server_error(
                 client.query_unavailability_of_generation_units,
-                ZONE_TO_ENTSOE[zone], start=start, end=end,
+                ZONE_TO_ENTSOE[zone],
+                start=start,
+                end=end,
             )
             rows = transform_outages(df, zone)
             total += insert_outages(con, rows)
@@ -229,9 +235,7 @@ def ingest_outages(
         except NoMatchingDataError:
             logger.warning("outages: no data for %s", zone)
         except Exception:
-            logger.error(
-                "outages: error for %s\n%s", zone, traceback.format_exc()
-            )
+            logger.error("outages: error for %s\n%s", zone, traceback.format_exc())
     return total
 
 
@@ -257,7 +261,9 @@ def fetch_day_ahead_prices(
     _rate_limit(limiter)
     series = _retry_on_server_error(
         client.query_day_ahead_prices,
-        ZONE_TO_ENTSOE[zone], start=start, end=end,
+        ZONE_TO_ENTSOE[zone],
+        start=start,
+        end=end,
     )
     rows = transform_day_ahead_prices(series, zone)
     logger.info("day_ahead_prices: %s → %d rows", zone, len(rows))
@@ -275,7 +281,9 @@ def fetch_generation(
     _rate_limit(limiter)
     df = _retry_on_server_error(
         client.query_generation,
-        ZONE_TO_ENTSOE[zone], start=start, end=end,
+        ZONE_TO_ENTSOE[zone],
+        start=start,
+        end=end,
     )
     rows = transform_generation(df, zone)
     logger.info("generation: %s → %d rows", zone, len(rows))
@@ -292,7 +300,10 @@ def fetch_load_actual(
     """Fetch and transform actual load for a single zone."""
     _rate_limit(limiter)
     df = _retry_on_server_error(
-        client.query_load, ZONE_TO_ENTSOE[zone], start=start, end=end,
+        client.query_load,
+        ZONE_TO_ENTSOE[zone],
+        start=start,
+        end=end,
     )
     rows = transform_load(df, zone, is_forecast=False)
     logger.info("load_actual: %s → %d rows", zone, len(rows))
@@ -309,7 +320,10 @@ def fetch_load_forecast(
     """Fetch and transform load forecast for a single zone."""
     _rate_limit(limiter)
     df = _retry_on_server_error(
-        client.query_load_forecast, ZONE_TO_ENTSOE[zone], start=start, end=end,
+        client.query_load_forecast,
+        ZONE_TO_ENTSOE[zone],
+        start=start,
+        end=end,
     )
     rows = transform_load(df, zone, is_forecast=True)
     logger.info("load_forecast: %s → %d rows", zone, len(rows))
@@ -327,8 +341,11 @@ def fetch_cross_border_flows(
     """Fetch and transform cross-border flows for a single border pair."""
     _rate_limit(limiter)
     series = _retry_on_server_error(
-        client.query_crossborder_flows, from_zone, to_zone,
-        start=start, end=end,
+        client.query_crossborder_flows,
+        from_zone,
+        to_zone,
+        start=start,
+        end=end,
     )
     rows = transform_cross_border_flows(series, from_zone, to_zone)
     logger.info("cross_border: %s→%s → %d rows", from_zone, to_zone, len(rows))
@@ -346,7 +363,9 @@ def fetch_outages(
     _rate_limit(limiter)
     df = _retry_on_server_error(
         client.query_unavailability_of_generation_units,
-        ZONE_TO_ENTSOE[zone], start=start, end=end,
+        ZONE_TO_ENTSOE[zone],
+        start=start,
+        end=end,
     )
     rows = transform_outages(df, zone)
     logger.info("outages: %s → %d rows", zone, len(rows))

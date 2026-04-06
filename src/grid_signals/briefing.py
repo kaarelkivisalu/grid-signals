@@ -70,7 +70,9 @@ class BriefingResult:
 def build_briefing_prompt(target_date: date) -> str:
     """Build the briefing prompt for a given date."""
     weekday = target_date.strftime("%A")
-    return BRIEFING_PROMPT_TEMPLATE.format(date=target_date.isoformat(), weekday=weekday)
+    return BRIEFING_PROMPT_TEMPLATE.format(
+        date=target_date.isoformat(), weekday=weekday
+    )
 
 
 def generate_briefing(

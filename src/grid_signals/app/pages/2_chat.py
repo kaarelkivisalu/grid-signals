@@ -32,6 +32,7 @@ def _record_spend(cost_usd: float) -> None:
     _USAGE_FILE.parent.mkdir(parents=True, exist_ok=True)
     _USAGE_FILE.write_text(json.dumps(data))
 
+
 st.set_page_config(page_title="Chat — Grid Signals", page_icon="⚡", layout="wide")
 st.title("Energy Intelligence Chat")
 
@@ -113,10 +114,12 @@ if prompt := st.chat_input("Ask about Baltic-Nordic energy markets..."):
         )
         st.caption(cost_str)
 
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": result.content,
-        "tool_calls": tool_info,
-        "cost": cost_str,
-    })
+    st.session_state.messages.append(
+        {
+            "role": "assistant",
+            "content": result.content,
+            "tool_calls": tool_info,
+            "cost": cost_str,
+        }
+    )
     st.session_state.api_messages.extend(result.messages)

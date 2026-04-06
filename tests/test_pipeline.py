@@ -273,9 +273,11 @@ class TestRunDaily:
         )
 
         # Generation: MultiIndex columns
-        columns = pd.MultiIndex.from_tuples([
-            ("Wind Onshore", "Actual Aggregated"),
-        ])
+        columns = pd.MultiIndex.from_tuples(
+            [
+                ("Wind Onshore", "Actual Aggregated"),
+            ]
+        )
         gen_df = pd.DataFrame([[100.0]] * 24, index=idx, columns=columns)
         client.query_generation.return_value = gen_df
 
@@ -288,23 +290,23 @@ class TestRunDaily:
         )
 
         # Cross-border flows
-        client.query_crossborder_flows.return_value = pd.Series(
-            [100.0] * 24, index=idx
-        )
+        client.query_crossborder_flows.return_value = pd.Series([100.0] * 24, index=idx)
 
         # Outages
-        client.query_unavailability_of_generation_units.return_value = pd.DataFrame({
-            "mrid": ["UM-1"],
-            "revision": [1],
-            "businesstype": ["Planned maintenance"],
-            "production_resource_name": ["Test"],
-            "production_type": ["Nuclear"],
-            "nominal_power": [500.0],
-            "available_capacity": [0.0],
-            "start": [pd.Timestamp("2024-01-01", tz="UTC")],
-            "end": [pd.Timestamp("2024-01-10", tz="UTC")],
-            "status": ["Active"],
-        })
+        client.query_unavailability_of_generation_units.return_value = pd.DataFrame(
+            {
+                "mrid": ["UM-1"],
+                "revision": [1],
+                "businesstype": ["Planned maintenance"],
+                "production_resource_name": ["Test"],
+                "production_type": ["Nuclear"],
+                "nominal_power": [500.0],
+                "available_capacity": [0.0],
+                "start": [pd.Timestamp("2024-01-01", tz="UTC")],
+                "end": [pd.Timestamp("2024-01-10", tz="UTC")],
+                "status": ["Active"],
+            }
+        )
 
         from grid_signals.pipeline import run_daily
 
@@ -403,9 +405,11 @@ class TestParallelIngest:
         client.query_day_ahead_prices.return_value = pd.Series(
             range(24), index=idx, dtype=float
         )
-        columns = pd.MultiIndex.from_tuples([
-            ("Wind Onshore", "Actual Aggregated"),
-        ])
+        columns = pd.MultiIndex.from_tuples(
+            [
+                ("Wind Onshore", "Actual Aggregated"),
+            ]
+        )
         client.query_generation.return_value = pd.DataFrame(
             [[100.0]] * 24, index=idx, columns=columns
         )
@@ -415,21 +419,21 @@ class TestParallelIngest:
         client.query_load_forecast.return_value = pd.DataFrame(
             {"Forecasted Load": [950.0] * 24}, index=idx
         )
-        client.query_crossborder_flows.return_value = pd.Series(
-            [100.0] * 24, index=idx
+        client.query_crossborder_flows.return_value = pd.Series([100.0] * 24, index=idx)
+        client.query_unavailability_of_generation_units.return_value = pd.DataFrame(
+            {
+                "mrid": ["UM-1"],
+                "revision": [1],
+                "businesstype": ["Planned maintenance"],
+                "production_resource_name": ["Test"],
+                "production_type": ["Nuclear"],
+                "nominal_power": [500.0],
+                "available_capacity": [0.0],
+                "start": [pd.Timestamp("2024-01-01", tz="UTC")],
+                "end": [pd.Timestamp("2024-01-10", tz="UTC")],
+                "status": ["Active"],
+            }
         )
-        client.query_unavailability_of_generation_units.return_value = pd.DataFrame({
-            "mrid": ["UM-1"],
-            "revision": [1],
-            "businesstype": ["Planned maintenance"],
-            "production_resource_name": ["Test"],
-            "production_type": ["Nuclear"],
-            "nominal_power": [500.0],
-            "available_capacity": [0.0],
-            "start": [pd.Timestamp("2024-01-01", tz="UTC")],
-            "end": [pd.Timestamp("2024-01-10", tz="UTC")],
-            "status": ["Active"],
-        })
 
         from grid_signals.ingestion.client import BORDERS
         from grid_signals.pipeline import _parallel_entsoe_ingest
@@ -437,7 +441,11 @@ class TestParallelIngest:
         start = pd.Timestamp("2024-01-01", tz="UTC")
         end = pd.Timestamp("2024-01-02", tz="UTC")
         total = _parallel_entsoe_ingest(
-            con, [BiddingZone.EE, BiddingZone.FI], BORDERS, start, end,
+            con,
+            [BiddingZone.EE, BiddingZone.FI],
+            BORDERS,
+            start,
+            end,
         )
         assert total > 0
         con.close()

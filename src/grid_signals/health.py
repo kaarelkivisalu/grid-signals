@@ -68,7 +68,9 @@ def check_data_freshness(
 
     for check in checks:
         if check.ok:
-            logger.info("OK  %s: %s (%.1fh old)", check.table, check.latest, check.age_hours)
+            logger.info(
+                "OK  %s: %s (%.1fh old)", check.table, check.latest, check.age_hours
+            )
         else:
             logger.warning(
                 "STALE %s: %s (%sh old)",

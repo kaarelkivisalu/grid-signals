@@ -28,18 +28,12 @@ def test_empty_tables_unhealthy(con: duckdb.DuckDBPyConnection) -> None:
 
 def _insert_all(con: duckdb.DuckDBPyConnection, ts: datetime) -> None:
     """Insert a row into each table with the given timestamp."""
-    con.execute(
-        "INSERT INTO day_ahead_prices VALUES (?, ?, 'EE', 0)", [ts, ts]
-    )
+    con.execute("INSERT INTO day_ahead_prices VALUES (?, ?, 'EE', 0)", [ts, ts])
     con.execute(
         "INSERT INTO generation_by_type VALUES (?, ?, 'EE', 'wind', 0)", [ts, ts]
     )
-    con.execute(
-        "INSERT INTO total_load VALUES (?, ?, 'EE', 0)", [ts, ts]
-    )
-    con.execute(
-        "INSERT INTO cross_border_flows VALUES (?, ?, 'EE', 'FI', 0)", [ts, ts]
-    )
+    con.execute("INSERT INTO total_load VALUES (?, ?, 'EE', 0)", [ts, ts])
+    con.execute("INSERT INTO cross_border_flows VALUES (?, ?, 'EE', 'FI', 0)", [ts, ts])
 
 
 def test_fresh_data_healthy(con: duckdb.DuckDBPyConnection) -> None:

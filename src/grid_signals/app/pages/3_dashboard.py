@@ -18,7 +18,23 @@ from grid_signals.db.connection import get_read_connection
 st.set_page_config(page_title="Dashboard — Grid Signals", page_icon="⚡", layout="wide")
 st.title("Dashboard")
 
-ZONES = ["EE", "LV", "LT", "FI", "SE1", "SE2", "SE3", "SE4", "NO1", "NO2", "NO3", "NO4", "NO5", "DK1", "DK2"]
+ZONES = [
+    "EE",
+    "LV",
+    "LT",
+    "FI",
+    "SE1",
+    "SE2",
+    "SE3",
+    "SE4",
+    "NO1",
+    "NO2",
+    "NO3",
+    "NO4",
+    "NO5",
+    "DK1",
+    "DK2",
+]
 # Map display zone codes to DB (ENTSO-E) codes for cross-border flow queries.
 _ZONE_TO_DB: dict[str, str] = {
     z: z if len(z) == 2 else f"{z[:2]}_{z[2:]}" for z in ZONES

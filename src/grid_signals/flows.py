@@ -71,7 +71,9 @@ def validate_data(db_path: Path = DEFAULT_DB_PATH) -> int:
 
 
 @task(retries=1, retry_delay_seconds=30, timeout_seconds=300)
-def backup_db(db_path: Path, s3_bucket: str, prefix: str = "grid-signals/backups") -> str:
+def backup_db(
+    db_path: Path, s3_bucket: str, prefix: str = "grid-signals/backups"
+) -> str:
     """Backup the DuckDB database to S3."""
     from grid_signals.backup import backup_database
 
@@ -103,7 +105,9 @@ def generate_briefing(db_path: Path = DEFAULT_DB_PATH) -> str:
     con = get_connection(db_path)
     try:
         create_tables(con)
-        result = _generate(con, validate_first=False)  # validation runs as separate task
+        result = _generate(
+            con, validate_first=False
+        )  # validation runs as separate task
         return result.content
     finally:
         con.close()
@@ -200,7 +204,9 @@ def initial_seed(
         total_rows += rows
         chunk_start = chunk_end
 
-    logger.info("Backfill complete: %d total rows across %d chunks", total_rows, chunk_num)
+    logger.info(
+        "Backfill complete: %d total rows across %d chunks", total_rows, chunk_num
+    )
 
     # Weather forecasts (next 7 days)
     weather_rows = ingest_weather(db_path)

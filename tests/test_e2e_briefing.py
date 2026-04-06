@@ -72,97 +72,118 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
     # CET 00:00 = UTC 23:00 on March 14 (March 15 is still CET, UTC+1).
     cet_start = datetime(2024, 3, 15, tzinfo=_CET).astimezone(UTC)
     # Prices: EE 50..96, FI 40..86
-    insert_day_ahead_prices(con, [
-        DayAheadPrice(
-            zone=BiddingZone.EE,
-            period_start=cet_start + timedelta(hours=h),
-            period_end=cet_start + timedelta(hours=h) + _1H,
-            price_eur_mwh=50.0 + h * 2,
-        )
-        for h in range(24)
-    ])
-    insert_day_ahead_prices(con, [
-        DayAheadPrice(
-            zone=BiddingZone.FI,
-            period_start=cet_start + timedelta(hours=h),
-            period_end=cet_start + timedelta(hours=h) + _1H,
-            price_eur_mwh=40.0 + h * 2,
-        )
-        for h in range(24)
-    ])
+    insert_day_ahead_prices(
+        con,
+        [
+            DayAheadPrice(
+                zone=BiddingZone.EE,
+                period_start=cet_start + timedelta(hours=h),
+                period_end=cet_start + timedelta(hours=h) + _1H,
+                price_eur_mwh=50.0 + h * 2,
+            )
+            for h in range(24)
+        ],
+    )
+    insert_day_ahead_prices(
+        con,
+        [
+            DayAheadPrice(
+                zone=BiddingZone.FI,
+                period_start=cet_start + timedelta(hours=h),
+                period_end=cet_start + timedelta(hours=h) + _1H,
+                price_eur_mwh=40.0 + h * 2,
+            )
+            for h in range(24)
+        ],
+    )
 
     # Generation mix
     ts = datetime(2024, 3, 15, 12, tzinfo=UTC)
-    insert_generation_by_type(con, [
-        GenerationByType(
-            zone=BiddingZone.EE,
-            period_start=ts,
-            period_end=ts + _1H,
-            fuel_type="oil_shale",
-            generation_mw=750.0,
-        ),
-        GenerationByType(
-            zone=BiddingZone.EE,
-            period_start=ts,
-            period_end=ts + _1H,
-            fuel_type="wind_onshore",
-            generation_mw=200.0,
-        ),
-    ])
+    insert_generation_by_type(
+        con,
+        [
+            GenerationByType(
+                zone=BiddingZone.EE,
+                period_start=ts,
+                period_end=ts + _1H,
+                fuel_type="oil_shale",
+                generation_mw=750.0,
+            ),
+            GenerationByType(
+                zone=BiddingZone.EE,
+                period_start=ts,
+                period_end=ts + _1H,
+                fuel_type="wind_onshore",
+                generation_mw=200.0,
+            ),
+        ],
+    )
 
     # Load forecast
-    insert_total_load(con, [
-        TotalLoad(
-            zone=BiddingZone.EE,
-            period_start=datetime(2024, 3, 15, h, tzinfo=UTC),
-            period_end=datetime(2024, 3, 15, h, tzinfo=UTC) + _1H,
-            load_mw=950.0 + h * 10,
-            is_forecast=True,
-        )
-        for h in range(24)
-    ])
+    insert_total_load(
+        con,
+        [
+            TotalLoad(
+                zone=BiddingZone.EE,
+                period_start=datetime(2024, 3, 15, h, tzinfo=UTC),
+                period_end=datetime(2024, 3, 15, h, tzinfo=UTC) + _1H,
+                load_mw=950.0 + h * 10,
+                is_forecast=True,
+            )
+            for h in range(24)
+        ],
+    )
 
     # Cross-border flows FI→EE
-    insert_cross_border_flows(con, [
-        CrossBorderFlow(
-            from_zone=BiddingZone.FI,
-            to_zone=BiddingZone.EE,
-            period_start=datetime(2024, 3, 15, h, tzinfo=UTC),
-            period_end=datetime(2024, 3, 15, h, tzinfo=UTC) + _1H,
-            flow_mw=500.0,
-        )
-        for h in range(24)
-    ])
+    insert_cross_border_flows(
+        con,
+        [
+            CrossBorderFlow(
+                from_zone=BiddingZone.FI,
+                to_zone=BiddingZone.EE,
+                period_start=datetime(2024, 3, 15, h, tzinfo=UTC),
+                period_end=datetime(2024, 3, 15, h, tzinfo=UTC) + _1H,
+                flow_mw=500.0,
+            )
+            for h in range(24)
+        ],
+    )
 
     # Outages
-    insert_outages(con, [
-        Outage(
-            zone=BiddingZone.FI,
-            asset_name=OUTAGE_ASSET,
-            fuel_type="nuclear",
-            outage_type="planned",
-            unavailable_mw=OUTAGE_MW,
-            period_start=datetime(2024, 3, 10, tzinfo=UTC),
-            period_end=datetime(2024, 3, 20, tzinfo=UTC),
-            message_id="REMIT-E2E-001",
-        ),
-    ])
+    insert_outages(
+        con,
+        [
+            Outage(
+                zone=BiddingZone.FI,
+                asset_name=OUTAGE_ASSET,
+                fuel_type="nuclear",
+                outage_type="planned",
+                unavailable_mw=OUTAGE_MW,
+                period_start=datetime(2024, 3, 10, tzinfo=UTC),
+                period_end=datetime(2024, 3, 20, tzinfo=UTC),
+                message_id="REMIT-E2E-001",
+            ),
+        ],
+    )
 
     # Weather: EE_tallinn
-    insert_weather_forecasts(con, [
-        WeatherForecast(
-            location_name="EE_tallinn",
-            latitude=59.0,
-            longitude=25.0,
-            period_start=datetime(2024, 3, 15, h, tzinfo=UTC),
-            period_end=datetime(2024, 3, 15, h, tzinfo=UTC) + _1H,
-            fetched_at=day,
-            wind_speed_100m_ms=WIND_SPEED,
-            solar_irradiance_wm2=120.0,
-            temperature_c=2.0,
-        )
-        for h in range(24)
-    ])
+    insert_weather_forecasts(
+        con,
+        [
+            WeatherForecast(
+                location_name="EE_tallinn",
+                latitude=59.0,
+                longitude=25.0,
+                period_start=datetime(2024, 3, 15, h, tzinfo=UTC),
+                period_end=datetime(2024, 3, 15, h, tzinfo=UTC) + _1H,
+                fetched_at=day,
+                wind_speed_100m_ms=WIND_SPEED,
+                solar_irradiance_wm2=120.0,
+                temperature_c=2.0,
+            )
+            for h in range(24)
+        ],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -240,15 +261,26 @@ class TestEndToEndBriefing:
             content=[
                 _make_text_block("Let me gather the data for today's briefing."),
                 _make_tool_use_block(
-                    "call_1", "get_day_ahead_prices",
-                    {"zone": "EE", "start_date": "2024-03-15", "end_date": "2024-03-16"},
+                    "call_1",
+                    "get_day_ahead_prices",
+                    {
+                        "zone": "EE",
+                        "start_date": "2024-03-15",
+                        "end_date": "2024-03-16",
+                    },
                 ),
                 _make_tool_use_block(
-                    "call_2", "get_day_ahead_prices",
-                    {"zone": "FI", "start_date": "2024-03-15", "end_date": "2024-03-16"},
+                    "call_2",
+                    "get_day_ahead_prices",
+                    {
+                        "zone": "FI",
+                        "start_date": "2024-03-15",
+                        "end_date": "2024-03-16",
+                    },
                 ),
                 _make_tool_use_block(
-                    "call_3", "get_outages",
+                    "call_3",
+                    "get_outages",
                     {"zone": "FI", "active_at": "2024-03-15"},
                 ),
             ],
@@ -259,12 +291,23 @@ class TestEndToEndBriefing:
         turn2 = _make_response(
             content=[
                 _make_tool_use_block(
-                    "call_4", "get_wind_forecast",
-                    {"location": "EE_tallinn", "start_date": "2024-03-15", "end_date": "2024-03-16"},
+                    "call_4",
+                    "get_wind_forecast",
+                    {
+                        "location": "EE_tallinn",
+                        "start_date": "2024-03-15",
+                        "end_date": "2024-03-16",
+                    },
                 ),
                 _make_tool_use_block(
-                    "call_5", "calculate_spread",
-                    {"zone_1": "EE", "zone_2": "FI", "start_date": "2024-03-15", "end_date": "2024-03-16"},
+                    "call_5",
+                    "calculate_spread",
+                    {
+                        "zone_1": "EE",
+                        "zone_2": "FI",
+                        "start_date": "2024-03-15",
+                        "end_date": "2024-03-16",
+                    },
                 ),
             ],
             stop_reason="tool_use",
@@ -321,7 +364,8 @@ class TestEndToEndBriefing:
         # --- Verify tool calls returned real DB data ---
         # EE prices tool call should have daily summary
         ee_price_call = next(
-            tc for tc in result.agent_result.tool_calls
+            tc
+            for tc in result.agent_result.tool_calls
             if tc.name == "get_day_ahead_prices" and '"EE"' in json.dumps(tc.input)
         )
         ee_data = json.loads(ee_price_call.output)
@@ -333,8 +377,7 @@ class TestEndToEndBriefing:
 
         # Outage tool call should find Olkiluoto 2
         outage_call = next(
-            tc for tc in result.agent_result.tool_calls
-            if tc.name == "get_outages"
+            tc for tc in result.agent_result.tool_calls if tc.name == "get_outages"
         )
         outage_data = json.loads(outage_call.output)
         assert len(outage_data) == 1

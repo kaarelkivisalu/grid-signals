@@ -20,7 +20,9 @@ def _list_briefings(directory: Path) -> list[Path]:
 briefings = _list_briefings(DEFAULT_OUTPUT_DIR)
 
 if not briefings:
-    st.info("No briefings found. Generate one with `uv run python -m grid_signals briefing`.")
+    st.info(
+        "No briefings found. Generate one with `uv run python -m grid_signals briefing`."
+    )
 else:
     labels = [p.stem for p in briefings]
     selected = st.selectbox("Select date", labels, index=0)

@@ -8,8 +8,9 @@ import duckdb
 import plotly.graph_objects as go
 
 
-def hourly_prices(con: duckdb.DuckDBPyConnection, zones: list[str],
-                  start: str, end: str) -> go.Figure:
+def hourly_prices(
+    con: duckdb.DuckDBPyConnection, zones: list[str], start: str, end: str
+) -> go.Figure:
     """Line chart of hourly prices, one line per zone."""
     fig = go.Figure()
     for zone in zones:
@@ -25,8 +26,9 @@ def hourly_prices(con: duckdb.DuckDBPyConnection, zones: list[str],
         if rows:
             times = [r[0] for r in rows]
             prices = [r[1] for r in rows]
-            fig.add_trace(go.Scatter(x=times, y=prices, name=zone, mode="lines",
-                                     line_shape="hv"))
+            fig.add_trace(
+                go.Scatter(x=times, y=prices, name=zone, mode="lines", line_shape="hv")
+            )
     fig.update_layout(
         title="Day-Ahead Prices",
         xaxis_title="Time (UTC)",
@@ -37,8 +39,9 @@ def hourly_prices(con: duckdb.DuckDBPyConnection, zones: list[str],
     return fig
 
 
-def generation_mix(con: duckdb.DuckDBPyConnection, zone: str,
-                   start: str, end: str) -> go.Figure:
+def generation_mix(
+    con: duckdb.DuckDBPyConnection, zone: str, start: str, end: str
+) -> go.Figure:
     """Stacked bar chart of generation by fuel type."""
     rows = con.execute(
         """
@@ -54,9 +57,19 @@ def generation_mix(con: duckdb.DuckDBPyConnection, zone: str,
     ).fetchall()
     if not rows:
         fig = go.Figure()
-        fig.update_layout(title=f"Generation Mix — {zone}", annotations=[
-            dict(text="No data", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
-        ])
+        fig.update_layout(
+            title=f"Generation Mix — {zone}",
+            annotations=[
+                dict(
+                    text="No data",
+                    xref="paper",
+                    yref="paper",
+                    x=0.5,
+                    y=0.5,
+                    showarrow=False,
+                )
+            ],
+        )
         return fig
 
     fuels: dict[str, dict] = {}
@@ -80,8 +93,9 @@ def generation_mix(con: duckdb.DuckDBPyConnection, zone: str,
     return fig
 
 
-def cross_border_flows(con: duckdb.DuckDBPyConnection, zone: str,
-                       start: str, end: str) -> go.Figure:
+def cross_border_flows(
+    con: duckdb.DuckDBPyConnection, zone: str, start: str, end: str
+) -> go.Figure:
     """Line chart of cross-border flows for all interconnections of a zone.
 
     For each neighbour, net flow = (zone→neighbour) − (neighbour→zone).
@@ -102,10 +116,14 @@ def cross_border_flows(con: duckdb.DuckDBPyConnection, zone: str,
     for fz, tz, ts, mw in rows:
         if fz == zone:
             nbr = tz
-            neighbours.setdefault(nbr, {})[ts] = neighbours.get(nbr, {}).get(ts, 0.0) + mw
+            neighbours.setdefault(nbr, {})[ts] = (
+                neighbours.get(nbr, {}).get(ts, 0.0) + mw
+            )
         else:
             nbr = fz
-            neighbours.setdefault(nbr, {})[ts] = neighbours.get(nbr, {}).get(ts, 0.0) - mw
+            neighbours.setdefault(nbr, {})[ts] = (
+                neighbours.get(nbr, {}).get(ts, 0.0) - mw
+            )
 
     display = _display_zone  # short alias
     fig = go.Figure()
@@ -113,9 +131,15 @@ def cross_border_flows(con: duckdb.DuckDBPyConnection, zone: str,
         series = neighbours[nbr]
         times = sorted(series)
         flows = [series[t] for t in times]
-        fig.add_trace(go.Scatter(x=times, y=flows, mode="lines",
-                                 name=f"{display(zone)} ↔ {display(nbr)}",
-                                 line_shape="hv"))
+        fig.add_trace(
+            go.Scatter(
+                x=times,
+                y=flows,
+                mode="lines",
+                name=f"{display(zone)} ↔ {display(nbr)}",
+                line_shape="hv",
+            )
+        )
 
     fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
     fig.update_layout(
@@ -132,8 +156,9 @@ def _display_zone(code: str) -> str:
     return code.replace("_", "")
 
 
-def wind_vs_price(con: duckdb.DuckDBPyConnection, zone: str, location: str,
-                  start: str, end: str) -> go.Figure:
+def wind_vs_price(
+    con: duckdb.DuckDBPyConnection, zone: str, location: str, start: str, end: str
+) -> go.Figure:
     """Dual-axis chart: wind speed and price."""
     prices = con.execute(
         """
@@ -159,19 +184,30 @@ def wind_vs_price(con: duckdb.DuckDBPyConnection, zone: str, location: str,
     ).fetchall()
 
     from plotly.subplots import make_subplots
+
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     if weather:
         fig.add_trace(
-            go.Scatter(x=[r[0] for r in weather], y=[r[1] for r in weather],
-                       name="Wind (m/s)", mode="lines", line=dict(color="#26A69A"),
-                       line_shape="hv"),
+            go.Scatter(
+                x=[r[0] for r in weather],
+                y=[r[1] for r in weather],
+                name="Wind (m/s)",
+                mode="lines",
+                line=dict(color="#26A69A"),
+                line_shape="hv",
+            ),
             secondary_y=False,
         )
     if prices:
         fig.add_trace(
-            go.Scatter(x=[r[0] for r in prices], y=[r[1] for r in prices],
-                       name="Price (EUR/MWh)", mode="lines", line=dict(color="#EF5350"),
-                       line_shape="hv"),
+            go.Scatter(
+                x=[r[0] for r in prices],
+                y=[r[1] for r in prices],
+                name="Price (EUR/MWh)",
+                mode="lines",
+                line=dict(color="#EF5350"),
+                line_shape="hv",
+            ),
             secondary_y=True,
         )
     fig.update_layout(
@@ -183,8 +219,9 @@ def wind_vs_price(con: duckdb.DuckDBPyConnection, zone: str, location: str,
     return fig
 
 
-def price_heatmap(con: duckdb.DuckDBPyConnection, zones: list[str],
-                  date: str) -> go.Figure:
+def price_heatmap(
+    con: duckdb.DuckDBPyConnection, zones: list[str], date: str
+) -> go.Figure:
     """Heatmap: zones x hours, color = price for a single day."""
     rows = con.execute(
         """
@@ -198,9 +235,19 @@ def price_heatmap(con: duckdb.DuckDBPyConnection, zones: list[str],
 
     if not rows:
         fig = go.Figure()
-        fig.update_layout(title="Price Heatmap", annotations=[
-            dict(text="No data", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
-        ])
+        fig.update_layout(
+            title="Price Heatmap",
+            annotations=[
+                dict(
+                    text="No data",
+                    xref="paper",
+                    yref="paper",
+                    x=0.5,
+                    y=0.5,
+                    showarrow=False,
+                )
+            ],
+        )
         return fig
 
     zone_data: dict[str, dict[int, float]] = {}
@@ -211,10 +258,15 @@ def price_heatmap(con: duckdb.DuckDBPyConnection, zones: list[str],
     hours = list(range(24))
     z = [[zone_data.get(z, {}).get(h, None) for h in hours] for z in zone_labels]
 
-    fig = go.Figure(go.Heatmap(
-        z=z, x=[f"{h:02d}:00" for h in hours], y=zone_labels,
-        colorscale="RdYlGn_r", colorbar_title="EUR/MWh",
-    ))
+    fig = go.Figure(
+        go.Heatmap(
+            z=z,
+            x=[f"{h:02d}:00" for h in hours],
+            y=zone_labels,
+            colorscale="RdYlGn_r",
+            colorbar_title="EUR/MWh",
+        )
+    )
     fig.update_layout(
         title=f"Price Heatmap — {date}",
         xaxis_title="Hour (UTC)",
@@ -246,20 +298,41 @@ _ZONE_COORDS: dict[str, tuple[float, float]] = {
 
 # Internal interconnectors (same as _INTERNAL_LINKS but with DB zone names).
 _MAP_LINKS: list[tuple[str, str]] = [
-    ("EE", "FI"), ("EE", "LV"), ("LV", "LT"),
-    ("LT", "SE4"), ("FI", "SE3"),
-    ("SE1", "SE2"), ("SE2", "SE3"), ("SE3", "SE4"),
-    ("NO1", "NO2"), ("NO1", "NO3"), ("NO1", "NO5"),
-    ("NO2", "NO5"), ("NO3", "NO4"), ("NO3", "NO5"),
-    ("NO1", "SE3"), ("NO3", "SE2"), ("NO4", "SE1"),
-    ("NO4", "SE2"), ("NO4", "FI"), ("FI", "SE1"),
-    ("DK1", "DK2"), ("DK1", "NO2"), ("DK1", "SE3"), ("DK2", "SE4"),
+    ("EE", "FI"),
+    ("EE", "LV"),
+    ("LV", "LT"),
+    ("LT", "SE4"),
+    ("FI", "SE3"),
+    ("SE1", "SE2"),
+    ("SE2", "SE3"),
+    ("SE3", "SE4"),
+    ("NO1", "NO2"),
+    ("NO1", "NO3"),
+    ("NO1", "NO5"),
+    ("NO2", "NO5"),
+    ("NO3", "NO4"),
+    ("NO3", "NO5"),
+    ("NO1", "SE3"),
+    ("NO3", "SE2"),
+    ("NO4", "SE1"),
+    ("NO4", "SE2"),
+    ("NO4", "FI"),
+    ("FI", "SE1"),
+    ("DK1", "DK2"),
+    ("DK1", "NO2"),
+    ("DK1", "SE3"),
+    ("DK2", "SE4"),
 ]
 
 
 def _arrow_triangle(
-    src_lat: float, src_lon: float, dst_lat: float, dst_lon: float,
-    pos: float = 0.55, size: float = 0.25, width: float = 0.12,
+    src_lat: float,
+    src_lon: float,
+    dst_lat: float,
+    dst_lon: float,
+    pos: float = 0.55,
+    size: float = 0.25,
+    width: float = 0.12,
 ) -> tuple[list[float], list[float]]:
     """Filled-arrowhead triangle at *pos* fraction along the line."""
     tip_lat = src_lat + pos * (dst_lat - src_lat)
@@ -279,7 +352,11 @@ def _arrow_triangle(
 
 
 def _label_pos(
-    lat1: float, lon1: float, lat2: float, lon2: float, offset: float = 0.25,
+    lat1: float,
+    lon1: float,
+    lat2: float,
+    lon2: float,
+    offset: float = 0.25,
 ) -> tuple[float, float]:
     """Midpoint shifted perpendicular to the line for label placement."""
     mid_lat = (lat1 + lat2) / 2
@@ -345,28 +422,34 @@ def flow_map(con: duckdb.DuckDBPyConnection, start: str, end: str) -> go.Figure:
         hover = f"{direction}: {abs_net:.0f} MW avg"
 
         # Flow line.
-        fig.add_trace(go.Scattermapbox(
-            lat=[s_lat, d_lat], lon=[s_lon, d_lon],
-            mode="lines",
-            line=dict(color=color, width=width),
-            hovertext=hover,
-            hoverinfo="text",
-            showlegend=False,
-        ))
+        fig.add_trace(
+            go.Scattermapbox(
+                lat=[s_lat, d_lat],
+                lon=[s_lon, d_lon],
+                mode="lines",
+                line=dict(color=color, width=width),
+                hovertext=hover,
+                hoverinfo="text",
+                showlegend=False,
+            )
+        )
 
         # Filled arrowhead triangle.
         if abs_net >= 1:
             ah_lat, ah_lon = _arrow_triangle(s_lat, s_lon, d_lat, d_lon)
             if ah_lat:
-                fig.add_trace(go.Scattermapbox(
-                    lat=ah_lat, lon=ah_lon,
-                    mode="lines",
-                    line=dict(color=color, width=1),
-                    fill="toself",
-                    fillcolor=color,
-                    hoverinfo="skip",
-                    showlegend=False,
-                ))
+                fig.add_trace(
+                    go.Scattermapbox(
+                        lat=ah_lat,
+                        lon=ah_lon,
+                        mode="lines",
+                        line=dict(color=color, width=1),
+                        fill="toself",
+                        fillcolor=color,
+                        hoverinfo="skip",
+                        showlegend=False,
+                    )
+                )
 
             # Collect MW label at offset midpoint.
             ol, on = _label_pos(s_lat, s_lon, d_lat, d_lon)
@@ -376,30 +459,36 @@ def flow_map(con: duckdb.DuckDBPyConnection, start: str, end: str) -> go.Figure:
 
     # MW labels — single trace for performance.
     if label_lats:
-        fig.add_trace(go.Scattermapbox(
-            lat=label_lats, lon=label_lons,
-            mode="text",
-            text=label_texts,
-            textfont=dict(size=11, color="#004D40", family="Arial Black"),
-            hoverinfo="skip",
-            showlegend=False,
-        ))
+        fig.add_trace(
+            go.Scattermapbox(
+                lat=label_lats,
+                lon=label_lons,
+                mode="text",
+                text=label_texts,
+                textfont=dict(size=11, color="#004D40", family="Arial Black"),
+                hoverinfo="skip",
+                showlegend=False,
+            )
+        )
 
     # Zone markers.
     zone_lats = [c[0] for c in _ZONE_COORDS.values()]
     zone_lons = [c[1] for c in _ZONE_COORDS.values()]
     zone_names = list(_ZONE_COORDS.keys())
-    fig.add_trace(go.Scattermapbox(
-        lat=zone_lats, lon=zone_lons,
-        mode="markers+text",
-        marker=dict(size=10, color="#1565C0", opacity=0.9),
-        text=zone_names,
-        textfont=dict(size=12, color="#0D47A1", family="Arial Black"),
-        textposition="top center",
-        hoverinfo="text",
-        hovertext=zone_names,
-        showlegend=False,
-    ))
+    fig.add_trace(
+        go.Scattermapbox(
+            lat=zone_lats,
+            lon=zone_lons,
+            mode="markers+text",
+            marker=dict(size=10, color="#1565C0", opacity=0.9),
+            text=zone_names,
+            textfont=dict(size=12, color="#0D47A1", family="Arial Black"),
+            textposition="top center",
+            hoverinfo="text",
+            hovertext=zone_names,
+            showlegend=False,
+        )
+    )
 
     fig.update_layout(
         mapbox=dict(

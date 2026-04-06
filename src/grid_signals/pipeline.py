@@ -83,44 +83,67 @@ def _parallel_entsoe_ingest(
     tasks: list[tuple[str, Callable[[], list[Any]], Callable]] = []
 
     for zone in zones:
-        tasks.append((
-            f"prices/{zone.value}",
-            lambda z=zone: fetch_day_ahead_prices(_get_client(), z, start, end, limiter),
-            insert_day_ahead_prices,
-        ))
-        tasks.append((
-            f"generation/{zone.value}",
-            lambda z=zone: fetch_generation(_get_client(), z, start, end, limiter),
-            insert_generation_by_type,
-        ))
-        tasks.append((
-            f"load_actual/{zone.value}",
-            lambda z=zone: fetch_load_actual(_get_client(), z, start, end, limiter),
-            insert_total_load,
-        ))
-        tasks.append((
-            f"load_forecast/{zone.value}",
-            lambda z=zone: fetch_load_forecast(_get_client(), z, start, end, limiter),
-            insert_total_load,
-        ))
-        tasks.append((
-            f"outages/{zone.value}",
-            lambda z=zone: fetch_outages(_get_client(), z, start, end, limiter),
-            insert_outages,
-        ))
+        tasks.append(
+            (
+                f"prices/{zone.value}",
+                lambda z=zone: fetch_day_ahead_prices(
+                    _get_client(), z, start, end, limiter
+                ),
+                insert_day_ahead_prices,
+            )
+        )
+        tasks.append(
+            (
+                f"generation/{zone.value}",
+                lambda z=zone: fetch_generation(_get_client(), z, start, end, limiter),
+                insert_generation_by_type,
+            )
+        )
+        tasks.append(
+            (
+                f"load_actual/{zone.value}",
+                lambda z=zone: fetch_load_actual(_get_client(), z, start, end, limiter),
+                insert_total_load,
+            )
+        )
+        tasks.append(
+            (
+                f"load_forecast/{zone.value}",
+                lambda z=zone: fetch_load_forecast(
+                    _get_client(), z, start, end, limiter
+                ),
+                insert_total_load,
+            )
+        )
+        tasks.append(
+            (
+                f"outages/{zone.value}",
+                lambda z=zone: fetch_outages(_get_client(), z, start, end, limiter),
+                insert_outages,
+            )
+        )
 
     for from_zone, to_zone in borders:
-        tasks.append((
-            f"flows/{from_zone}→{to_zone}",
-            lambda f=from_zone, t=to_zone: fetch_cross_border_flows(
-                _get_client(), f, t, start, end, limiter,
-            ),
-            insert_cross_border_flows,
-        ))
+        tasks.append(
+            (
+                f"flows/{from_zone}→{to_zone}",
+                lambda f=from_zone, t=to_zone: fetch_cross_border_flows(
+                    _get_client(),
+                    f,
+                    t,
+                    start,
+                    end,
+                    limiter,
+                ),
+                insert_cross_border_flows,
+            )
+        )
 
     # Phase 1: fetch in parallel
     num_tasks = len(tasks)
-    logger.info("ENTSO-E fetch: starting %d tasks with %d workers", num_tasks, max_workers)
+    logger.info(
+        "ENTSO-E fetch: starting %d tasks with %d workers", num_tasks, max_workers
+    )
     results: list[tuple[str, Callable, list[Any]]] = []
     completed = 0
     ctx = contextvars.copy_context()
@@ -136,15 +159,29 @@ def _parallel_entsoe_ingest(
                 rows = future.result()
                 if rows:
                     results.append((label, insert_fn, rows))
-                    logger.info("[%d/%d] %s: fetched %d rows", completed, num_tasks, label, len(rows))
+                    logger.info(
+                        "[%d/%d] %s: fetched %d rows",
+                        completed,
+                        num_tasks,
+                        label,
+                        len(rows),
+                    )
                 else:
                     logger.info("[%d/%d] %s: empty result", completed, num_tasks, label)
             except NoMatchingDataError:
                 logger.warning("[%d/%d] %s: no data", completed, num_tasks, label)
             except Exception:
-                logger.error("[%d/%d] %s: error\n%s", completed, num_tasks, label, traceback.format_exc())
+                logger.error(
+                    "[%d/%d] %s: error\n%s",
+                    completed,
+                    num_tasks,
+                    label,
+                    traceback.format_exc(),
+                )
 
-    logger.info("ENTSO-E fetch complete: %d/%d tasks returned data", len(results), num_tasks)
+    logger.info(
+        "ENTSO-E fetch complete: %d/%d tasks returned data", len(results), num_tasks
+    )
 
     # Phase 2: write sequentially (DuckDB single-writer lock)
     total = 0
@@ -286,40 +323,83 @@ def run_backfill_gaps(
         for zone_val, missing in gaps.prices.items():
             zone = BiddingZone(zone_val)
             for rng_start, rng_end in _date_ranges(missing):
-                s = pd.Timestamp(datetime.combine(rng_start, datetime.min.time(), tzinfo=UTC))
-                e = pd.Timestamp(datetime.combine(rng_end, datetime.min.time(), tzinfo=UTC))
+                s = pd.Timestamp(
+                    datetime.combine(rng_start, datetime.min.time(), tzinfo=UTC)
+                )
+                e = pd.Timestamp(
+                    datetime.combine(rng_end, datetime.min.time(), tzinfo=UTC)
+                )
                 rows = ingest_day_ahead_prices(con, entsoe_client, [zone], s, e)
-                logger.info("backfill-gaps: prices %s %s→%s → %d rows", zone, rng_start, rng_end, rows)
+                logger.info(
+                    "backfill-gaps: prices %s %s→%s → %d rows",
+                    zone,
+                    rng_start,
+                    rng_end,
+                    rows,
+                )
                 total += rows
 
         # Generation
         for zone_val, missing in gaps.generation.items():
             zone = BiddingZone(zone_val)
             for rng_start, rng_end in _date_ranges(missing):
-                s = pd.Timestamp(datetime.combine(rng_start, datetime.min.time(), tzinfo=UTC))
-                e = pd.Timestamp(datetime.combine(rng_end, datetime.min.time(), tzinfo=UTC))
+                s = pd.Timestamp(
+                    datetime.combine(rng_start, datetime.min.time(), tzinfo=UTC)
+                )
+                e = pd.Timestamp(
+                    datetime.combine(rng_end, datetime.min.time(), tzinfo=UTC)
+                )
                 rows = ingest_generation_per_type(con, entsoe_client, [zone], s, e)
-                logger.info("backfill-gaps: generation %s %s→%s → %d rows", zone, rng_start, rng_end, rows)
+                logger.info(
+                    "backfill-gaps: generation %s %s→%s → %d rows",
+                    zone,
+                    rng_start,
+                    rng_end,
+                    rows,
+                )
                 total += rows
 
         # Load
         for zone_val, missing in gaps.load.items():
             zone = BiddingZone(zone_val)
             for rng_start, rng_end in _date_ranges(missing):
-                s = pd.Timestamp(datetime.combine(rng_start, datetime.min.time(), tzinfo=UTC))
-                e = pd.Timestamp(datetime.combine(rng_end, datetime.min.time(), tzinfo=UTC))
+                s = pd.Timestamp(
+                    datetime.combine(rng_start, datetime.min.time(), tzinfo=UTC)
+                )
+                e = pd.Timestamp(
+                    datetime.combine(rng_end, datetime.min.time(), tzinfo=UTC)
+                )
                 rows = ingest_total_load(con, entsoe_client, [zone], s, e)
-                logger.info("backfill-gaps: load %s %s→%s → %d rows", zone, rng_start, rng_end, rows)
+                logger.info(
+                    "backfill-gaps: load %s %s→%s → %d rows",
+                    zone,
+                    rng_start,
+                    rng_end,
+                    rows,
+                )
                 total += rows
 
         # Flows
         for border_key, missing in gaps.flows.items():
             from_z, to_z = border_key.split("→")
             for rng_start, rng_end in _date_ranges(missing):
-                s = pd.Timestamp(datetime.combine(rng_start, datetime.min.time(), tzinfo=UTC))
-                e = pd.Timestamp(datetime.combine(rng_end, datetime.min.time(), tzinfo=UTC))
-                rows = ingest_cross_border_flows(con, entsoe_client, [(from_z, to_z)], s, e)
-                logger.info("backfill-gaps: flows %s→%s %s→%s → %d rows", from_z, to_z, rng_start, rng_end, rows)
+                s = pd.Timestamp(
+                    datetime.combine(rng_start, datetime.min.time(), tzinfo=UTC)
+                )
+                e = pd.Timestamp(
+                    datetime.combine(rng_end, datetime.min.time(), tzinfo=UTC)
+                )
+                rows = ingest_cross_border_flows(
+                    con, entsoe_client, [(from_z, to_z)], s, e
+                )
+                logger.info(
+                    "backfill-gaps: flows %s→%s %s→%s → %d rows",
+                    from_z,
+                    to_z,
+                    rng_start,
+                    rng_end,
+                    rows,
+                )
                 total += rows
 
         # Weather gaps (Open-Meteo)
@@ -333,7 +413,13 @@ def run_backfill_gaps(
                 s = datetime.combine(rng_start, datetime.min.time(), tzinfo=UTC)
                 e = datetime.combine(rng_end, datetime.min.time(), tzinfo=UTC)
                 rows = ingest_weather_history(con, weather_client, [loc], s, e)
-                logger.info("backfill-gaps: weather %s %s→%s → %d rows", loc_name, rng_start, rng_end, rows)
+                logger.info(
+                    "backfill-gaps: weather %s %s→%s → %d rows",
+                    loc_name,
+                    rng_start,
+                    rng_end,
+                    rows,
+                )
                 total += rows
 
         logger.info("backfill-gaps: total → %d rows", total)

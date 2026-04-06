@@ -60,7 +60,9 @@ def validate_price_completeness(
         """,
         [zone.value, start, end],
     ).fetchone()
-    min_interval = interval_row[0] if interval_row and interval_row[0] is not None else 60
+    min_interval = (
+        interval_row[0] if interval_row and interval_row[0] is not None else 60
+    )
 
     if min_interval <= 15:
         resolution = "15min"
@@ -183,7 +185,12 @@ def run_all_validations(
 
     passed = sum(1 for r in results if r.passed)
     failed = sum(1 for r in results if not r.passed)
-    logger.info("validation: %d passed, %d failed out of %d checks", passed, failed, len(results))
+    logger.info(
+        "validation: %d passed, %d failed out of %d checks",
+        passed,
+        failed,
+        len(results),
+    )
 
     for r in results:
         if not r.passed:

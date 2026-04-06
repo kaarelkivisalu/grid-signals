@@ -52,8 +52,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
 
     validate_cmd = sub.add_parser("validate", help="Run data validation checks")
-    validate_cmd.add_argument("--start", default=None, help="Start date (YYYY-MM-DD, default: yesterday)")
-    validate_cmd.add_argument("--end", default=None, help="End date exclusive (YYYY-MM-DD, default: start + 1 day)")
+    validate_cmd.add_argument(
+        "--start", default=None, help="Start date (YYYY-MM-DD, default: yesterday)"
+    )
+    validate_cmd.add_argument(
+        "--end",
+        default=None,
+        help="End date exclusive (YYYY-MM-DD, default: start + 1 day)",
+    )
     sub.add_parser("ui", help="Launch the Streamlit web interface")
 
     health_cmd = sub.add_parser("health", help="Check data freshness across all tables")
@@ -72,7 +78,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="S3 key prefix (default: grid-signals/backups)",
     )
 
-    agent_cmd = sub.add_parser("agent", help="Ask the energy intelligence agent a question")
+    agent_cmd = sub.add_parser(
+        "agent", help="Ask the energy intelligence agent a question"
+    )
     agent_cmd.add_argument("question", help="Question to ask the agent")
     agent_cmd.add_argument(
         "--model",
@@ -123,13 +131,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     # prices
     q_prices = query_sub.add_parser("prices", help="Day-ahead electricity prices")
-    q_prices.add_argument("zone", help="Bidding zone (EE, LV, LT, FI, SE1-SE4, NO1-NO5, DK1, DK2)")
+    q_prices.add_argument(
+        "zone", help="Bidding zone (EE, LV, LT, FI, SE1-SE4, NO1-NO5, DK1, DK2)"
+    )
     q_prices.add_argument("start_date", help="Start date (YYYY-MM-DD), inclusive")
     q_prices.add_argument("end_date", help="End date (YYYY-MM-DD), exclusive")
 
     # generation
     q_gen = query_sub.add_parser("generation", help="Generation mix by fuel type")
-    q_gen.add_argument("zone", help="Bidding zone (EE, LV, LT, FI, SE1-SE4, NO1-NO5, DK1, DK2)")
+    q_gen.add_argument(
+        "zone", help="Bidding zone (EE, LV, LT, FI, SE1-SE4, NO1-NO5, DK1, DK2)"
+    )
     q_gen.add_argument("start_date", help="Start date (YYYY-MM-DD), inclusive")
     q_gen.add_argument("end_date", help="End date (YYYY-MM-DD), exclusive")
     q_gen.add_argument("--fuel-type", default=None, help="Filter by fuel type")
@@ -144,10 +156,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     # outages
     q_outages = query_sub.add_parser("outages", help="REMIT outage messages")
-    q_outages.add_argument("zone", help="Bidding zone (EE, LV, LT, FI, SE1-SE4, NO1-NO5, DK1, DK2)")
+    q_outages.add_argument(
+        "zone", help="Bidding zone (EE, LV, LT, FI, SE1-SE4, NO1-NO5, DK1, DK2)"
+    )
     q_outages.add_argument("--fuel-type", default=None, help="Filter by fuel type")
     q_outages.add_argument(
-        "--active-at", default=None, help="Find outages active at this time (YYYY-MM-DD or ISO datetime)"
+        "--active-at",
+        default=None,
+        help="Find outages active at this time (YYYY-MM-DD or ISO datetime)",
     )
 
     # flows
@@ -159,7 +175,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     # load
     q_load = query_sub.add_parser("load", help="Load forecast summary")
-    q_load.add_argument("zone", help="Bidding zone (EE, LV, LT, FI, SE1-SE4, NO1-NO5, DK1, DK2)")
+    q_load.add_argument(
+        "zone", help="Bidding zone (EE, LV, LT, FI, SE1-SE4, NO1-NO5, DK1, DK2)"
+    )
     q_load.add_argument("start_date", help="Start date (YYYY-MM-DD), inclusive")
     q_load.add_argument("end_date", help="End date (YYYY-MM-DD), exclusive")
 
@@ -172,15 +190,32 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     # similar-days
     q_similar = query_sub.add_parser(
-        "similar-days", help="Find historical days with similar weather and their prices"
+        "similar-days",
+        help="Find historical days with similar weather and their prices",
     )
     q_similar.add_argument("zone", help="Bidding zone for price data")
     q_similar.add_argument("location", help="Weather location name")
-    q_similar.add_argument("--wind", type=float, required=True, help="Target wind speed (m/s)")
-    q_similar.add_argument("--temp", type=float, required=True, help="Target temperature (°C)")
-    q_similar.add_argument("--wind-tolerance", type=float, default=2.0, help="Wind tolerance (m/s, default: 2.0)")
-    q_similar.add_argument("--temp-tolerance", type=float, default=3.0, help="Temp tolerance (°C, default: 3.0)")
-    q_similar.add_argument("--limit", type=int, default=10, help="Max results (default: 10)")
+    q_similar.add_argument(
+        "--wind", type=float, required=True, help="Target wind speed (m/s)"
+    )
+    q_similar.add_argument(
+        "--temp", type=float, required=True, help="Target temperature (°C)"
+    )
+    q_similar.add_argument(
+        "--wind-tolerance",
+        type=float,
+        default=2.0,
+        help="Wind tolerance (m/s, default: 2.0)",
+    )
+    q_similar.add_argument(
+        "--temp-tolerance",
+        type=float,
+        default=3.0,
+        help="Temp tolerance (°C, default: 3.0)",
+    )
+    q_similar.add_argument(
+        "--limit", type=int, default=10, help="Max results (default: 10)"
+    )
 
     return parser.parse_args(argv)
 

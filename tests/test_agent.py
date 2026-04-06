@@ -78,88 +78,106 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
 
     # Generation mix for EE
     ts = datetime(2024, 1, 15, 12, tzinfo=UTC)
-    insert_generation_by_type(con, [
-        GenerationByType(
-            zone=BiddingZone.EE,
-            period_start=ts,
-            period_end=ts + _1H,
-            fuel_type="oil_shale",
-            generation_mw=800.0,
-        ),
-        GenerationByType(
-            zone=BiddingZone.EE,
-            period_start=ts,
-            period_end=ts + _1H,
-            fuel_type="wind_onshore",
-            generation_mw=150.0,
-        ),
-    ])
+    insert_generation_by_type(
+        con,
+        [
+            GenerationByType(
+                zone=BiddingZone.EE,
+                period_start=ts,
+                period_end=ts + _1H,
+                fuel_type="oil_shale",
+                generation_mw=800.0,
+            ),
+            GenerationByType(
+                zone=BiddingZone.EE,
+                period_start=ts,
+                period_end=ts + _1H,
+                fuel_type="wind_onshore",
+                generation_mw=150.0,
+            ),
+        ],
+    )
 
     # Total load (forecast) for EE
-    insert_total_load(con, [
-        TotalLoad(
-            zone=BiddingZone.EE,
-            period_start=datetime(2024, 1, 15, h, tzinfo=UTC),
-            period_end=datetime(2024, 1, 15, h, tzinfo=UTC) + _1H,
-            load_mw=900.0 + h * 10,
-            is_forecast=True,
-        )
-        for h in range(24)
-    ])
+    insert_total_load(
+        con,
+        [
+            TotalLoad(
+                zone=BiddingZone.EE,
+                period_start=datetime(2024, 1, 15, h, tzinfo=UTC),
+                period_end=datetime(2024, 1, 15, h, tzinfo=UTC) + _1H,
+                load_mw=900.0 + h * 10,
+                is_forecast=True,
+            )
+            for h in range(24)
+        ],
+    )
 
     # Cross-border flows FI->EE
     ts2 = datetime(2024, 1, 15, 12, tzinfo=UTC)
-    insert_cross_border_flows(con, [
-        CrossBorderFlow(
-            from_zone=BiddingZone.FI,
-            to_zone=BiddingZone.EE,
-            period_start=ts2,
-            period_end=ts2 + _1H,
-            flow_mw=450.0,
-        ),
-    ])
+    insert_cross_border_flows(
+        con,
+        [
+            CrossBorderFlow(
+                from_zone=BiddingZone.FI,
+                to_zone=BiddingZone.EE,
+                period_start=ts2,
+                period_end=ts2 + _1H,
+                flow_mw=450.0,
+            ),
+        ],
+    )
 
     # Outages
-    insert_outages(con, [
-        Outage(
-            zone=BiddingZone.FI,
-            asset_name="Olkiluoto 2",
-            fuel_type="nuclear",
-            outage_type="planned",
-            unavailable_mw=890.0,
-            period_start=datetime(2024, 1, 10, tzinfo=UTC),
-            period_end=datetime(2024, 1, 20, tzinfo=UTC),
-            message_id="REMIT-TEST-001",
-        ),
-    ])
+    insert_outages(
+        con,
+        [
+            Outage(
+                zone=BiddingZone.FI,
+                asset_name="Olkiluoto 2",
+                fuel_type="nuclear",
+                outage_type="planned",
+                unavailable_mw=890.0,
+                period_start=datetime(2024, 1, 10, tzinfo=UTC),
+                period_end=datetime(2024, 1, 20, tzinfo=UTC),
+                message_id="REMIT-TEST-001",
+            ),
+        ],
+    )
 
     # Weather for EE_tallinn — two days for similar-day matching
     for d in [15, 16]:
-        insert_weather_forecasts(con, [
-            WeatherForecast(
-                location_name="EE_tallinn",
-                latitude=59.0,
-                longitude=25.0,
-                period_start=datetime(2024, 1, d, h, tzinfo=UTC),
-                period_end=datetime(2024, 1, d, h, tzinfo=UTC) + _1H,
-                fetched_at=day,
-                wind_speed_100m_ms=7.0 + (d - 15) * 0.5,
-                solar_irradiance_wm2=50.0,
-                temperature_c=-5.0 + (d - 15) * 1.0,
-            )
-            for h in range(24)
-        ])
+        insert_weather_forecasts(
+            con,
+            [
+                WeatherForecast(
+                    location_name="EE_tallinn",
+                    latitude=59.0,
+                    longitude=25.0,
+                    period_start=datetime(2024, 1, d, h, tzinfo=UTC),
+                    period_end=datetime(2024, 1, d, h, tzinfo=UTC) + _1H,
+                    fetched_at=day,
+                    wind_speed_100m_ms=7.0 + (d - 15) * 0.5,
+                    solar_irradiance_wm2=50.0,
+                    temperature_c=-5.0 + (d - 15) * 1.0,
+                )
+                for h in range(24)
+            ],
+        )
 
     # Extra day of prices for Jan 16 (for similar-day test)
-    insert_day_ahead_prices(con, [
-        DayAheadPrice(
-            zone=BiddingZone.EE,
-            period_start=datetime(2024, 1, 16, h, tzinfo=UTC),
-            period_end=datetime(2024, 1, 16, h, tzinfo=UTC) + _1H,
-            price_eur_mwh=55.0 + h * 2,
-        )
-        for h in range(24)
-    ])
+    insert_day_ahead_prices(
+        con,
+        [
+            DayAheadPrice(
+                zone=BiddingZone.EE,
+                period_start=datetime(2024, 1, 16, h, tzinfo=UTC),
+                period_end=datetime(2024, 1, 16, h, tzinfo=UTC) + _1H,
+                price_eur_mwh=55.0 + h * 2,
+            )
+            for h in range(24)
+        ],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -169,11 +187,13 @@ def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
 
 class TestGetDayAheadPrices:
     def test_returns_prices(self, con):
-        result = json.loads(execute_tool(
-            "get_day_ahead_prices",
-            {"zone": "EE", "start_date": "2024-01-15", "end_date": "2024-01-16"},
-            con,
-        ))
+        result = json.loads(
+            execute_tool(
+                "get_day_ahead_prices",
+                {"zone": "EE", "start_date": "2024-01-15", "end_date": "2024-01-16"},
+                con,
+            )
+        )
         # Daily summary: should have entry for 2024-01-15
         day_15 = next(r for r in result if r["date"] == "2024-01-15")
         assert day_15["min"] == 50.0
@@ -184,29 +204,39 @@ class TestGetDayAheadPrices:
         assert "intervals" in day_15
 
     def test_empty_range(self, con):
-        result = json.loads(execute_tool(
-            "get_day_ahead_prices",
-            {"zone": "EE", "start_date": "2025-01-01", "end_date": "2025-01-02"},
-            con,
-        ))
+        result = json.loads(
+            execute_tool(
+                "get_day_ahead_prices",
+                {"zone": "EE", "start_date": "2025-01-01", "end_date": "2025-01-02"},
+                con,
+            )
+        )
         assert result == []
 
     def test_invalid_zone(self, con):
-        result = json.loads(execute_tool(
-            "get_day_ahead_prices",
-            {"zone": "INVALID", "start_date": "2024-01-15", "end_date": "2024-01-16"},
-            con,
-        ))
+        result = json.loads(
+            execute_tool(
+                "get_day_ahead_prices",
+                {
+                    "zone": "INVALID",
+                    "start_date": "2024-01-15",
+                    "end_date": "2024-01-16",
+                },
+                con,
+            )
+        )
         assert "error" in result
 
 
 class TestGetGenerationMix:
     def test_returns_all_types(self, con):
-        result = json.loads(execute_tool(
-            "get_generation_mix",
-            {"zone": "EE", "start_date": "2024-01-15", "end_date": "2024-01-16"},
-            con,
-        ))
+        result = json.loads(
+            execute_tool(
+                "get_generation_mix",
+                {"zone": "EE", "start_date": "2024-01-15", "end_date": "2024-01-16"},
+                con,
+            )
+        )
         # Daily summary with fuels list
         assert len(result) >= 1
         day_15 = next(r for r in result if r["date"] == "2024-01-15")
@@ -214,16 +244,18 @@ class TestGetGenerationMix:
         assert fuel_types == {"oil_shale", "wind_onshore"}
 
     def test_filter_by_fuel_type(self, con):
-        result = json.loads(execute_tool(
-            "get_generation_mix",
-            {
-                "zone": "EE",
-                "start_date": "2024-01-15",
-                "end_date": "2024-01-16",
-                "fuel_type": "wind_onshore",
-            },
-            con,
-        ))
+        result = json.loads(
+            execute_tool(
+                "get_generation_mix",
+                {
+                    "zone": "EE",
+                    "start_date": "2024-01-15",
+                    "end_date": "2024-01-16",
+                    "fuel_type": "wind_onshore",
+                },
+                con,
+            )
+        )
         assert len(result) >= 1
         day_15 = next(r for r in result if r["date"] == "2024-01-15")
         assert len(day_15["fuels"]) == 1
@@ -232,11 +264,17 @@ class TestGetGenerationMix:
 
 class TestGetWindForecast:
     def test_returns_forecasts(self, con):
-        result = json.loads(execute_tool(
-            "get_wind_forecast",
-            {"location": "EE_tallinn", "start_date": "2024-01-15", "end_date": "2024-01-16"},
-            con,
-        ))
+        result = json.loads(
+            execute_tool(
+                "get_wind_forecast",
+                {
+                    "location": "EE_tallinn",
+                    "start_date": "2024-01-15",
+                    "end_date": "2024-01-16",
+                },
+                con,
+            )
+        )
         # Daily summary
         assert len(result) >= 1
         day_15 = next(r for r in result if r["date"] == "2024-01-15")
@@ -244,11 +282,17 @@ class TestGetWindForecast:
         assert day_15["location"] == "EE_tallinn"
 
     def test_unknown_location(self, con):
-        result = json.loads(execute_tool(
-            "get_wind_forecast",
-            {"location": "NOWHERE", "start_date": "2024-01-15", "end_date": "2024-01-16"},
-            con,
-        ))
+        result = json.loads(
+            execute_tool(
+                "get_wind_forecast",
+                {
+                    "location": "NOWHERE",
+                    "start_date": "2024-01-15",
+                    "end_date": "2024-01-16",
+                },
+                con,
+            )
+        )
         assert result == []
 
 
@@ -259,18 +303,22 @@ class TestGetOutages:
         assert result[0]["asset_name"] == "Olkiluoto 2"
 
     def test_filter_by_active_at(self, con):
-        result = json.loads(execute_tool(
-            "get_outages",
-            {"zone": "FI", "active_at": "2024-01-15"},
-            con,
-        ))
+        result = json.loads(
+            execute_tool(
+                "get_outages",
+                {"zone": "FI", "active_at": "2024-01-15"},
+                con,
+            )
+        )
         assert len(result) == 1
 
-        result = json.loads(execute_tool(
-            "get_outages",
-            {"zone": "FI", "active_at": "2024-02-01"},
-            con,
-        ))
+        result = json.loads(
+            execute_tool(
+                "get_outages",
+                {"zone": "FI", "active_at": "2024-02-01"},
+                con,
+            )
+        )
         assert len(result) == 0
 
     def test_no_outages(self, con):
@@ -280,16 +328,18 @@ class TestGetOutages:
 
 class TestGetCrossBorderFlows:
     def test_returns_flows(self, con):
-        result = json.loads(execute_tool(
-            "get_cross_border_flows",
-            {
-                "from_zone": "FI",
-                "to_zone": "EE",
-                "start_date": "2024-01-15",
-                "end_date": "2024-01-16",
-            },
-            con,
-        ))
+        result = json.loads(
+            execute_tool(
+                "get_cross_border_flows",
+                {
+                    "from_zone": "FI",
+                    "to_zone": "EE",
+                    "start_date": "2024-01-15",
+                    "end_date": "2024-01-16",
+                },
+                con,
+            )
+        )
         # Daily summary
         assert len(result) == 1
         assert result[0]["mean_flow_mw"] == 450.0
@@ -299,11 +349,13 @@ class TestGetCrossBorderFlows:
 
 class TestGetLoadForecast:
     def test_returns_forecast_only(self, con):
-        result = json.loads(execute_tool(
-            "get_load_forecast",
-            {"zone": "EE", "start_date": "2024-01-15", "end_date": "2024-01-16"},
-            con,
-        ))
+        result = json.loads(
+            execute_tool(
+                "get_load_forecast",
+                {"zone": "EE", "start_date": "2024-01-15", "end_date": "2024-01-16"},
+                con,
+            )
+        )
         # Daily summary
         day_15 = next(r for r in result if r["date"] == "2024-01-15")
         assert day_15["min_mw"] == 900.0
@@ -312,16 +364,18 @@ class TestGetLoadForecast:
 
 class TestCalculateSpread:
     def test_spread_arithmetic(self, con):
-        result = json.loads(execute_tool(
-            "calculate_spread",
-            {
-                "zone_1": "EE",
-                "zone_2": "FI",
-                "start_date": "2024-01-15",
-                "end_date": "2024-01-16",
-            },
-            con,
-        ))
+        result = json.loads(
+            execute_tool(
+                "calculate_spread",
+                {
+                    "zone_1": "EE",
+                    "zone_2": "FI",
+                    "start_date": "2024-01-15",
+                    "end_date": "2024-01-16",
+                },
+                con,
+            )
+        )
         assert result["zone_1"] == "EE"
         assert result["zone_2"] == "FI"
         # EE = 50+h*2, FI = 40+h*2 → spread = 10 for every hour
@@ -330,16 +384,18 @@ class TestCalculateSpread:
         assert result["summary"]["hours_negative"] == 0
 
     def test_spread_empty(self, con):
-        result = json.loads(execute_tool(
-            "calculate_spread",
-            {
-                "zone_1": "LV",
-                "zone_2": "LT",
-                "start_date": "2024-01-15",
-                "end_date": "2024-01-16",
-            },
-            con,
-        ))
+        result = json.loads(
+            execute_tool(
+                "calculate_spread",
+                {
+                    "zone_1": "LV",
+                    "zone_2": "LT",
+                    "start_date": "2024-01-15",
+                    "end_date": "2024-01-16",
+                },
+                con,
+            )
+        )
         assert result["summary"] is None
 
 
@@ -347,36 +403,40 @@ class TestGetHistoricalSimilarDays:
     def test_finds_similar_days(self, con):
         # Jan 15 weather: wind=7.0, temp=-5.0
         # Jan 16 weather: wind=7.5, temp=-4.0
-        result = json.loads(execute_tool(
-            "get_historical_similar_days",
-            {
-                "zone": "EE",
-                "location": "EE_tallinn",
-                "target_wind_ms": 7.0,
-                "target_temp_c": -5.0,
-                "wind_tolerance_ms": 1.0,
-                "temp_tolerance_c": 2.0,
-            },
-            con,
-        ))
+        result = json.loads(
+            execute_tool(
+                "get_historical_similar_days",
+                {
+                    "zone": "EE",
+                    "location": "EE_tallinn",
+                    "target_wind_ms": 7.0,
+                    "target_temp_c": -5.0,
+                    "wind_tolerance_ms": 1.0,
+                    "temp_tolerance_c": 2.0,
+                },
+                con,
+            )
+        )
         assert result["matching_days"] >= 1
         # Jan 15 should definitely match (exact hit)
         dates = [d["date"] for d in result["days"]]
         assert any("2024-01-15" in d for d in dates)
 
     def test_no_matches(self, con):
-        result = json.loads(execute_tool(
-            "get_historical_similar_days",
-            {
-                "zone": "EE",
-                "location": "EE_tallinn",
-                "target_wind_ms": 30.0,
-                "target_temp_c": 40.0,
-                "wind_tolerance_ms": 0.1,
-                "temp_tolerance_c": 0.1,
-            },
-            con,
-        ))
+        result = json.loads(
+            execute_tool(
+                "get_historical_similar_days",
+                {
+                    "zone": "EE",
+                    "location": "EE_tallinn",
+                    "target_wind_ms": 30.0,
+                    "target_temp_c": 40.0,
+                    "wind_tolerance_ms": 0.1,
+                    "temp_tolerance_c": 0.1,
+                },
+                con,
+            )
+        )
         assert result["matching_days"] == 0
         assert result["days"] == []
 
@@ -405,17 +465,31 @@ class TestCLIBuildToolInput:
     def test_prices(self):
         name, inp = self._parse(["query", "prices", "EE", "2024-01-15", "2024-01-16"])
         assert name == "get_day_ahead_prices"
-        assert inp == {"zone": "EE", "start_date": "2024-01-15", "end_date": "2024-01-16"}
+        assert inp == {
+            "zone": "EE",
+            "start_date": "2024-01-15",
+            "end_date": "2024-01-16",
+        }
 
     def test_generation_with_fuel_type(self):
         name, inp = self._parse(
-            ["query", "generation", "EE", "2024-01-15", "2024-01-16", "--fuel-type", "wind_onshore"]
+            [
+                "query",
+                "generation",
+                "EE",
+                "2024-01-15",
+                "2024-01-16",
+                "--fuel-type",
+                "wind_onshore",
+            ]
         )
         assert name == "get_generation_mix"
         assert inp["fuel_type"] == "wind_onshore"
 
     def test_weather(self):
-        name, inp = self._parse(["query", "weather", "EE_tallinn", "2024-01-15", "2024-01-16"])
+        name, inp = self._parse(
+            ["query", "weather", "EE_tallinn", "2024-01-15", "2024-01-16"]
+        )
         assert name == "get_wind_forecast"
         assert inp["location"] == "EE_tallinn"
 
@@ -425,7 +499,9 @@ class TestCLIBuildToolInput:
         assert inp == {"zone": "FI", "fuel_type": "nuclear"}
 
     def test_flows(self):
-        name, inp = self._parse(["query", "flows", "EE", "FI", "2024-01-15", "2024-01-16"])
+        name, inp = self._parse(
+            ["query", "flows", "EE", "FI", "2024-01-15", "2024-01-16"]
+        )
         assert name == "get_cross_border_flows"
         assert inp["from_zone"] == "EE"
         assert inp["to_zone"] == "FI"
@@ -435,14 +511,25 @@ class TestCLIBuildToolInput:
         assert name == "get_load_forecast"
 
     def test_spread(self):
-        name, inp = self._parse(["query", "spread", "EE", "FI", "2024-01-15", "2024-01-16"])
+        name, inp = self._parse(
+            ["query", "spread", "EE", "FI", "2024-01-15", "2024-01-16"]
+        )
         assert name == "calculate_spread"
         assert inp["zone_1"] == "EE"
         assert inp["zone_2"] == "FI"
 
     def test_similar_days(self):
         name, inp = self._parse(
-            ["query", "similar-days", "EE", "EE_tallinn", "--wind", "7.0", "--temp", "-5.0"]
+            [
+                "query",
+                "similar-days",
+                "EE",
+                "EE_tallinn",
+                "--wind",
+                "7.0",
+                "--temp",
+                "-5.0",
+            ]
         )
         assert name == "get_historical_similar_days"
         assert inp["target_wind_ms"] == 7.0
@@ -482,7 +569,9 @@ def _make_tool_use_block(tool_id: str, name: str, tool_input: dict):
     return block
 
 
-def _make_response(content, stop_reason: str, input_tokens: int = 10, output_tokens: int = 20):
+def _make_response(
+    content, stop_reason: str, input_tokens: int = 10, output_tokens: int = 20
+):
     """Create a mock API response."""
     resp = MagicMock()
     resp.content = content
@@ -497,7 +586,11 @@ class TestAgentLoopSimpleResponse:
     def test_returns_text_without_tools(self, con):
         mock_client = MagicMock()
         mock_client.messages.create.return_value = _make_response(
-            content=[_make_text_block("The available bidding zones are EE, LV, LT, FI, SE4, SE3.")],
+            content=[
+                _make_text_block(
+                    "The available bidding zones are EE, LV, LT, FI, SE4, SE3."
+                )
+            ],
             stop_reason="end_turn",
         )
 
@@ -521,7 +614,11 @@ class TestAgentLoopSingleToolCall:
                 _make_tool_use_block(
                     "call_1",
                     "get_day_ahead_prices",
-                    {"zone": "EE", "start_date": "2024-01-15", "end_date": "2024-01-16"},
+                    {
+                        "zone": "EE",
+                        "start_date": "2024-01-15",
+                        "end_date": "2024-01-16",
+                    },
                 ),
             ],
             stop_reason="tool_use",
@@ -529,7 +626,9 @@ class TestAgentLoopSingleToolCall:
 
         # Second call: model produces final text
         final_response = _make_response(
-            content=[_make_text_block("EE prices on Jan 15 ranged from 50 to 96 EUR/MWh.")],
+            content=[
+                _make_text_block("EE prices on Jan 15 ranged from 50 to 96 EUR/MWh.")
+            ],
             stop_reason="end_turn",
         )
 
@@ -558,12 +657,20 @@ class TestAgentLoopMultipleToolCalls:
                 _make_tool_use_block(
                     "call_1",
                     "get_day_ahead_prices",
-                    {"zone": "EE", "start_date": "2024-01-15", "end_date": "2024-01-16"},
+                    {
+                        "zone": "EE",
+                        "start_date": "2024-01-15",
+                        "end_date": "2024-01-16",
+                    },
                 ),
                 _make_tool_use_block(
                     "call_2",
                     "get_day_ahead_prices",
-                    {"zone": "FI", "start_date": "2024-01-15", "end_date": "2024-01-16"},
+                    {
+                        "zone": "FI",
+                        "start_date": "2024-01-15",
+                        "end_date": "2024-01-16",
+                    },
                 ),
             ],
             stop_reason="tool_use",
@@ -595,7 +702,11 @@ class TestAgentLoopMaxTurns:
                     _make_tool_use_block(
                         "call_loop",
                         "get_day_ahead_prices",
-                        {"zone": "EE", "start_date": "2024-01-15", "end_date": "2024-01-16"},
+                        {
+                            "zone": "EE",
+                            "start_date": "2024-01-15",
+                            "end_date": "2024-01-16",
+                        },
                     ),
                 ],
                 stop_reason="tool_use",

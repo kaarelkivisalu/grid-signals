@@ -43,34 +43,43 @@ def fix_period_end(con: duckdb.DuckDBPyConnection, dry_run: bool) -> None:
             # The transition starts at the :00 of the same hour as the first :15
             # Actually, use the first :00 entry that's within 1 hour before the first :15
             # Simplest: the transition starts at the :00 just before the first :15
-            transition_start = con.execute(f"""
+            transition_start = con.execute(
+                f"""
                 SELECT MAX(period_start) FROM {table}
                 WHERE {zone_col} = ?
                   AND EXTRACT(MINUTE FROM period_start) = 0
                   AND period_start <= ?
-            """, [zone, first_15m]).fetchone()[0]
+            """,
+                [zone, first_15m],
+            ).fetchone()[0]
 
             if transition_start is None:
                 transition_start = first_15m
 
             # Count rows to fix
-            count = con.execute(f"""
+            count = con.execute(
+                f"""
                 SELECT COUNT(*) FROM {table}
                 WHERE {zone_col} = ?
                   AND period_start >= ?
                   AND period_end - period_start = INTERVAL '1 hour'
-            """, [zone, transition_start]).fetchone()[0]
+            """,
+                [zone, transition_start],
+            ).fetchone()[0]
 
             print(f"  {zone}: transition at {transition_start}, {count} rows to fix")
 
             if not dry_run and count > 0:
-                con.execute(f"""
+                con.execute(
+                    f"""
                     UPDATE {table}
                     SET period_end = period_start + INTERVAL '15 minutes'
                     WHERE {zone_col} = ?
                       AND period_start >= ?
                       AND period_end - period_start = INTERVAL '1 hour'
-                """, [zone, transition_start])
+                """,
+                    [zone, transition_start],
+                )
                 print(f"  {zone}: fixed {count} rows")
 
     if dry_run:
