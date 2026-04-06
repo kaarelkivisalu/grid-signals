@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import anthropic
-import duckdb
+if TYPE_CHECKING:
+    import anthropic
+    import duckdb
 
-from grid_signals.agent.loop import Agent, AgentResult, DEFAULT_MODEL, DEFAULT_MAX_TURNS
+from grid_signals.agent.loop import DEFAULT_MAX_TURNS, DEFAULT_MODEL, Agent, AgentResult
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +72,9 @@ class BriefingResult:
 def build_briefing_prompt(target_date: date) -> str:
     """Build the briefing prompt for a given date."""
     weekday = target_date.strftime("%A")
-    return BRIEFING_PROMPT_TEMPLATE.format(date=target_date.isoformat(), weekday=weekday)
+    return BRIEFING_PROMPT_TEMPLATE.format(
+        date=target_date.isoformat(), weekday=weekday
+    )
 
 
 def generate_briefing(
@@ -81,6 +85,7 @@ def generate_briefing(
     model: str = DEFAULT_MODEL,
     max_turns: int = DEFAULT_MAX_TURNS,
     client: anthropic.Anthropic | None = None,
+    validate_first: bool = True,
 ) -> BriefingResult:
     """Generate a daily briefing by running the agent with a structured prompt.
 
@@ -91,15 +96,27 @@ def generate_briefing(
         model: Claude model to use.
         max_turns: Maximum agent turns.
         client: Anthropic client (optional, for testing).
+        validate_first: Run data validation before generating (default True).
 
     Returns:
         BriefingResult with the briefing content and metadata.
     """
     if target_date is None:
-        target_date = datetime.now(timezone.utc).date()
+        target_date = datetime.now(UTC).date()
 
     prompt = build_briefing_prompt(target_date)
     logger.info("Generating briefing for %s", target_date.isoformat())
+
+    if validate_first:
+        from grid_signals.validation import run_all_validations
+
+        results = run_all_validations(con)
+        failures = [r for r in results if not r.passed]
+        if failures:
+            logger.warning(
+                "Data validation found %d issue(s) before briefing generation",
+                len(failures),
+            )
 
     agent = Agent(con, client=client, model=model, max_turns=max_turns)
     agent_result = agent.run(prompt)

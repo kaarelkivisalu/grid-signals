@@ -6,7 +6,9 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from grid_signals.config import ConfigError
 from grid_signals.db.connection import DEFAULT_DB_PATH
+from grid_signals.logging_config import configure_logging
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -20,6 +22,19 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=str(DEFAULT_DB_PATH),
         help=f"Path to DuckDB file (default: {DEFAULT_DB_PATH})",
     )
+    log_group = parser.add_mutually_exclusive_group()
+    log_group.add_argument(
+        "--json-log",
+        action="store_true",
+        default=None,
+        help="Force JSON log output",
+    )
+    log_group.add_argument(
+        "--no-json-log",
+        action="store_true",
+        default=None,
+        help="Force human-readable log output",
+    )
 
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -29,11 +44,43 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     backfill = sub.add_parser("backfill", help="Backfill a date range")
     backfill.add_argument("--start", required=True, help="Start date (YYYY-MM-DD)")
     backfill.add_argument("--end", required=True, help="End date (YYYY-MM-DD)")
+    backfill.add_argument(
+        "--gaps-only",
+        action="store_true",
+        default=False,
+        help="Only backfill missing data (detect gaps first, then fetch only what is needed)",
+    )
 
-    sub.add_parser("validate", help="Run data validation checks")
+    validate_cmd = sub.add_parser("validate", help="Run data validation checks")
+    validate_cmd.add_argument(
+        "--start", default=None, help="Start date (YYYY-MM-DD, default: yesterday)"
+    )
+    validate_cmd.add_argument(
+        "--end",
+        default=None,
+        help="End date exclusive (YYYY-MM-DD, default: start + 1 day)",
+    )
     sub.add_parser("ui", help="Launch the Streamlit web interface")
 
-    agent_cmd = sub.add_parser("agent", help="Ask the energy intelligence agent a question")
+    health_cmd = sub.add_parser("health", help="Check data freshness across all tables")
+    health_cmd.add_argument(
+        "--max-age",
+        type=int,
+        default=26,
+        help="Maximum acceptable age in hours (default: 26)",
+    )
+
+    backup_cmd = sub.add_parser("backup", help="Backup DuckDB to S3")
+    backup_cmd.add_argument("--bucket", required=True, help="S3 bucket name")
+    backup_cmd.add_argument(
+        "--prefix",
+        default="grid-signals/backups",
+        help="S3 key prefix (default: grid-signals/backups)",
+    )
+
+    agent_cmd = sub.add_parser(
+        "agent", help="Ask the energy intelligence agent a question"
+    )
     agent_cmd.add_argument("question", help="Question to ask the agent")
     agent_cmd.add_argument(
         "--model",
@@ -84,13 +131,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     # prices
     q_prices = query_sub.add_parser("prices", help="Day-ahead electricity prices")
-    q_prices.add_argument("zone", help="Bidding zone (EE, LV, LT, FI, SE1-SE4, NO1-NO5, DK1, DK2)")
+    q_prices.add_argument(
+        "zone", help="Bidding zone (EE, LV, LT, FI, SE1-SE4, NO1-NO5, DK1, DK2)"
+    )
     q_prices.add_argument("start_date", help="Start date (YYYY-MM-DD), inclusive")
     q_prices.add_argument("end_date", help="End date (YYYY-MM-DD), exclusive")
 
     # generation
     q_gen = query_sub.add_parser("generation", help="Generation mix by fuel type")
-    q_gen.add_argument("zone", help="Bidding zone (EE, LV, LT, FI, SE1-SE4, NO1-NO5, DK1, DK2)")
+    q_gen.add_argument(
+        "zone", help="Bidding zone (EE, LV, LT, FI, SE1-SE4, NO1-NO5, DK1, DK2)"
+    )
     q_gen.add_argument("start_date", help="Start date (YYYY-MM-DD), inclusive")
     q_gen.add_argument("end_date", help="End date (YYYY-MM-DD), exclusive")
     q_gen.add_argument("--fuel-type", default=None, help="Filter by fuel type")
@@ -105,10 +156,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     # outages
     q_outages = query_sub.add_parser("outages", help="REMIT outage messages")
-    q_outages.add_argument("zone", help="Bidding zone (EE, LV, LT, FI, SE1-SE4, NO1-NO5, DK1, DK2)")
+    q_outages.add_argument(
+        "zone", help="Bidding zone (EE, LV, LT, FI, SE1-SE4, NO1-NO5, DK1, DK2)"
+    )
     q_outages.add_argument("--fuel-type", default=None, help="Filter by fuel type")
     q_outages.add_argument(
-        "--active-at", default=None, help="Find outages active at this time (YYYY-MM-DD or ISO datetime)"
+        "--active-at",
+        default=None,
+        help="Find outages active at this time (YYYY-MM-DD or ISO datetime)",
     )
 
     # flows
@@ -120,7 +175,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     # load
     q_load = query_sub.add_parser("load", help="Load forecast summary")
-    q_load.add_argument("zone", help="Bidding zone (EE, LV, LT, FI, SE1-SE4, NO1-NO5, DK1, DK2)")
+    q_load.add_argument(
+        "zone", help="Bidding zone (EE, LV, LT, FI, SE1-SE4, NO1-NO5, DK1, DK2)"
+    )
     q_load.add_argument("start_date", help="Start date (YYYY-MM-DD), inclusive")
     q_load.add_argument("end_date", help="End date (YYYY-MM-DD), exclusive")
 
@@ -133,20 +190,37 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     # similar-days
     q_similar = query_sub.add_parser(
-        "similar-days", help="Find historical days with similar weather and their prices"
+        "similar-days",
+        help="Find historical days with similar weather and their prices",
     )
     q_similar.add_argument("zone", help="Bidding zone for price data")
     q_similar.add_argument("location", help="Weather location name")
-    q_similar.add_argument("--wind", type=float, required=True, help="Target wind speed (m/s)")
-    q_similar.add_argument("--temp", type=float, required=True, help="Target temperature (°C)")
-    q_similar.add_argument("--wind-tolerance", type=float, default=2.0, help="Wind tolerance (m/s, default: 2.0)")
-    q_similar.add_argument("--temp-tolerance", type=float, default=3.0, help="Temp tolerance (°C, default: 3.0)")
-    q_similar.add_argument("--limit", type=int, default=10, help="Max results (default: 10)")
+    q_similar.add_argument(
+        "--wind", type=float, required=True, help="Target wind speed (m/s)"
+    )
+    q_similar.add_argument(
+        "--temp", type=float, required=True, help="Target temperature (°C)"
+    )
+    q_similar.add_argument(
+        "--wind-tolerance",
+        type=float,
+        default=2.0,
+        help="Wind tolerance (m/s, default: 2.0)",
+    )
+    q_similar.add_argument(
+        "--temp-tolerance",
+        type=float,
+        default=3.0,
+        help="Temp tolerance (°C, default: 3.0)",
+    )
+    q_similar.add_argument(
+        "--limit", type=int, default=10, help="Max results (default: 10)"
+    )
 
     return parser.parse_args(argv)
 
 
-def _build_tool_input(args: argparse.Namespace) -> tuple[str, dict]:
+def _build_tool_input(args: argparse.Namespace) -> tuple[str, dict]:  # noqa: PLR0911
     """Map parsed query subcommand args to (tool_name, tool_input) pair."""
     cmd = args.query_command
     if cmd == "prices":
@@ -207,23 +281,30 @@ def _build_tool_input(args: argparse.Namespace) -> tuple[str, dict]:
             "temp_tolerance_c": args.temp_tolerance,
             "limit": args.limit,
         }
-    raise ValueError(f"Unknown query command: {cmd!r}")
-
-
-def _configure_logging() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        datefmt="%Y-%m-%dT%H:%M:%S",
-    )
+    msg = f"Unknown query command: {cmd!r}"
+    raise ValueError(msg)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    _configure_logging()
+
+    json_log: bool | None = None
+    if args.json_log:
+        json_log = True
+    elif args.no_json_log:
+        json_log = False
+    configure_logging(json_output=json_log)
 
     db_path = Path(args.db)
 
+    try:
+        return _run_command(args, db_path)
+    except ConfigError as exc:
+        print(f"Configuration error: {exc}", file=sys.stderr)
+        return 1
+
+
+def _run_command(args: argparse.Namespace, db_path: Path) -> int:
     if args.command == "daily":
         from grid_signals.pipeline import run_daily
 
@@ -235,29 +316,41 @@ def main(argv: list[str] | None = None) -> int:
         run_weather(db_path)
 
     elif args.command == "backfill":
-        from grid_signals.pipeline import run_backfill
-
         start = datetime.strptime(args.start, "%Y-%m-%d").replace(tzinfo=UTC)
         end = datetime.strptime(args.end, "%Y-%m-%d").replace(tzinfo=UTC)
-        run_backfill(db_path, start, end)
+        if args.gaps_only:
+            from grid_signals.pipeline import run_backfill_gaps
+
+            run_backfill_gaps(db_path, start, end)
+        else:
+            from grid_signals.pipeline import run_backfill
+
+            run_backfill(db_path, start, end)
 
     elif args.command == "validate":
         from grid_signals.db.connection import get_connection
         from grid_signals.db.schema import create_tables
         from grid_signals.validation import run_all_validations
 
+        v_start = None
+        v_end = None
+        if args.start:
+            v_start = datetime.strptime(args.start, "%Y-%m-%d").replace(tzinfo=UTC)
+        if args.end:
+            v_end = datetime.strptime(args.end, "%Y-%m-%d").replace(tzinfo=UTC)
+
         con = get_connection(db_path)
         try:
             create_tables(con)
-            run_all_validations(con)
+            run_all_validations(con, start=v_start, end=v_end)
         finally:
             con.close()
 
     elif args.command == "ui":
-        import subprocess
+        import subprocess  # noqa: S404
 
         app_path = Path(__file__).parent / "app" / "main.py"
-        subprocess.run(
+        subprocess.run(  # noqa: S603
             ["streamlit", "run", str(app_path)],
             check=True,
         )
@@ -270,7 +363,7 @@ def main(argv: list[str] | None = None) -> int:
         con = get_connection(db_path)
         try:
             create_tables(con)
-            agent_kwargs: dict = dict(model=args.model)
+            agent_kwargs: dict = {"model": args.model}
             if args.max_turns is not None:
                 agent_kwargs["max_turns"] = args.max_turns
             result = run_agent(args.question, con, **agent_kwargs)
@@ -307,7 +400,9 @@ def main(argv: list[str] | None = None) -> int:
 
         target_date = None
         if args.date:
-            target_date = datetime.strptime(args.date, "%Y-%m-%d").date()
+            target_date = (
+                datetime.strptime(args.date, "%Y-%m-%d").replace(tzinfo=UTC).date()
+            )
 
         if args.no_save:
             output_dir = None
@@ -319,11 +414,11 @@ def main(argv: list[str] | None = None) -> int:
         con = get_connection(db_path)
         try:
             create_tables(con)
-            kwargs = dict(
-                target_date=target_date,
-                output_dir=output_dir,
-                model=args.model,
-            )
+            kwargs = {
+                "target_date": target_date,
+                "output_dir": output_dir,
+                "model": args.model,
+            }
             if args.max_turns is not None:
                 kwargs["max_turns"] = args.max_turns
             result = generate_briefing(con, **kwargs)
@@ -340,5 +435,27 @@ def main(argv: list[str] | None = None) -> int:
             )
         finally:
             con.close()
+
+    elif args.command == "health":
+        from grid_signals.db.connection import get_connection
+        from grid_signals.db.schema import create_tables
+        from grid_signals.health import check_data_freshness
+
+        con = get_connection(db_path, read_only=True)
+        try:
+            create_tables(con)
+            status = check_data_freshness(con, max_age_hours=args.max_age)
+            if not status.healthy:
+                print("UNHEALTHY: some tables have stale data", file=sys.stderr)
+                return 1
+            print("HEALTHY: all tables within freshness threshold")
+        finally:
+            con.close()
+
+    elif args.command == "backup":
+        from grid_signals.backup import backup_database
+
+        uri = backup_database(db_path, s3_bucket=args.bucket, prefix=args.prefix)
+        print(f"Backup uploaded: {uri}")
 
     return 0

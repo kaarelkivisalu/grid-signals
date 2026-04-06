@@ -1,34 +1,44 @@
 """Dashboard page — interactive data visualizations."""
 
-from datetime import date, timedelta
+from datetime import UTC, datetime, timedelta
 
 import duckdb
 import streamlit as st
 
 from grid_signals.app.charts import (
     cross_border_flows,
+    flow_map,
     generation_mix,
     hourly_prices,
     price_heatmap,
     wind_vs_price,
 )
-from grid_signals.db.connection import DEFAULT_DB_PATH
+from grid_signals.db.connection import get_read_connection
 
 st.set_page_config(page_title="Dashboard — Grid Signals", page_icon="⚡", layout="wide")
 st.title("Dashboard")
 
-ZONES = ["EE", "LV", "LT", "FI", "SE1", "SE2", "SE3", "SE4", "NO1", "NO2", "NO3", "NO4", "NO5", "DK1", "DK2"]
-INTERCONNECTORS = [
-    ("FI", "EE"),
-    ("EE", "LV"),
-    ("LV", "LT"),
-    ("SE4", "LT"),
-    ("NO1", "SE3"),
-    ("NO2", "DK1"),
-    ("DK1", "DK2"),
-    ("DK2", "SE4"),
-    ("NO4", "FI"),
+ZONES = [
+    "EE",
+    "LV",
+    "LT",
+    "FI",
+    "SE1",
+    "SE2",
+    "SE3",
+    "SE4",
+    "NO1",
+    "NO2",
+    "NO3",
+    "NO4",
+    "NO5",
+    "DK1",
+    "DK2",
 ]
+# Map display zone codes to DB (ENTSO-E) codes for cross-border flow queries.
+_ZONE_TO_DB: dict[str, str] = {
+    z: z if len(z) == 2 else f"{z[:2]}_{z[2:]}" for z in ZONES
+}
 WEATHER_LOCATIONS = [
     "EE_tallinn",
     "LV_riga",
@@ -52,27 +62,40 @@ WEATHER_LOCATIONS = [
 @st.cache_resource
 def get_dash_db() -> duckdb.DuckDBPyConnection:
     """Read-only DB connection for the dashboard."""
-    return duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
+    return get_read_connection()
 
 
-con = get_dash_db()
+try:
+    con = get_dash_db()
+except duckdb.IOException:
+    st.warning(
+        "Data ingestion is currently running. The dashboard will be available "
+        "once ingestion completes. Refresh the page to retry.",
+        icon="\u23f3",
+    )
+    st.stop()
 
 # --- Date range selector (shared) ---
 col1, col2 = st.columns(2)
 with col1:
-    start_date = st.date_input("Start date", value=date.today() - timedelta(days=7))
+    start_date = st.date_input(
+        "Start date", value=datetime.now(tz=UTC).date() - timedelta(days=7)
+    )
 with col2:
-    end_date = st.date_input("End date", value=date.today() + timedelta(days=1))
+    end_date = st.date_input(
+        "End date", value=datetime.now(tz=UTC).date() + timedelta(days=1)
+    )
 
 start_str = start_date.isoformat()
 end_str = end_date.isoformat()
 
 # --- Tabs for chart types ---
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
+tab1, tab2, tab3, tab_map, tab4, tab5 = st.tabs(
     [
         "Hourly Prices",
         "Generation Mix",
         "Cross-Border Flows",
+        "Flow Map",
         "Wind vs Price",
         "Price Heatmap",
     ]
@@ -90,16 +113,13 @@ with tab2:
     st.plotly_chart(fig, width="stretch")
 
 with tab3:
-    ic_labels = [f"{f} → {t}" for f, t in INTERCONNECTORS]
-    ic_idx = st.selectbox(
-        "Interconnector",
-        range(len(INTERCONNECTORS)),
-        format_func=lambda i: ic_labels[i],
-        key="ic_select",
-    )
-    f_zone, t_zone = INTERCONNECTORS[ic_idx]
-    fig = cross_border_flows(con, f_zone, t_zone, start_str, end_str)
+    flow_zone = st.selectbox("Zone", ZONES, key="flow_zone")
+    fig = cross_border_flows(con, _ZONE_TO_DB[flow_zone], start_str, end_str)
     st.plotly_chart(fig, width="stretch")
+
+with tab_map:
+    fig = flow_map(con, start_str, end_str)
+    st.plotly_chart(fig, use_container_width=True)
 
 with tab4:
     wcol1, wcol2 = st.columns(2)
@@ -112,7 +132,7 @@ with tab4:
 
 with tab5:
     hm_date = st.date_input(
-        "Date", value=date.today() - timedelta(days=1), key="hm_date"
+        "Date", value=datetime.now(tz=UTC).date() - timedelta(days=1), key="hm_date"
     )
     hm_zones = st.multiselect("Zones", ZONES, default=ZONES, key="hm_zones")
     if hm_zones:

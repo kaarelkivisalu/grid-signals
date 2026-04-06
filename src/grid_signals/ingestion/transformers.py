@@ -43,9 +43,7 @@ def transform_day_ahead_prices(
     return rows
 
 
-def transform_generation(
-    df: pd.DataFrame, zone: BiddingZone
-) -> list[GenerationByType]:
+def transform_generation(df: pd.DataFrame, zone: BiddingZone) -> list[GenerationByType]:
     """Convert entsoe-py generation DataFrame to GenerationByType models.
 
     Handles both MultiIndex columns (with "Actual Aggregated" / "Actual
@@ -59,7 +57,7 @@ def transform_generation(
         for col, value in row.items():
             if pd.isna(value):
                 continue
-            # MultiIndex: (fuel_type, aggregation_type)
+            # MultiIndex: (fuel_type, aggregation_type)  # noqa: ERA001
             if isinstance(col, tuple):
                 fuel_raw, agg_type = col
                 if agg_type != "Actual Aggregated":
@@ -79,7 +77,7 @@ def transform_generation(
 
 
 def transform_load(
-    df: pd.DataFrame, zone: BiddingZone, is_forecast: bool
+    df: pd.DataFrame, zone: BiddingZone, *, is_forecast: bool
 ) -> list[TotalLoad]:
     """Convert entsoe-py load DataFrame to TotalLoad models.
 
@@ -127,9 +125,7 @@ def transform_cross_border_flows(
     return rows
 
 
-def transform_outages(
-    df: pd.DataFrame, zone: BiddingZone
-) -> list[Outage]:
+def transform_outages(df: pd.DataFrame, zone: BiddingZone) -> list[Outage]:
     """Convert entsoe-py unavailability DataFrame to Outage models.
 
     Groups by mRID, takes the latest revision, filters cancelled events,
@@ -169,9 +165,7 @@ def transform_outages(
             Outage(
                 zone=zone,
                 asset_name=str(r.get("production_resource_name", "Unknown")),
-                fuel_type=normalize_fuel_type(
-                    str(r.get("production_type", "Other"))
-                ),
+                fuel_type=normalize_fuel_type(str(r.get("production_type", "Other"))),
                 outage_type=outage_type,
                 unavailable_mw=unavailable,
                 period_start=period_start,

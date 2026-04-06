@@ -1,0 +1,32 @@
+pull:
+  - prefect.deployments.steps.git_clone:
+      id: clone-step
+      repository: https://github.com/kaarelkivisalu/grid-signals.git
+      branch: main
+      access_token: "{{ prefect.blocks.secret.github-access-token }}"
+  - prefect.deployments.steps.set_working_directory:
+      directory: "{{ clone-step.directory }}"
+
+deployments:
+  - name: morning-pipeline
+    entrypoint: src/grid_signals/flows.py:morning_pipeline
+    work_pool:
+      name: grid-signals
+    schedule:
+      cron: "0 5 * * *"
+      timezone: "Europe/Tallinn"
+
+  - name: weather-update
+    entrypoint: src/grid_signals/flows.py:weather_update
+    work_pool:
+      name: grid-signals
+    schedule:
+      cron: "0 */6 * * *"
+      timezone: "UTC"
+
+  - name: initial-seed
+    entrypoint: src/grid_signals/flows.py:initial_seed
+    work_pool:
+      name: grid-signals
+    parameters:
+      days: 90

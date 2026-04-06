@@ -1,14 +1,19 @@
 """Orchestrator functions: fetch from Open-Meteo, transform, insert into DuckDB."""
 
-import logging
-import traceback
-from datetime import UTC, datetime
+from __future__ import annotations
 
-import duckdb
+import logging
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
+
 import httpx
 
+if TYPE_CHECKING:
+    import duckdb
+
+    from grid_signals.ingestion.locations import WeatherLocation
+
 from grid_signals.db.queries import insert_weather_forecasts
-from grid_signals.ingestion.locations import WeatherLocation
 from grid_signals.ingestion.weather_client import fetch_forecast, fetch_history
 from grid_signals.ingestion.weather_transformers import transform_weather_response
 
@@ -36,9 +41,7 @@ def ingest_weather_forecasts(
                 "weather_forecast: HTTP %d for %s", exc.response.status_code, loc.name
             )
         except Exception:
-            logger.error(
-                "weather_forecast: error for %s\n%s", loc.name, traceback.format_exc()
-            )
+            logger.exception("weather_forecast: error for %s", loc.name)
     return total
 
 
@@ -63,7 +66,5 @@ def ingest_weather_history(
                 "weather_history: HTTP %d for %s", exc.response.status_code, loc.name
             )
         except Exception:
-            logger.error(
-                "weather_history: error for %s\n%s", loc.name, traceback.format_exc()
-            )
+            logger.exception("weather_history: error for %s", loc.name)
     return total

@@ -1,6 +1,6 @@
 """Tests for the daily briefing generation module."""
 
-from datetime import date, datetime, timedelta, UTC
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import MagicMock
 
 import duckdb
@@ -16,7 +16,6 @@ from grid_signals.db.queries import insert_day_ahead_prices
 from grid_signals.db.schema import create_tables
 from grid_signals.models import BiddingZone, DayAheadPrice
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -28,15 +27,18 @@ def con():
     c = duckdb.connect(":memory:")
     create_tables(c)
     # Seed minimal price data so tools return something
-    insert_day_ahead_prices(c, [
-        DayAheadPrice(
-            zone=BiddingZone.EE,
-            period_start=datetime(2024, 6, 10, h, tzinfo=UTC),
-            period_end=datetime(2024, 6, 10, h, tzinfo=UTC) + timedelta(hours=1),
-            price_eur_mwh=45.0 + h,
-        )
-        for h in range(24)
-    ])
+    insert_day_ahead_prices(
+        c,
+        [
+            DayAheadPrice(
+                zone=BiddingZone.EE,
+                period_start=datetime(2024, 6, 10, h, tzinfo=UTC),
+                period_end=datetime(2024, 6, 10, h, tzinfo=UTC) + timedelta(hours=1),
+                price_eur_mwh=45.0 + h,
+            )
+            for h in range(24)
+        ],
+    )
     yield c
     c.close()
 
@@ -160,8 +162,8 @@ class TestGenerateBriefing:
             _mock_agent_run("briefing content"),
         )
         result = generate_briefing(con, output_dir=None)
-        from datetime import timezone
-        assert result.date == datetime.now(timezone.utc).date()
+
+        assert result.date == datetime.now(UTC).date()
 
     def test_passes_prompt_with_date(self, con, monkeypatch):
         mock_cls = _mock_agent_run("content")

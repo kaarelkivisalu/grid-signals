@@ -16,17 +16,15 @@ from grid_signals.ingestion.openmeteo import (
 from grid_signals.ingestion.weather_client import get_openmeteo_client
 
 __all__ = [
-    # ENTSO-E
+    "LOCATIONS",
+    "WeatherLocation",
     "get_entsoe_client",
+    "get_openmeteo_client",
     "ingest_cross_border_flows",
     "ingest_day_ahead_prices",
     "ingest_generation_per_type",
     "ingest_outages",
     "ingest_total_load",
-    # Open-Meteo
-    "get_openmeteo_client",
     "ingest_weather_forecasts",
     "ingest_weather_history",
-    "LOCATIONS",
-    "WeatherLocation",
 ]

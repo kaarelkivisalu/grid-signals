@@ -20,7 +20,9 @@ class GenerationByType(BaseModel):
     zone: BiddingZone
     period_start: datetime  # UTC, inclusive
     period_end: datetime  # UTC, exclusive
-    fuel_type: str  # e.g. "wind_onshore", "solar", "nuclear", "gas", "oil_shale", "hydro"
+    fuel_type: (
+        str  # e.g. "wind_onshore", "solar", "nuclear", "gas", "oil_shale", "hydro"
+    )
     generation_mw: float
 
 

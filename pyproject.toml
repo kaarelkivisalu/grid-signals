@@ -12,13 +12,17 @@ dependencies = [
     "pandas>=2.2, <3",
     "streamlit>=1.45, <2",
     "plotly>=6.0, <7",
+    "prefect>=3.0, <4",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=9, <10",
     "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
     "pandas-stubs>=2.2",
+    "ruff>=0.9",
+    "mypy>=1.14",
 ]
 
 [project.scripts]
@@ -28,6 +32,72 @@ grid-signals = "grid_signals.cli:main"
 requires = ["uv_build>=0.11.2, <0.12"]
 build-backend = "uv_build"
 
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["ALL"]
+preview = true
+ignore = [
+    "ANN001",
+    "ANN002",
+    "ANN003",
+    "ANN201",
+    "ANN202",
+    "C901",
+    "CPY001", # Missing copyright notice at top of file
+    "D100",   # Missing docstring in public module
+    "D101",   # Missing docstring in public class
+    "D102",   # Missing docstring in public method
+    "D103",   # Missing docstring in public function
+    "D104",   # Missing docstring in public package
+    "D107",   # Missing docstring in __init__
+    "DOC201",
+    "DOC402",
+    "DOC501",
+    "N999",
+    "PLC0415",
+    "PLR0912",
+    "PLR0913",
+    "PLR0914",
+    "PLR0915",
+    "PLR0917",
+    "PLR2004",
+    "PLR6301",
+    "RUF069",
+    "S607",
+    "S608",
+    "T201",
+
+    # https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules
+    "W191",   # tab-indentation
+    "E111",   # indentation-with-invalid-multiple
+    "E114",   # indentation-with-invalid-multiple-comment
+    "E117",   # over-indented
+    "D206",   # docstring-tab-indentation
+    "D300",   # triple-single-quotes
+    "Q000",   # bad-quotes-inline-string
+    "Q001",   # bad-quotes-multiline-string
+    "Q002",   # bad-quotes-docstring
+    "Q003",   # avoidable-escaped-quote
+    "Q004",   # unnecessary-escaped-quote
+    "COM812", # missing-trailing-comma
+    "COM819", # prohibited-trailing-comma
+    "E501",   # line-too-long
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+"scripts/**" = ["INP001"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.mypy]
+python_version = "3.12"

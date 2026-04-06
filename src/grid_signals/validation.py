@@ -1,7 +1,8 @@
 """Data quality checks for ingested energy and weather data."""
 
 import logging
-from datetime import UTC, datetime, timedelta
+from collections import defaultdict
+from datetime import UTC, date, datetime, timedelta
 
 import duckdb
 from pydantic import BaseModel
@@ -59,7 +60,9 @@ def validate_price_completeness(
         """,
         [zone.value, start, end],
     ).fetchone()
-    min_interval = interval_row[0] if interval_row and interval_row[0] is not None else 60
+    min_interval = (
+        interval_row[0] if interval_row and interval_row[0] is not None else 60
+    )
 
     if min_interval <= 15:
         resolution = "15min"
@@ -149,27 +152,180 @@ def validate_weather_freshness(
     ]
 
 
-def run_all_validations(con: duckdb.DuckDBPyConnection) -> list[ValidationResult]:
-    """Run all validation checks for yesterday's data across all zones/locations."""
-    yesterday = datetime.now(UTC).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    ) - timedelta(days=1)
+def run_all_validations(
+    con: duckdb.DuckDBPyConnection,
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> list[ValidationResult]:
+    """Run all validation checks across all zones/locations.
+
+    If *start*/*end* are omitted the check covers yesterday only.
+    When a range is given, price checks run for every day in [start, end).
+    Weather freshness is always checked once (it's point-in-time).
+    """
+    if start is None:
+        start = datetime.now(UTC).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        ) - timedelta(days=1)
+    if end is None:
+        end = start + timedelta(days=1)
 
     results: list[ValidationResult] = []
 
-    for zone in BiddingZone:
-        results.extend(validate_price_completeness(con, zone, yesterday))
-        results.extend(validate_price_bounds(con, zone, yesterday))
+    # Iterate over each day in the range
+    day = start
+    while day < end:
+        for zone in BiddingZone:
+            results.extend(validate_price_completeness(con, zone, day))
+            results.extend(validate_price_bounds(con, zone, day))
+        day += timedelta(days=1)
 
     for loc in LOCATIONS:
         results.extend(validate_weather_freshness(con, loc.name))
 
     passed = sum(1 for r in results if r.passed)
     failed = sum(1 for r in results if not r.passed)
-    logger.info("validation: %d passed, %d failed out of %d checks", passed, failed, len(results))
+    logger.info(
+        "validation: %d passed, %d failed out of %d checks",
+        passed,
+        failed,
+        len(results),
+    )
 
     for r in results:
         if not r.passed:
             logger.warning("FAIL %s: %s", r.check, r.detail)
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# Gap detection — find missing data across all tables
+# ---------------------------------------------------------------------------
+
+
+class DataGaps(BaseModel):
+    """Missing data detected across tables."""
+
+    prices: dict[str, list[date]]  # zone → missing dates
+    generation: dict[str, list[date]]
+    load: dict[str, list[date]]
+    flows: dict[str, list[date]]  # "FROM→TO" → missing dates
+
+    @property
+    def empty(self) -> bool:
+        return not (self.prices or self.generation or self.load or self.flows)
+
+    def summary(self) -> str:
+        lines: list[str] = []
+        for label, gaps in [
+            ("prices", self.prices),
+            ("generation", self.generation),
+            ("load", self.load),
+            ("flows", self.flows),
+        ]:
+            if gaps:
+                total_days = sum(len(d) for d in gaps.values())
+                lines.append(
+                    f"  {label}: {len(gaps)} zone(s), {total_days} missing day(s)"
+                )
+        if not lines:
+            return "No gaps found."
+        return "Gaps detected:\n" + "\n".join(lines)
+
+
+def _expected_dates(start: datetime, end: datetime) -> set[date]:
+    """Return the set of dates in [start, end)."""
+    dates: set[date] = set()
+    d = start.date() if isinstance(start, datetime) else start
+    end_d = end.date() if isinstance(end, datetime) else end
+    while d < end_d:
+        dates.add(d)
+        d += timedelta(days=1)
+    return dates
+
+
+def _find_zone_date_gaps(
+    con: duckdb.DuckDBPyConnection,
+    table: str,
+    zones: list[BiddingZone],
+    start: datetime,
+    end: datetime,
+) -> dict[str, list[date]]:
+    """Find (zone, date) pairs with zero rows in *table*."""
+    rows = con.execute(
+        f"""
+        SELECT zone, CAST(period_start AS DATE) AS d
+        FROM {table}
+        WHERE period_start >= ? AND period_start < ?
+        GROUP BY zone, d
+        """,
+        [start, end],
+    ).fetchall()
+
+    present: dict[str, set[date]] = defaultdict(set)
+    for zone_val, d in rows:
+        present[zone_val].add(d)
+
+    expected = _expected_dates(start, end)
+    gaps: dict[str, list[date]] = {}
+    for zone in zones:
+        missing = sorted(expected - present.get(zone.value, set()))
+        if missing:
+            gaps[zone.value] = missing
+    return gaps
+
+
+def _find_flow_gaps(
+    con: duckdb.DuckDBPyConnection,
+    borders: list[tuple[str, str]],
+    start: datetime,
+    end: datetime,
+) -> dict[str, list[date]]:
+    """Find (border, date) pairs with zero rows in cross_border_flows."""
+    rows = con.execute(
+        """
+        SELECT from_zone, to_zone, CAST(period_start AS DATE) AS d
+        FROM cross_border_flows
+        WHERE period_start >= ? AND period_start < ?
+        GROUP BY from_zone, to_zone, d
+        """,
+        [start, end],
+    ).fetchall()
+
+    present: dict[str, set[date]] = defaultdict(set)
+    for fz, tz, d in rows:
+        present[f"{fz}→{tz}"].add(d)
+
+    expected = _expected_dates(start, end)
+    gaps: dict[str, list[date]] = {}
+    for from_zone, to_zone in borders:
+        key = f"{from_zone}→{to_zone}"
+        missing = sorted(expected - present.get(key, set()))
+        if missing:
+            gaps[key] = missing
+    return gaps
+
+
+def find_gaps(
+    con: duckdb.DuckDBPyConnection,
+    start: datetime,
+    end: datetime,
+    borders: list[tuple[str, str]] | None = None,
+) -> DataGaps:
+    """Detect missing data across all tables for the given date range.
+
+    *borders* defaults to the full BORDERS list from ingestion.client.
+    """
+    if borders is None:
+        from grid_signals.ingestion.client import BORDERS
+
+        borders = BORDERS
+
+    zones = list(BiddingZone)
+    return DataGaps(
+        prices=_find_zone_date_gaps(con, "day_ahead_prices", zones, start, end),
+        generation=_find_zone_date_gaps(con, "generation_by_type", zones, start, end),
+        load=_find_zone_date_gaps(con, "total_load", zones, start, end),
+        flows=_find_flow_gaps(con, borders, start, end),
+    )
