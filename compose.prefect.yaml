@@ -21,7 +21,7 @@ services:
 
     prefect-worker:
         build: .
-        command: uv run prefect worker start --pool grid-signals
+        command: uv run --no-project prefect worker start --pool grid-signals
         depends_on:
             prefect-server:
                 condition: service_healthy
