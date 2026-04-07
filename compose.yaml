@@ -5,7 +5,13 @@ services:
         environment:
             ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
             CHAT_DAILY_LIMIT_USD: ${CHAT_DAILY_LIMIT_USD:-1.0}
-            DATABASE_URL: ${DATABASE_URL}
+            DATABASE_URL: postgresql://grid_signals:${POSTGRES_PASSWORD}@postgres/grid_signals
+        networks:
+            - grid-signals
         expose:
             - "8501"
         restart: unless-stopped
+
+networks:
+    grid-signals:
+        external: true

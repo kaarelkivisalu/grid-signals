@@ -12,6 +12,9 @@ services:
             interval: 10s
             timeout: 5s
             retries: 5
+        networks:
+            - default
+            - grid-signals
         restart: unless-stopped
 
     prefect-server:
@@ -54,6 +57,10 @@ services:
             AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-}
         restart: unless-stopped
         stop_grace_period: 120s
+
+networks:
+    grid-signals:
+        name: grid-signals
 
 volumes:
     prefect-data:
