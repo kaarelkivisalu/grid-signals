@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import (
-    Path,  # noqa: TC003 — Pydantic needs Path at runtime for flow parameter validation
+    Path,
 )
 
 from prefect import flow, task
@@ -13,6 +14,14 @@ from prefect import flow, task
 from grid_signals.db.connection import DEFAULT_DB_PATH
 
 logger = logging.getLogger(__name__)
+
+# The Prefect pull step clones the repo and os.chdir()s into the clone,
+# so relative paths resolve inside the ephemeral clone instead of the
+# persistent Docker volume mounts at /app/.  APP_DIR (set in Dockerfile)
+# anchors paths to the volume mount location regardless of CWD.
+_APP_DIR: Path | None = Path(d) if (d := os.environ.get("APP_DIR")) else None
+_RESOLVED_DB_PATH = _APP_DIR / DEFAULT_DB_PATH if _APP_DIR else DEFAULT_DB_PATH
+_RESOLVED_BRIEFINGS_DIR = _APP_DIR / "briefings" if _APP_DIR else None
 
 
 def _setup_library_logging() -> None:
@@ -33,7 +42,7 @@ def _setup_library_logging() -> None:
 
 
 @task(retries=2, retry_delay_seconds=60, timeout_seconds=600)
-def ingest_daily(db_path: Path = DEFAULT_DB_PATH) -> int:
+def ingest_daily(db_path: Path = _RESOLVED_DB_PATH) -> int:
     """Pull day-ahead prices, generation, load, outages, and flows."""
     from grid_signals.pipeline import run_daily
 
@@ -41,7 +50,7 @@ def ingest_daily(db_path: Path = DEFAULT_DB_PATH) -> int:
 
 
 @task(retries=2, retry_delay_seconds=30, timeout_seconds=300)
-def ingest_weather(db_path: Path = DEFAULT_DB_PATH) -> int:
+def ingest_weather(db_path: Path = _RESOLVED_DB_PATH) -> int:
     """Update 7-day weather forecasts for all locations."""
     from grid_signals.pipeline import run_weather
 
@@ -57,7 +66,7 @@ def backfill_gaps(db_path: Path, start: datetime, end: datetime) -> int:
 
 
 @task(timeout_seconds=120)
-def validate_data(db_path: Path = DEFAULT_DB_PATH) -> int:
+def validate_data(db_path: Path = _RESOLVED_DB_PATH) -> int:
     """Run all data quality checks. Returns number of failures."""
     from grid_signals.db.connection import get_connection
     from grid_signals.db.schema import create_tables
@@ -83,7 +92,7 @@ def backup_db(
 
 
 @task(timeout_seconds=60)
-def health_check(db_path: Path = DEFAULT_DB_PATH, max_age_hours: int = 26) -> bool:
+def health_check(db_path: Path = _RESOLVED_DB_PATH, max_age_hours: int = 26) -> bool:
     """Check data freshness. Returns True if healthy."""
     from grid_signals.db.connection import get_connection
     from grid_signals.health import check_data_freshness
@@ -97,7 +106,7 @@ def health_check(db_path: Path = DEFAULT_DB_PATH, max_age_hours: int = 26) -> bo
 
 
 @task(retries=1, retry_delay_seconds=30, timeout_seconds=600)
-def generate_briefing(db_path: Path = DEFAULT_DB_PATH) -> str:
+def generate_briefing(db_path: Path = _RESOLVED_DB_PATH) -> str:
     """Generate the morning briefing. Returns briefing content."""
     from grid_signals.briefing import generate_briefing as _generate
     from grid_signals.db.connection import get_connection
@@ -106,9 +115,10 @@ def generate_briefing(db_path: Path = DEFAULT_DB_PATH) -> str:
     con = get_connection(db_path)
     try:
         create_tables(con)
-        result = _generate(
-            con, validate_first=False
-        )  # validation runs as separate task
+        kwargs: dict = {"validate_first": False}
+        if _RESOLVED_BRIEFINGS_DIR is not None:
+            kwargs["output_dir"] = _RESOLVED_BRIEFINGS_DIR
+        result = _generate(con, **kwargs)  # validation runs as separate task
         return result.content
     finally:
         con.close()
@@ -121,15 +131,13 @@ def generate_briefing(db_path: Path = DEFAULT_DB_PATH) -> str:
 
 @flow(name="morning-pipeline", log_prints=True)
 def morning_pipeline(
-    db_path: Path = DEFAULT_DB_PATH,
+    db_path: Path = _RESOLVED_DB_PATH,
     s3_bucket: str | None = None,
 ) -> None:
     """Full morning pipeline: ingest → backfill → validate → briefing → backup → health.
 
     Tasks run sequentially because DuckDB has a single-writer lock.
     """
-    import os
-
     if s3_bucket is None:
         s3_bucket = os.environ.get("S3_BUCKET") or None
 
@@ -159,7 +167,7 @@ def morning_pipeline(
 
 
 @flow(name="weather-update", log_prints=True)
-def weather_update(db_path: Path = DEFAULT_DB_PATH) -> None:
+def weather_update(db_path: Path = _RESOLVED_DB_PATH) -> None:
     """Weather forecast update flow."""
     _setup_library_logging()
     rows = ingest_weather(db_path)
@@ -179,7 +187,7 @@ def backfill_chunk(
 
 @flow(name="initial-seed", log_prints=True, timeout_seconds=7200)
 def initial_seed(
-    db_path: Path = DEFAULT_DB_PATH,
+    db_path: Path = _RESOLVED_DB_PATH,
     days: int = 90,
 ) -> None:
     """One-time data seed: backfill historical data and weather, then validate.

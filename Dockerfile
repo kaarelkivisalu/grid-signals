@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends awscli git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+ENV APP_DIR=/app
 
 # Install dependencies first for layer caching
 COPY pyproject.toml uv.lock ./
