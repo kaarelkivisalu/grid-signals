@@ -13,7 +13,8 @@ ENV UV_PROJECT_ENVIRONMENT=/app/.venv
 
 # Install dependencies first for layer caching
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project \
+    && rm pyproject.toml uv.lock
 
 # prefect.yaml is needed by the worker; source code comes via git_clone pull step
 COPY prefect.yaml ./
