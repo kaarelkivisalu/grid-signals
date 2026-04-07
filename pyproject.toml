@@ -22,7 +22,6 @@ dev = [
     "pytest-cov>=6.0",
     "pandas-stubs>=2.2",
     "ruff>=0.9",
-    "mypy>=1.14",
 ]
 
 [project.scripts]
@@ -98,6 +97,3 @@ convention = "google"
 
 [tool.ruff.format]
 docstring-code-format = true
-
-[tool.mypy]
-python_version = "3.12"

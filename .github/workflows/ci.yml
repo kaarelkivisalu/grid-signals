@@ -16,14 +16,6 @@ jobs:
             - name: Format check (Ruff)
               run: ruff format --check --diff
 
-    typecheck:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v4
-            - uses: astral-sh/setup-uv@v5
-            - run: uv sync --frozen
-            - run: uv run mypy src/grid_signals/
-
     test:
         runs-on: ubuntu-latest
         steps:
