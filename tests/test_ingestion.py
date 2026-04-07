@@ -235,6 +235,16 @@ class TestTransformOutages:
         rows = transform_outages(df, BiddingZone.EE)
         assert rows == []
 
+    def test_nan_capacity_yields_zero(self):
+        """NaN nominal_power / available_capacity must not produce NaN unavailable_mw."""
+        df = self._make_outage_df()
+        df.loc[0, "nominal_power"] = np.nan
+        df.loc[0, "available_capacity"] = np.nan
+        rows = transform_outages(df, BiddingZone.FI)
+        for r in rows:
+            assert r.unavailable_mw == r.unavailable_mw  # NaN != NaN
+            assert not pd.isna(r.unavailable_mw)
+
 
 # ---------------------------------------------------------------------------
 # Client / mapping tests

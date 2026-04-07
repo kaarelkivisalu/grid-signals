@@ -149,8 +149,10 @@ def transform_outages(df: pd.DataFrame, zone: BiddingZone) -> list[Outage]:
         btype = str(r.get("businesstype", "")).lower()
         outage_type = "unplanned" if "unplanned" in btype else "planned"
 
-        nominal = float(r.get("nominal_power", 0) or 0)
-        available = float(r.get("available_capacity", 0) or 0)
+        raw_nominal = r.get("nominal_power", 0)
+        raw_available = r.get("available_capacity", 0)
+        nominal = 0.0 if pd.isna(raw_nominal) else float(raw_nominal)
+        available = 0.0 if pd.isna(raw_available) else float(raw_available)
         unavailable = nominal - available
 
         period_end = r.get("end")
