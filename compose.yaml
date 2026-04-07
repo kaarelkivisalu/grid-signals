@@ -5,15 +5,13 @@ services:
         environment:
             ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
             CHAT_DAILY_LIMIT_USD: ${CHAT_DAILY_LIMIT_USD:-1.0}
+            DATABASE_URL: ${DATABASE_URL}
         volumes:
-            - gridsignals_grid-data:/app/data:ro
             - gridsignals_grid-briefings:/app/briefings:ro
         expose:
             - "8501"
         restart: unless-stopped
 
 volumes:
-    gridsignals_grid-data:
-        external: true
     gridsignals_grid-briefings:
         external: true

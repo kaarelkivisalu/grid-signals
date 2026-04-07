@@ -12,7 +12,7 @@ from grid_signals.agent.prompt import SYSTEM_PROMPT
 from grid_signals.agent.tools import TOOLS, execute_tool
 
 if TYPE_CHECKING:
-    import duckdb
+    import psycopg
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ class Agent:
 
     def __init__(
         self,
-        con: duckdb.DuckDBPyConnection,
+        con: psycopg.Connection,
         *,
         client: anthropic.Anthropic | None = None,
         model: str = DEFAULT_MODEL,
@@ -185,7 +185,7 @@ def _extract_text(content: list) -> str:
 
 def run_agent(
     user_message: str,
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     *,
     model: str = DEFAULT_MODEL,
     max_turns: int = DEFAULT_MAX_TURNS,

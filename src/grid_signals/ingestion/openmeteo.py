@@ -1,4 +1,4 @@
-"""Orchestrator functions: fetch from Open-Meteo, transform, insert into DuckDB."""
+"""Orchestrator functions: fetch from Open-Meteo, transform, insert into PostgreSQL."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 import httpx
 
 if TYPE_CHECKING:
-    import duckdb
+    import psycopg
 
     from grid_signals.ingestion.locations import WeatherLocation
 
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def ingest_weather_forecasts(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     client: httpx.Client,
     locations: list[WeatherLocation],
     start: datetime,
@@ -46,7 +46,7 @@ def ingest_weather_forecasts(
 
 
 def ingest_weather_history(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     client: httpx.Client,
     locations: list[WeatherLocation],
     start: datetime,

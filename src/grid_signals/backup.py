@@ -1,42 +1,45 @@
-"""DuckDB backup: checkpoint and upload to S3."""
+"""PostgreSQL backup: pg_dump and upload to S3."""
 
 from __future__ import annotations
 
 import logging
 import subprocess  # noqa: S404
+import tempfile
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 
-import duckdb
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from grid_signals.config import get_database_url
 
 logger = logging.getLogger(__name__)
 
 
 def backup_database(
-    db_path: Path,
+    dsn: str | None = None,
+    *,
     s3_bucket: str,
     prefix: str = "grid-signals/backups",
 ) -> str:
-    """Checkpoint the DB and upload to S3 with a date-stamped key.
+    """Dump the database and upload to S3 with a date-stamped key.
 
     Returns the S3 URI of the uploaded backup.
     """
-    # Checkpoint to flush WAL to main DB file
-    con = duckdb.connect(str(db_path), read_only=False)
-    try:
-        con.execute("CHECKPOINT")
-    finally:
-        con.close()
+    if dsn is None:
+        dsn = get_database_url()
 
     today = datetime.now(tz=UTC).date().isoformat()
-    s3_uri = f"s3://{s3_bucket}/{prefix}/{today}.duckdb"
+    s3_uri = f"s3://{s3_bucket}/{prefix}/{today}.sql.gz"
+
+    with tempfile.NamedTemporaryFile(suffix=".sql.gz", delete=True) as tmp:
+        dump_path = tmp.name
+
+    logger.info("Dumping database to %s", dump_path)
+    subprocess.run(  # noqa: S603
+        ["pg_dump", "--format=custom", "-f", dump_path, dsn],
+        check=True,
+    )
 
     logger.info("Uploading backup to %s", s3_uri)
     subprocess.run(  # noqa: S603
-        ["aws", "s3", "cp", str(db_path), s3_uri],
+        ["aws", "s3", "cp", dump_path, s3_uri],
         check=True,
     )
     logger.info("Backup complete: %s", s3_uri)

@@ -1,6 +1,6 @@
 """Grid Signals — main Streamlit entry point."""
 
-import duckdb
+import psycopg
 import streamlit as st
 
 from grid_signals.db.connection import get_read_connection
@@ -15,8 +15,8 @@ st.set_page_config(
 
 
 @st.cache_resource
-def get_db() -> duckdb.DuckDBPyConnection:
-    """Open a read-only DuckDB connection, shared across all pages."""
+def get_db() -> psycopg.Connection:
+    """Open a read-only PostgreSQL connection, shared across all pages."""
     return get_read_connection()
 
 

@@ -5,7 +5,7 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
-import duckdb
+import psycopg
 import streamlit as st
 
 from grid_signals.agent.loop import Agent, AgentResult
@@ -48,7 +48,7 @@ if not os.environ.get("ANTHROPIC_API_KEY"):
 
 
 @st.cache_resource
-def get_chat_db() -> duckdb.DuckDBPyConnection:
+def get_chat_db() -> psycopg.Connection:
     """Read-only DB connection for the chat agent."""
     return get_read_connection()
 
@@ -84,14 +84,7 @@ if prompt := st.chat_input("Ask about Baltic-Nordic energy markets..."):
 
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            try:
-                con = get_chat_db()
-            except duckdb.IOException:
-                st.warning(
-                    "Data ingestion is currently running. Please try again shortly.",
-                    icon="\u23f3",
-                )
-                st.stop()
+            con = get_chat_db()
             agent = Agent(con)
             result: AgentResult = agent.run(
                 prompt,

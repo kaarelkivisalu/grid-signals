@@ -10,7 +10,6 @@ from datetime import UTC, date, datetime, timedelta
 from unittest.mock import MagicMock
 from zoneinfo import ZoneInfo
 
-import duckdb
 import pytest
 
 from grid_signals.briefing import generate_briefing
@@ -22,7 +21,6 @@ from grid_signals.db.queries import (
     insert_total_load,
     insert_weather_forecasts,
 )
-from grid_signals.db.schema import create_tables
 from grid_signals.models import (
     BiddingZone,
     CrossBorderFlow,
@@ -54,16 +52,13 @@ WIND_SPEED = 8.5
 
 
 @pytest.fixture
-def con():
-    """In-memory DuckDB seeded with known data for 2024-03-15."""
-    c = duckdb.connect(":memory:")
-    create_tables(c)
-    _seed_data(c)
-    yield c
-    c.close()
+def con(con):
+    """PostgreSQL connection seeded with known data for 2024-03-15."""
+    _seed_data(con)
+    return con
 
 
-def _seed_data(con: duckdb.DuckDBPyConnection) -> None:
+def _seed_data(con) -> None:
     day = datetime(2024, 3, 15, tzinfo=UTC)
 
     one_hour = timedelta(hours=1)

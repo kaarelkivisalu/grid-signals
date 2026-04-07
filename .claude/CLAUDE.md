@@ -10,13 +10,13 @@ See `ROADMAP.md` for the full project plan and future directions.
 
 ### Architecture
 
-- **Data ingestion:** ENTSO-E, Open-Meteo, Elering/Fingrid APIs → DuckDB
-- **LLM agent:** Claude API with tool use, queries DuckDB through structured tools
+- **Data ingestion:** ENTSO-E, Open-Meteo, Elering/Fingrid APIs → PostgreSQL
+- **LLM agent:** Claude API with tool use, queries PostgreSQL through structured tools
 - **Output:** Automated daily briefing (delivery channel TBD)
 
 ### Tech Stack
 
-- Python 3.12+, DuckDB, entsoe-py, Claude API, pytest, uv
+- Python 3.12+, PostgreSQL, psycopg3, entsoe-py, Claude API, pytest, uv
 
 ## Build & Test Commands
 
@@ -50,11 +50,10 @@ uv run grid-signals query similar-days EE EE_tallinn --wind 7.0 --temp -5.0
 
 - **Tables:** day_ahead_prices, generation_by_type, total_load, cross_border_flows, outages, weather_forecasts
 - All tables use `period_start`/`period_end` columns for time ranges
-- All inserts use upsert (`INSERT OR REPLACE`) for idempotency
+- All inserts use upsert (`ON CONFLICT ... DO UPDATE SET`) for idempotency
 
 ## Data Quirks
 
-- **DuckDB single-writer lock:** cannot run concurrent writes (e.g. daily + backfill simultaneously)
 - **15-min ISP transition (mid-2025):** some data is hourly, some 15-min. Validation detects resolution dynamically from `period_start` gaps (min_gap ≤ 15 → 15min mode)
 - **ENTSO-E rate limit:** 400 req/min. PL zone has the most generation data (~37K rows/month). Backfill in 30-day chunks works well
 - **Open-Meteo:** archive API for historical, forecast API for future; both free, no key needed
@@ -62,8 +61,9 @@ uv run grid-signals query similar-days EE EE_tallinn --wind 7.0 --temp -5.0
 
 ## Testing
 
-- Tests use in-memory DuckDB with mocked external clients
+- Tests use PostgreSQL via testcontainers (requires Docker) with mocked external clients
 - E2E briefing test mocks Anthropic client but uses real DB tool execution
+- Session-scoped container fixture shared across all tests; tables dropped/recreated per test
 
 ## Workflow
 

@@ -2,8 +2,8 @@ FROM python:3.12-slim
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# AWS CLI for S3 backups
-RUN apt-get update && apt-get install -y --no-install-recommends awscli git \
+# AWS CLI for S3 backups, postgresql-client for pg_dump
+RUN apt-get update && apt-get install -y --no-install-recommends awscli git postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -20,7 +20,7 @@ COPY src/ src/
 COPY prefect.yaml ./
 RUN uv sync --frozen --no-dev
 
-# Create data and briefings directories for volume mounts
-RUN mkdir -p data briefings
+# Create briefings directory for volume mount
+RUN mkdir -p briefings
 
 CMD ["uv", "run", "prefect", "worker", "start", "--pool", "grid-signals"]

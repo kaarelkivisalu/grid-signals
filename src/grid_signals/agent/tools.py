@@ -23,7 +23,7 @@ from grid_signals.ingestion.client import _EXTERNAL_LINKS, ZONE_TO_ENTSOE  # noq
 from grid_signals.models import BiddingZone  # noqa: E402
 
 if TYPE_CHECKING:
-    import duckdb
+    import psycopg
 
 # Reverse map: ENTSO-E code → BiddingZone value (for "outside" detection).
 _ENTSOE_TO_ZONE = {v: k.value for k, v in ZONE_TO_ENTSOE.items()}
@@ -541,7 +541,7 @@ def _summarize_load(rows: list) -> list[dict]:
 
 
 def _calculate_spread(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     zone_1: str,
     zone_2: str,
     start: datetime,
@@ -589,7 +589,7 @@ def _calculate_spread(
 
 
 def _get_historical_similar_days(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     zone: str,
     location: str,
     target_wind_ms: float,
@@ -606,7 +606,7 @@ def _get_historical_similar_days(
                 avg(wind_speed_100m_ms) AS avg_wind,
                 avg(temperature_c) AS avg_temp
             FROM weather_forecasts
-            WHERE location_name = ?
+            WHERE location_name = %s
               AND wind_speed_100m_ms IS NOT NULL
               AND temperature_c IS NOT NULL
             GROUP BY date_trunc('day', period_start)
@@ -614,8 +614,8 @@ def _get_historical_similar_days(
         similar_days AS (
             SELECT day, avg_wind, avg_temp
             FROM daily_weather
-            WHERE abs(avg_wind - ?) <= ?
-              AND abs(avg_temp - ?) <= ?
+            WHERE abs(avg_wind - %s) <= %s
+              AND abs(avg_temp - %s) <= %s
         ),
         daily_prices AS (
             SELECT
@@ -624,7 +624,7 @@ def _get_historical_similar_days(
                 min(price_eur_mwh) AS min_price,
                 max(price_eur_mwh) AS max_price
             FROM day_ahead_prices
-            WHERE zone = ?
+            WHERE zone = %s
             GROUP BY date_trunc('day', period_start)
         )
         SELECT
@@ -633,7 +633,7 @@ def _get_historical_similar_days(
         FROM similar_days s
         JOIN daily_prices p ON s.day = p.day
         ORDER BY s.day DESC
-        LIMIT ?
+        LIMIT %s
         """,
         [
             location,
@@ -678,7 +678,7 @@ def _get_historical_similar_days(
 def execute_tool(
     name: str,
     tool_input: dict,
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
 ) -> str:
     """Execute an agent tool call and return a JSON string result.
 
@@ -695,7 +695,7 @@ def execute_tool(
 def _dispatch(  # noqa: PLR0911
     name: str,
     tool_input: dict,
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
 ) -> object:
     if name == "get_day_ahead_prices":
         rows = get_day_ahead_prices(

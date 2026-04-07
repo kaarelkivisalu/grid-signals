@@ -3,7 +3,7 @@
 import logging
 from datetime import UTC, datetime, timedelta
 
-import duckdb
+import psycopg
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ class HealthStatus(BaseModel):
 
 
 def check_data_freshness(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     max_age_hours: int = 26,
 ) -> HealthStatus:
     """Verify that the latest data in each core table is within max_age_hours.

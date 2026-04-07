@@ -4,17 +4,16 @@ import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-import duckdb
 import pandas as pd
+import psycopg
 from entsoe.exceptions import NoMatchingDataError
 
-from grid_signals.db.connection import DEFAULT_DB_PATH, get_connection
+from grid_signals.db.connection import get_connection
 from grid_signals.db.queries import (
     insert_cross_border_flows,
     insert_day_ahead_prices,
@@ -58,7 +57,7 @@ _ENTSOE_MAX_WORKERS = 8
 
 
 def _parallel_entsoe_ingest(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     zones: list[BiddingZone],
     borders: list[tuple[str, str]],
     start: pd.Timestamp,
@@ -179,23 +178,18 @@ def _parallel_entsoe_ingest(
         "ENTSO-E fetch complete: %d/%d tasks returned data", len(results), num_tasks
     )
 
-    # Phase 2: write sequentially in a single transaction (avoids per-insert checkpoint)
+    # Phase 2: write sequentially in a single transaction
     total = 0
-    con.execute("BEGIN TRANSACTION")
-    try:
+    with con.transaction():
         for i, (label, insert_fn, rows) in enumerate(results, 1):
             count = insert_fn(con, rows)
             total += count
             logger.info("[%d/%d] %s: inserted %d rows", i, len(results), label, count)
-        con.execute("COMMIT")
-    except Exception:
-        con.execute("ROLLBACK")
-        raise
     logger.info("ENTSO-E insert complete: %d total rows", total)
     return total
 
 
-def run_daily(db_path: Path = DEFAULT_DB_PATH) -> int:
+def run_daily(dsn: str | None = None) -> int:
     """Run daily ENTSO-E ingestion (yesterday 00:00 UTC to tomorrow 00:00 UTC).
 
     Covers both day-ahead data and actuals for the previous day.
@@ -207,7 +201,7 @@ def run_daily(db_path: Path = DEFAULT_DB_PATH) -> int:
 
     zones = list(BiddingZone)
 
-    con = get_connection(db_path)
+    con = get_connection(dsn)
     try:
         create_tables(con)
         total = _parallel_entsoe_ingest(con, zones, BORDERS, start_ts, end_ts)
@@ -217,7 +211,7 @@ def run_daily(db_path: Path = DEFAULT_DB_PATH) -> int:
         con.close()
 
 
-def run_weather(db_path: Path = DEFAULT_DB_PATH) -> int:
+def run_weather(dsn: str | None = None) -> int:
     """Run weather forecast ingestion (today to today + 7 days).
 
     Returns total rows inserted.
@@ -226,7 +220,7 @@ def run_weather(db_path: Path = DEFAULT_DB_PATH) -> int:
     start = today
     end = today + timedelta(days=7)
 
-    con = get_connection(db_path)
+    con = get_connection(dsn)
     try:
         create_tables(con)
         client = get_openmeteo_client()
@@ -239,7 +233,7 @@ def run_weather(db_path: Path = DEFAULT_DB_PATH) -> int:
 
 
 def run_backfill(
-    db_path: Path = DEFAULT_DB_PATH,
+    dsn: str | None = None,
     start: datetime | None = None,
     end: datetime | None = None,
 ) -> int:
@@ -255,7 +249,7 @@ def run_backfill(
     end_ts = pd.Timestamp(end)
     zones = list(BiddingZone)
 
-    con = get_connection(db_path)
+    con = get_connection(dsn)
     try:
         create_tables(con)
         total = 0
@@ -295,7 +289,7 @@ def _date_ranges(dates: list[date]) -> list[tuple[date, date]]:
 
 
 def run_backfill_gaps(
-    db_path: Path = DEFAULT_DB_PATH,
+    dsn: str | None = None,
     start: datetime | None = None,
     end: datetime | None = None,
 ) -> int:
@@ -309,7 +303,7 @@ def run_backfill_gaps(
 
     from grid_signals.validation import find_gaps
 
-    con = get_connection(db_path)
+    con = get_connection(dsn)
     try:
         create_tables(con)
 
@@ -433,7 +427,7 @@ def run_backfill_gaps(
 
 
 def _find_weather_gaps(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     start: datetime,
     end: datetime,
 ) -> dict[str, list[date]]:
@@ -446,7 +440,7 @@ def _find_weather_gaps(
         """
         SELECT location_name, CAST(period_start AS DATE) AS d
         FROM weather_forecasts
-        WHERE period_start >= ? AND period_start < ?
+        WHERE period_start >= %s AND period_start < %s
         GROUP BY location_name, d
         """,
         [start, end],

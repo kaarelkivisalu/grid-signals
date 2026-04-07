@@ -2,18 +2,16 @@
 
 - Transformer tests: pure functions, no mocks
 - Client tests: verify URL/params construction
-- Integration tests: mocked HTTP + in-memory DuckDB
+- Integration tests: mocked HTTP + PostgreSQL
 """
 
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
-import duckdb
 import httpx
 import pytest
 
 from grid_signals.db.queries import get_weather_forecasts
-from grid_signals.db.schema import create_tables
 from grid_signals.ingestion.locations import LOCATIONS, WeatherLocation
 from grid_signals.ingestion.openmeteo import (
     ingest_weather_forecasts,
@@ -32,15 +30,6 @@ from grid_signals.ingestion.weather_transformers import transform_weather_respon
 # ---------------------------------------------------------------------------
 
 SAMPLE_LOCATION = WeatherLocation("TEST_loc", 56.0, 14.0)
-
-
-@pytest.fixture
-def con():
-    """In-memory DuckDB with all tables created."""
-    c = duckdb.connect(":memory:")
-    create_tables(c)
-    yield c
-    c.close()
 
 
 def _make_openmeteo_response(hours: int = 24) -> dict:
@@ -199,7 +188,7 @@ class TestFetchHistory:
 
 
 # ---------------------------------------------------------------------------
-# Integration tests (mocked fetch + in-memory DuckDB)
+# Integration tests (mocked fetch + PostgreSQL)
 # ---------------------------------------------------------------------------
 
 

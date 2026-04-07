@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import anthropic
-    import duckdb
+    import psycopg
 
 from grid_signals.agent.loop import DEFAULT_MAX_TURNS, DEFAULT_MODEL, Agent, AgentResult
 
@@ -78,7 +78,7 @@ def build_briefing_prompt(target_date: date) -> str:
 
 
 def generate_briefing(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     *,
     target_date: date | None = None,
     output_dir: Path | None = DEFAULT_OUTPUT_DIR,
@@ -90,7 +90,7 @@ def generate_briefing(
     """Generate a daily briefing by running the agent with a structured prompt.
 
     Args:
-        con: DuckDB connection with energy data.
+        con: PostgreSQL connection with energy data.
         target_date: Date to generate the briefing for (defaults to today UTC).
         output_dir: Directory to save the Markdown file. None to skip saving.
         model: Claude model to use.

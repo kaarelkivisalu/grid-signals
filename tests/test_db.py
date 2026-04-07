@@ -2,9 +2,6 @@
 
 from datetime import UTC, datetime, timedelta
 
-import duckdb
-import pytest
-
 from grid_signals.db.queries import (
     get_cross_border_flows,
     get_day_ahead_prices,
@@ -33,15 +30,6 @@ from grid_signals.models import (
 _1H = timedelta(hours=1)
 
 
-@pytest.fixture
-def con():
-    """In-memory DuckDB with all tables created."""
-    c = duckdb.connect(":memory:")
-    create_tables(c)
-    yield c
-    c.close()
-
-
 # ---- schema ----
 
 
@@ -54,7 +42,7 @@ def test_all_tables_exist(con):
     tables = {
         r[0]
         for r in con.execute(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema='main'"
+            "SELECT table_name FROM information_schema.tables WHERE table_schema='public'"
         ).fetchall()
     }
     expected = {

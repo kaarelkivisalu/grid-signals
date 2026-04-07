@@ -1,4 +1,4 @@
-"""Orchestrator functions: fetch from ENTSO-E, transform, insert into DuckDB.
+"""Orchestrator functions: fetch from ENTSO-E, transform, insert into PostgreSQL.
 
 The ``fetch_*`` functions handle API calls and transformation only (no DB
 writes) so they can be called from multiple threads.  The ``ingest_*``
@@ -34,8 +34,8 @@ from grid_signals.ingestion.transformers import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    import duckdb
     import pandas as pd
+    import psycopg
     from entsoe import EntsoePandasClient
 
     from grid_signals.ingestion.rate_limiter import RateLimiter
@@ -76,7 +76,7 @@ def _retry_on_server_error[T](fn: Callable[..., T], *args, **kwargs) -> T:
 
 
 def ingest_day_ahead_prices(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     client: EntsoePandasClient,
     zones: list[BiddingZone],
     start: pd.Timestamp,
@@ -103,7 +103,7 @@ def ingest_day_ahead_prices(
 
 
 def ingest_generation_per_type(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     client: EntsoePandasClient,
     zones: list[BiddingZone],
     start: pd.Timestamp,
@@ -130,7 +130,7 @@ def ingest_generation_per_type(
 
 
 def ingest_total_load(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     client: EntsoePandasClient,
     zones: list[BiddingZone],
     start: pd.Timestamp,
@@ -174,7 +174,7 @@ def ingest_total_load(
 
 
 def ingest_cross_border_flows(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     client: EntsoePandasClient,
     borders: list[tuple[str, str]],
     start: pd.Timestamp,
@@ -205,7 +205,7 @@ def ingest_cross_border_flows(
 
 
 def ingest_outages(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     client: EntsoePandasClient,
     zones: list[BiddingZone],
     start: pd.Timestamp,

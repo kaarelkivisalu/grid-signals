@@ -6,7 +6,7 @@ Nordic-Baltic Energy Intelligence Agent: automated market analysis powered by st
 
 ## MVP — Completed ✅
 
-Milestones 1–3, 5–8 are done: project setup, DuckDB schemas, ENTSO-E ingestion, Open-Meteo weather, scheduling/CLI, LLM agent with tool use, daily briefing generation, testing & docs.
+Milestones 1–3, 5–8 are done: project setup, PostgreSQL schemas (migrated from DuckDB), ENTSO-E ingestion, Open-Meteo weather, scheduling/CLI, LLM agent with tool use, daily briefing generation, testing & docs.
 
 ### Milestone 4: Data Ingestion — Baltic/Nordic System Data
 
@@ -81,7 +81,7 @@ Generate weekly/monthly PDF reports suitable for distribution within a trading o
 - [x] Structured logging (JSON format) — stdlib JSONFormatter, auto-detect TTY
 - [x] Failure alerting: Prefect automations (configurable via Prefect UI)
 - [x] Daily health check: verify all jobs ran, latest `period_start` is within 26h
-- [x] Automated daily DuckDB backup to S3 (30-day retention via S3 lifecycle policy)
+- [x] Automated daily PostgreSQL backup (pg_dump) to S3 (30-day retention via S3 lifecycle policy)
 - [x] Add timeouts to ENTSO-E (60s) and Anthropic (120s) API calls
 - [x] Validate environment variables at startup with clear error messages
 - [x] Run validation *before* briefing generation so bad data doesn't produce a bad briefing

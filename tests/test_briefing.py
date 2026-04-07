@@ -3,7 +3,6 @@
 from datetime import UTC, date, datetime, timedelta
 from unittest.mock import MagicMock
 
-import duckdb
 import pytest
 
 from grid_signals.agent.loop import AgentResult
@@ -13,7 +12,6 @@ from grid_signals.briefing import (
     generate_briefing,
 )
 from grid_signals.db.queries import insert_day_ahead_prices
-from grid_signals.db.schema import create_tables
 from grid_signals.models import BiddingZone, DayAheadPrice
 
 # ---------------------------------------------------------------------------
@@ -22,13 +20,10 @@ from grid_signals.models import BiddingZone, DayAheadPrice
 
 
 @pytest.fixture
-def con():
-    """In-memory DuckDB with tables and minimal seed data."""
-    c = duckdb.connect(":memory:")
-    create_tables(c)
-    # Seed minimal price data so tools return something
+def con(con):
+    """PostgreSQL connection seeded with minimal price data."""
     insert_day_ahead_prices(
-        c,
+        con,
         [
             DayAheadPrice(
                 zone=BiddingZone.EE,
@@ -39,8 +34,7 @@ def con():
             for h in range(24)
         ],
     )
-    yield c
-    c.close()
+    return con
 
 
 # ---------------------------------------------------------------------------
