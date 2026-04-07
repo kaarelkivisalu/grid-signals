@@ -179,12 +179,18 @@ def _parallel_entsoe_ingest(
         "ENTSO-E fetch complete: %d/%d tasks returned data", len(results), num_tasks
     )
 
-    # Phase 2: write sequentially (DuckDB single-writer lock)
+    # Phase 2: write sequentially in a single transaction (avoids per-insert checkpoint)
     total = 0
-    for i, (label, insert_fn, rows) in enumerate(results, 1):
-        count = insert_fn(con, rows)
-        total += count
-        logger.info("[%d/%d] %s: inserted %d rows", i, len(results), label, count)
+    con.execute("BEGIN TRANSACTION")
+    try:
+        for i, (label, insert_fn, rows) in enumerate(results, 1):
+            count = insert_fn(con, rows)
+            total += count
+            logger.info("[%d/%d] %s: inserted %d rows", i, len(results), label, count)
+        con.execute("COMMIT")
+    except Exception:
+        con.execute("ROLLBACK")
+        raise
     logger.info("ENTSO-E insert complete: %d total rows", total)
     return total
 
