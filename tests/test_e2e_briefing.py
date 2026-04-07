@@ -1,6 +1,6 @@
 """End-to-end test: seed DB → run briefing generation → verify output.
 
-Seeds DuckDB with known data, mocks the Anthropic API to make tool calls
+Seeds PostgreSQL with known data, mocks the Anthropic API to make tool calls
 that hit the real database, and verifies the final briefing output
 references correct numbers from the seed data.
 """
@@ -246,7 +246,7 @@ interconnector capacity.
 class TestEndToEndBriefing:
     """Full pipeline: seed DB → agent with tool calls → verify output."""
 
-    def test_briefing_references_correct_data(self, con, tmp_path):
+    def test_briefing_references_correct_data(self, con):
         """The agent makes tool calls against real DB data and produces a briefing.
 
         Verifies that the briefing references the correct numbers.
@@ -321,7 +321,6 @@ class TestEndToEndBriefing:
         result = generate_briefing(
             con,
             target_date=TARGET_DATE,
-            output_dir=tmp_path,
             model="test-model",
             client=mock_client,
         )
@@ -344,11 +343,12 @@ class TestEndToEndBriefing:
         # Wind
         assert str(WIND_SPEED) in result.content
 
-        # --- Verify file output ---
-        output_file = tmp_path / "2024-03-15.md"
-        assert output_file.exists()
-        file_content = output_file.read_text(encoding="utf-8")
-        assert file_content == result.content
+        # --- Verify DB storage ---
+        from grid_signals.db.queries import get_briefing
+
+        row = get_briefing(con, TARGET_DATE)
+        assert row is not None
+        assert row[0] == result.content
 
         # --- Verify tool call records ---
         assert len(result.agent_result.tool_calls) == 5
@@ -380,7 +380,7 @@ class TestEndToEndBriefing:
         assert len(outage_data) == 1
         assert outage_data[0]["asset_name"] == OUTAGE_ASSET
 
-    def test_briefing_sections_present(self, con, tmp_path):
+    def test_briefing_sections_present(self, con):
         """Verify the briefing contains all required sections."""
         mock_client = MagicMock()
 
@@ -393,7 +393,6 @@ class TestEndToEndBriefing:
         result = generate_briefing(
             con,
             target_date=TARGET_DATE,
-            output_dir=tmp_path,
             model="test-model",
             client=mock_client,
         )

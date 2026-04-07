@@ -11,7 +11,7 @@ from grid_signals.briefing import (
     build_briefing_prompt,
     generate_briefing,
 )
-from grid_signals.db.queries import insert_day_ahead_prices
+from grid_signals.db.queries import get_briefing, insert_day_ahead_prices
 from grid_signals.models import BiddingZone, DayAheadPrice
 
 # ---------------------------------------------------------------------------
@@ -113,49 +113,50 @@ class TestGenerateBriefing:
         result = generate_briefing(
             con,
             target_date=date(2024, 6, 10),
-            output_dir=None,
         )
         assert isinstance(result, BriefingResult)
         assert result.content == SAMPLE_BRIEFING
         assert result.date == date(2024, 6, 10)
-        assert result.output_path is None
         assert result.agent_result.input_tokens == 100
 
-    def test_saves_markdown_file(self, con, tmp_path, monkeypatch):
+    def test_saves_to_database(self, con, monkeypatch):
         monkeypatch.setattr(
             "grid_signals.briefing.Agent",
             _mock_agent_run(SAMPLE_BRIEFING),
         )
-        result = generate_briefing(
+        generate_briefing(
             con,
             target_date=date(2024, 6, 10),
-            output_dir=tmp_path,
         )
-        assert result.output_path is not None
-        assert result.output_path.exists()
-        assert result.output_path.name == "2024-06-10.md"
-        assert result.output_path.read_text(encoding="utf-8") == SAMPLE_BRIEFING
+        row = get_briefing(con, date(2024, 6, 10))
+        assert row is not None
+        content, created_at = row
+        assert content == SAMPLE_BRIEFING
+        assert created_at is not None
 
-    def test_creates_output_dir(self, con, tmp_path, monkeypatch):
+    def test_upsert_overwrites(self, con, monkeypatch):
         monkeypatch.setattr(
             "grid_signals.briefing.Agent",
-            _mock_agent_run(SAMPLE_BRIEFING),
+            _mock_agent_run("first version"),
         )
-        nested = tmp_path / "sub" / "briefings"
-        result = generate_briefing(
-            con,
-            target_date=date(2024, 6, 10),
-            output_dir=nested,
+        generate_briefing(con, target_date=date(2024, 6, 10))
+
+        monkeypatch.setattr(
+            "grid_signals.briefing.Agent",
+            _mock_agent_run("second version"),
         )
-        assert nested.exists()
-        assert result.output_path.parent == nested
+        generate_briefing(con, target_date=date(2024, 6, 10))
+
+        row = get_briefing(con, date(2024, 6, 10))
+        assert row is not None
+        assert row[0] == "second version"
 
     def test_defaults_to_today(self, con, monkeypatch):
         monkeypatch.setattr(
             "grid_signals.briefing.Agent",
             _mock_agent_run("briefing content"),
         )
-        result = generate_briefing(con, output_dir=None)
+        result = generate_briefing(con)
 
         assert result.date == datetime.now(UTC).date()
 
@@ -166,7 +167,6 @@ class TestGenerateBriefing:
         generate_briefing(
             con,
             target_date=date(2024, 6, 10),
-            output_dir=None,
         )
 
         # Check that run() was called with a prompt containing the date

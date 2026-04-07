@@ -100,17 +100,6 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Date to generate briefing for (YYYY-MM-DD, default: today)",
     )
     briefing_cmd.add_argument(
-        "--output",
-        default=None,
-        help="Output directory for Markdown file (default: briefings/)",
-    )
-    briefing_cmd.add_argument(
-        "--no-save",
-        action="store_true",
-        default=False,
-        help="Do not save the briefing to a file",
-    )
-    briefing_cmd.add_argument(
         "--model",
         default="claude-haiku-4-5",
         help="Claude model to use (default: claude-haiku-4-5)",
@@ -393,7 +382,7 @@ def _run_command(args: argparse.Namespace, dsn: str | None) -> int:
             con.close()
 
     elif args.command == "briefing":
-        from grid_signals.briefing import DEFAULT_OUTPUT_DIR, generate_briefing
+        from grid_signals.briefing import generate_briefing
         from grid_signals.db.connection import get_connection
         from grid_signals.db.schema import create_tables
 
@@ -403,19 +392,11 @@ def _run_command(args: argparse.Namespace, dsn: str | None) -> int:
                 datetime.strptime(args.date, "%Y-%m-%d").replace(tzinfo=UTC).date()
             )
 
-        if args.no_save:
-            output_dir = None
-        elif args.output:
-            output_dir = Path(args.output)
-        else:
-            output_dir = DEFAULT_OUTPUT_DIR
-
         con = get_connection(dsn)
         try:
             create_tables(con)
             kwargs = {
                 "target_date": target_date,
-                "output_dir": output_dir,
                 "model": args.model,
             }
             if args.max_turns is not None:
@@ -423,8 +404,6 @@ def _run_command(args: argparse.Namespace, dsn: str | None) -> int:
             result = generate_briefing(con, **kwargs)
             print(result.content)
             logger = logging.getLogger(__name__)
-            if result.output_path:
-                logger.info("Briefing saved to %s", result.output_path)
             logger.info(
                 "tokens: %d in / %d out, tool calls: %d, cost: $%.4f",
                 result.agent_result.input_tokens,

@@ -33,6 +33,7 @@ def con(pg_container):
         DROP TABLE IF EXISTS cross_border_flows CASCADE;
         DROP TABLE IF EXISTS outages CASCADE;
         DROP TABLE IF EXISTS weather_forecasts CASCADE;
+        DROP TABLE IF EXISTS briefings CASCADE;
     """)
     create_tables(conn)
     yield conn

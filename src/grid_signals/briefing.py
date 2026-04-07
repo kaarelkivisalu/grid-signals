@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -56,8 +55,6 @@ tool call. If data is unavailable for a section, note that briefly and \
 move on.
 """
 
-DEFAULT_OUTPUT_DIR = Path("briefings")
-
 
 @dataclass
 class BriefingResult:
@@ -65,7 +62,6 @@ class BriefingResult:
 
     content: str
     date: date
-    output_path: Path | None
     agent_result: AgentResult
 
 
@@ -81,7 +77,6 @@ def generate_briefing(
     con: psycopg.Connection,
     *,
     target_date: date | None = None,
-    output_dir: Path | None = DEFAULT_OUTPUT_DIR,
     model: str = DEFAULT_MODEL,
     max_turns: int = DEFAULT_MAX_TURNS,
     client: anthropic.Anthropic | None = None,
@@ -89,10 +84,11 @@ def generate_briefing(
 ) -> BriefingResult:
     """Generate a daily briefing by running the agent with a structured prompt.
 
+    The briefing is saved to the ``briefings`` table in PostgreSQL.
+
     Args:
         con: PostgreSQL connection with energy data.
         target_date: Date to generate the briefing for (defaults to today UTC).
-        output_dir: Directory to save the Markdown file. None to skip saving.
         model: Claude model to use.
         max_turns: Maximum agent turns.
         client: Anthropic client (optional, for testing).
@@ -130,22 +126,23 @@ def generate_briefing(
         agent_result.estimated_cost_usd,
     )
 
-    output_path = None
-    if output_dir is not None:
-        output_path = _save_briefing(agent_result.content, target_date, output_dir)
+    # Persist to database
+    from grid_signals.db.queries import upsert_briefing
+
+    upsert_briefing(
+        con,
+        briefing_date=target_date,
+        content=agent_result.content,
+        model=model,
+        input_tokens=agent_result.input_tokens,
+        output_tokens=agent_result.output_tokens,
+        tool_calls=len(agent_result.tool_calls),
+        cost_usd=agent_result.estimated_cost_usd,
+    )
+    logger.info("Briefing saved to database for %s", target_date.isoformat())
 
     return BriefingResult(
         content=agent_result.content,
         date=target_date,
-        output_path=output_path,
         agent_result=agent_result,
     )
-
-
-def _save_briefing(content: str, target_date: date, output_dir: Path) -> Path:
-    """Save briefing content to a Markdown file."""
-    output_dir.mkdir(parents=True, exist_ok=True)
-    path = output_dir / f"{target_date.isoformat()}.md"
-    path.write_text(content, encoding="utf-8")
-    logger.info("Briefing saved to %s", path)
-    return path

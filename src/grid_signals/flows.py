@@ -12,10 +12,6 @@ logger = logging.getLogger(__name__)
 
 # DATABASE_URL is passed via environment; no file path needed.
 _DSN: str | None = os.environ.get("DATABASE_URL")
-_APP_DIR_STR: str | None = os.environ.get("APP_DIR")
-_RESOLVED_BRIEFINGS_DIR = (
-    __import__("pathlib").Path(_APP_DIR_STR) / "briefings" if _APP_DIR_STR else None
-)
 
 
 def _setup_library_logging() -> None:
@@ -109,10 +105,9 @@ def generate_briefing(dsn: str | None = _DSN) -> str:
     con = get_connection(dsn)
     try:
         create_tables(con)
-        kwargs: dict = {"validate_first": False}
-        if _RESOLVED_BRIEFINGS_DIR is not None:
-            kwargs["output_dir"] = _RESOLVED_BRIEFINGS_DIR
-        result = _generate(con, **kwargs)  # validation runs as separate task
+        result = _generate(
+            con, validate_first=False
+        )  # validation runs as separate task
         return result.content
     finally:
         con.close()

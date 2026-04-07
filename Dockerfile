@@ -20,7 +20,4 @@ COPY src/ src/
 COPY prefect.yaml ./
 RUN uv sync --frozen --no-dev
 
-# Create briefings directory for volume mount
-RUN mkdir -p briefings
-
 CMD ["uv", "run", "prefect", "worker", "start", "--pool", "grid-signals"]

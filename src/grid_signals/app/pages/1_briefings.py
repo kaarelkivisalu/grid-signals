@@ -1,32 +1,27 @@
 """Briefing viewer page."""
 
-from pathlib import Path
-
 import streamlit as st
 
-from grid_signals.briefing import DEFAULT_OUTPUT_DIR
+from grid_signals.app.main import get_db
+from grid_signals.db.queries import get_briefing, list_briefing_dates
 
 st.set_page_config(page_title="Briefings — Grid Signals", page_icon="⚡", layout="wide")
 st.title("Daily Briefings")
 
+con = get_db()
+dates = list_briefing_dates(con)
 
-def _list_briefings(directory: Path) -> list[Path]:
-    """List briefing markdown files sorted by date descending."""
-    if not directory.exists():
-        return []
-    return sorted(directory.glob("*.md"), reverse=True)
-
-
-briefings = _list_briefings(DEFAULT_OUTPUT_DIR)
-
-if not briefings:
-    st.info(
-        "No briefings found. Generate one with `uv run python -m grid_signals briefing`."
-    )
+if not dates:
+    st.info("No briefings found. Generate one with `uv run grid-signals briefing`.")
 else:
-    labels = [p.stem for p in briefings]
+    labels = [d.isoformat() for d in dates]
     selected = st.selectbox("Select date", labels, index=0)
     if selected:
-        path = DEFAULT_OUTPUT_DIR / f"{selected}.md"
-        content = path.read_text(encoding="utf-8")
-        st.markdown(content)
+        from datetime import date
+
+        briefing_date = date.fromisoformat(selected)
+        result = get_briefing(con, briefing_date)
+        if result:
+            content, created_at = result
+            st.caption(f"Generated at {created_at:%Y-%m-%d %H:%M} UTC")
+            st.markdown(content)

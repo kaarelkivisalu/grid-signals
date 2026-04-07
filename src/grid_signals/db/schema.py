@@ -58,6 +58,19 @@ DDL_STATEMENTS: list[str] = [
         period_end     TIMESTAMPTZ
     )
     """,
+    # --- briefings ---
+    """
+    CREATE TABLE IF NOT EXISTS briefings (
+        briefing_date DATE PRIMARY KEY,
+        content       TEXT NOT NULL,
+        model         VARCHAR NOT NULL,
+        input_tokens  INTEGER NOT NULL,
+        output_tokens INTEGER NOT NULL,
+        tool_calls    INTEGER NOT NULL,
+        cost_usd      DOUBLE PRECISION NOT NULL,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+    """,
     # --- weather ---
     """
     CREATE TABLE IF NOT EXISTS weather_forecasts (

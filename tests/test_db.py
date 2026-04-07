@@ -1,8 +1,9 @@
 """Tests for DB schema creation and data access layer."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from grid_signals.db.queries import (
+    get_briefing,
     get_cross_border_flows,
     get_day_ahead_prices,
     get_generation_mix,
@@ -15,6 +16,8 @@ from grid_signals.db.queries import (
     insert_outages,
     insert_total_load,
     insert_weather_forecasts,
+    list_briefing_dates,
+    upsert_briefing,
 )
 from grid_signals.db.schema import create_tables
 from grid_signals.models import (
@@ -52,6 +55,7 @@ def test_all_tables_exist(con):
         "cross_border_flows",
         "outages",
         "weather_forecasts",
+        "briefings",
     }
     assert expected <= tables
 
@@ -360,6 +364,74 @@ def test_weather_returns_latest_forecast(con):
     )
     assert len(result) == 1
     assert result[0].wind_speed_100m_ms == 7.2
+
+
+# ---- briefings ----
+
+
+def test_upsert_and_get_briefing(con):
+    upsert_briefing(
+        con,
+        briefing_date=date(2024, 6, 10),
+        content="## Key Signal\nTest briefing content.",
+        model="claude-haiku-4-5",
+        input_tokens=100,
+        output_tokens=200,
+        tool_calls=5,
+        cost_usd=0.0012,
+    )
+    result = get_briefing(con, date(2024, 6, 10))
+    assert result is not None
+    content, created_at = result
+    assert content == "## Key Signal\nTest briefing content."
+    assert created_at is not None
+
+
+def test_upsert_briefing_overwrites(con):
+    upsert_briefing(
+        con,
+        briefing_date=date(2024, 6, 10),
+        content="first",
+        model="claude-haiku-4-5",
+        input_tokens=100,
+        output_tokens=200,
+        tool_calls=5,
+        cost_usd=0.001,
+    )
+    upsert_briefing(
+        con,
+        briefing_date=date(2024, 6, 10),
+        content="second",
+        model="claude-haiku-4-5",
+        input_tokens=150,
+        output_tokens=250,
+        tool_calls=7,
+        cost_usd=0.002,
+    )
+    result = get_briefing(con, date(2024, 6, 10))
+    assert result is not None
+    assert result[0] == "second"
+
+
+def test_get_briefing_missing(con):
+    result = get_briefing(con, date(2099, 1, 1))
+    assert result is None
+
+
+def test_list_briefing_dates(con):
+    for d in [date(2024, 6, 10), date(2024, 6, 12), date(2024, 6, 11)]:
+        upsert_briefing(
+            con,
+            briefing_date=d,
+            content=f"briefing for {d}",
+            model="claude-haiku-4-5",
+            input_tokens=100,
+            output_tokens=200,
+            tool_calls=5,
+            cost_usd=0.001,
+        )
+    dates = list_briefing_dates(con)
+    assert dates == [date(2024, 6, 12), date(2024, 6, 11), date(2024, 6, 10)]
 
 
 # ---- empty inputs ----

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from datetime import datetime
+    from datetime import date, datetime
 
     import psycopg
 
@@ -406,3 +406,66 @@ def get_weather_forecasts(
         )
         for r in rows
     ]
+
+
+# ---------------------------------------------------------------------------
+# Briefings
+# ---------------------------------------------------------------------------
+
+
+def upsert_briefing(
+    con: psycopg.Connection,
+    briefing_date: date,
+    content: str,
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    tool_calls: int,
+    cost_usd: float,
+) -> None:
+    """Insert or update a briefing for a given date."""
+    con.execute(
+        """
+        INSERT INTO briefings (briefing_date, content, model, input_tokens, output_tokens,
+                               tool_calls, cost_usd)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (briefing_date) DO UPDATE SET
+            content = EXCLUDED.content,
+            model = EXCLUDED.model,
+            input_tokens = EXCLUDED.input_tokens,
+            output_tokens = EXCLUDED.output_tokens,
+            tool_calls = EXCLUDED.tool_calls,
+            cost_usd = EXCLUDED.cost_usd,
+            created_at = now()
+        """,
+        [
+            briefing_date,
+            content,
+            model,
+            input_tokens,
+            output_tokens,
+            tool_calls,
+            cost_usd,
+        ],
+    )
+
+
+def get_briefing(
+    con: psycopg.Connection, briefing_date: date
+) -> tuple[str, date] | None:
+    """Return (content, created_at) for a single date, or None."""
+    row = con.execute(
+        "SELECT content, created_at FROM briefings WHERE briefing_date = %s",
+        [briefing_date],
+    ).fetchone()
+    if row is None:
+        return None
+    return (row[0], row[1])
+
+
+def list_briefing_dates(con: psycopg.Connection) -> list[date]:
+    """Return all briefing dates, most recent first."""
+    rows = con.execute(
+        "SELECT briefing_date FROM briefings ORDER BY briefing_date DESC"
+    ).fetchall()
+    return [r[0] for r in rows]
