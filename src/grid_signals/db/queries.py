@@ -4,12 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pandas as pd
-
 if TYPE_CHECKING:
-    from datetime import datetime
+    from datetime import date, datetime
 
-    import duckdb
+    import psycopg
 
 from grid_signals.models import (
     BiddingZone,
@@ -21,32 +19,50 @@ from grid_signals.models import (
     WeatherForecast,
 )
 
+# Primary key columns per table — needed for ON CONFLICT upsert.
+_PK_COLUMNS: dict[str, list[str]] = {
+    "day_ahead_prices": ["zone", "period_start"],
+    "generation_by_type": ["zone", "period_start", "fuel_type"],
+    "total_load": ["zone", "period_start", "is_forecast"],
+    "cross_border_flows": ["from_zone", "to_zone", "period_start"],
+    "outages": ["message_id"],
+    "weather_forecasts": ["location_name", "period_start", "fetched_at"],
+}
+
 
 def _bulk_upsert(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     table: str,
     columns: list[str],
     data: list[tuple[Any, ...]],
 ) -> None:
-    """Insert data via DataFrame for DuckDB's vectorized bulk path.
-
-    ~900x faster than executemany for typical batch sizes (2-3k rows).
-    """
-    df = pd.DataFrame(data, columns=columns)  # noqa: F841 — referenced by name in SQL
+    """Insert data with ON CONFLICT upsert for idempotent writes."""
+    pk_cols = _PK_COLUMNS[table]
     cols = ", ".join(columns)
-    con.execute(
-        f"INSERT OR REPLACE INTO {table} ({cols}) SELECT {cols} FROM df",
-    )
+    placeholders = ", ".join(["%s"] * len(columns))
+    pk = ", ".join(pk_cols)
+    update_cols = [c for c in columns if c not in pk_cols]
+    if update_cols:
+        updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
+        sql = (
+            f"INSERT INTO {table} ({cols}) VALUES ({placeholders}) "
+            f"ON CONFLICT ({pk}) DO UPDATE SET {updates}"
+        )
+    else:
+        sql = (
+            f"INSERT INTO {table} ({cols}) VALUES ({placeholders}) "
+            f"ON CONFLICT ({pk}) DO NOTHING"
+        )
+    with con.cursor() as cur:
+        cur.executemany(sql, data)
 
 
 # ---------------------------------------------------------------------------
-# Inserts (upsert via INSERT OR REPLACE)
+# Inserts (upsert via ON CONFLICT)
 # ---------------------------------------------------------------------------
 
 
-def insert_day_ahead_prices(
-    con: duckdb.DuckDBPyConnection, rows: list[DayAheadPrice]
-) -> int:
+def insert_day_ahead_prices(con: psycopg.Connection, rows: list[DayAheadPrice]) -> int:
     if not rows:
         return 0
     _bulk_upsert(
@@ -59,7 +75,7 @@ def insert_day_ahead_prices(
 
 
 def insert_generation_by_type(
-    con: duckdb.DuckDBPyConnection, rows: list[GenerationByType]
+    con: psycopg.Connection, rows: list[GenerationByType]
 ) -> int:
     if not rows:
         return 0
@@ -75,7 +91,7 @@ def insert_generation_by_type(
     return len(rows)
 
 
-def insert_total_load(con: duckdb.DuckDBPyConnection, rows: list[TotalLoad]) -> int:
+def insert_total_load(con: psycopg.Connection, rows: list[TotalLoad]) -> int:
     if not rows:
         return 0
     _bulk_upsert(
@@ -91,7 +107,7 @@ def insert_total_load(con: duckdb.DuckDBPyConnection, rows: list[TotalLoad]) -> 
 
 
 def insert_cross_border_flows(
-    con: duckdb.DuckDBPyConnection, rows: list[CrossBorderFlow]
+    con: psycopg.Connection, rows: list[CrossBorderFlow]
 ) -> int:
     if not rows:
         return 0
@@ -107,7 +123,7 @@ def insert_cross_border_flows(
     return len(rows)
 
 
-def insert_outages(con: duckdb.DuckDBPyConnection, rows: list[Outage]) -> int:
+def insert_outages(con: psycopg.Connection, rows: list[Outage]) -> int:
     if not rows:
         return 0
     _bulk_upsert(
@@ -141,7 +157,7 @@ def insert_outages(con: duckdb.DuckDBPyConnection, rows: list[Outage]) -> int:
 
 
 def insert_weather_forecasts(
-    con: duckdb.DuckDBPyConnection, rows: list[WeatherForecast]
+    con: psycopg.Connection, rows: list[WeatherForecast]
 ) -> int:
     if not rows:
         return 0
@@ -183,7 +199,7 @@ def insert_weather_forecasts(
 
 
 def get_day_ahead_prices(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     zone: BiddingZone,
     start: datetime,
     end: datetime,
@@ -192,7 +208,7 @@ def get_day_ahead_prices(
         """
         SELECT zone, period_start, period_end, price_eur_mwh
         FROM day_ahead_prices
-        WHERE zone = ? AND period_start >= ? AND period_start < ?
+        WHERE zone = %s AND period_start >= %s AND period_start < %s
         ORDER BY period_start
         """,
         [zone, start, end],
@@ -204,7 +220,7 @@ def get_day_ahead_prices(
 
 
 def get_generation_mix(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     zone: BiddingZone,
     start: datetime,
     end: datetime,
@@ -215,7 +231,7 @@ def get_generation_mix(
             """
             SELECT zone, period_start, period_end, fuel_type, generation_mw
             FROM generation_by_type
-            WHERE zone = ? AND period_start >= ? AND period_start < ? AND fuel_type = ?
+            WHERE zone = %s AND period_start >= %s AND period_start < %s AND fuel_type = %s
             ORDER BY period_start, fuel_type
             """,
             [zone, start, end, fuel_type],
@@ -225,7 +241,7 @@ def get_generation_mix(
             """
             SELECT zone, period_start, period_end, fuel_type, generation_mw
             FROM generation_by_type
-            WHERE zone = ? AND period_start >= ? AND period_start < ?
+            WHERE zone = %s AND period_start >= %s AND period_start < %s
             ORDER BY period_start, fuel_type
             """,
             [zone, start, end],
@@ -243,7 +259,7 @@ def get_generation_mix(
 
 
 def get_total_load(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     zone: BiddingZone,
     start: datetime,
     end: datetime,
@@ -255,7 +271,7 @@ def get_total_load(
             """
             SELECT zone, period_start, period_end, load_mw, is_forecast
             FROM total_load
-            WHERE zone = ? AND period_start >= ? AND period_start < ? AND is_forecast = true
+            WHERE zone = %s AND period_start >= %s AND period_start < %s AND is_forecast = true
             ORDER BY period_start
             """,
             [zone, start, end],
@@ -265,7 +281,7 @@ def get_total_load(
             """
             SELECT zone, period_start, period_end, load_mw, is_forecast
             FROM total_load
-            WHERE zone = ? AND period_start >= ? AND period_start < ?
+            WHERE zone = %s AND period_start >= %s AND period_start < %s
             ORDER BY period_start
             """,
             [zone, start, end],
@@ -283,7 +299,7 @@ def get_total_load(
 
 
 def get_cross_border_flows(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     from_zone: str,
     to_zone: str,
     start: datetime,
@@ -293,7 +309,7 @@ def get_cross_border_flows(
         """
         SELECT from_zone, to_zone, period_start, period_end, flow_mw
         FROM cross_border_flows
-        WHERE from_zone = ? AND to_zone = ? AND period_start >= ? AND period_start < ?
+        WHERE from_zone = %s AND to_zone = %s AND period_start >= %s AND period_start < %s
         ORDER BY period_start
         """,
         [from_zone, to_zone, start, end],
@@ -311,19 +327,19 @@ def get_cross_border_flows(
 
 
 def get_outages(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     zone: BiddingZone,
     fuel_type: str | None = None,
     active_at: datetime | None = None,
 ) -> list[Outage]:
-    conditions = ["zone = ?"]
+    conditions = ["zone = %s"]
     params: list[object] = [zone]
     if fuel_type:
-        conditions.append("fuel_type = ?")
+        conditions.append("fuel_type = %s")
         params.append(fuel_type)
     if active_at:
         conditions.extend(
-            ["period_start <= ?", "(period_end IS NULL OR period_end >= ?)"]
+            ["period_start <= %s", "(period_end IS NULL OR period_end >= %s)"]
         )
         params.extend((active_at, active_at))
     where = " AND ".join(conditions)
@@ -353,7 +369,7 @@ def get_outages(
 
 
 def get_weather_forecasts(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     location_name: str,
     start: datetime,
     end: datetime,
@@ -363,11 +379,15 @@ def get_weather_forecasts(
         """
         SELECT location_name, latitude, longitude, period_start, period_end, fetched_at,
                wind_speed_100m_ms, solar_irradiance_wm2, temperature_c
-        FROM weather_forecasts
-        WHERE location_name = ? AND period_start >= ? AND period_start < ?
-        QUALIFY ROW_NUMBER() OVER (
-            PARTITION BY location_name, period_start ORDER BY fetched_at DESC
-        ) = 1
+        FROM (
+            SELECT *,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY location_name, period_start ORDER BY fetched_at DESC
+                   ) AS rn
+            FROM weather_forecasts
+            WHERE location_name = %s AND period_start >= %s AND period_start < %s
+        ) t
+        WHERE rn = 1
         ORDER BY period_start
         """,
         [location_name, start, end],
@@ -386,3 +406,66 @@ def get_weather_forecasts(
         )
         for r in rows
     ]
+
+
+# ---------------------------------------------------------------------------
+# Briefings
+# ---------------------------------------------------------------------------
+
+
+def upsert_briefing(
+    con: psycopg.Connection,
+    briefing_date: date,
+    content: str,
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    tool_calls: int,
+    cost_usd: float,
+) -> None:
+    """Insert or update a briefing for a given date."""
+    con.execute(
+        """
+        INSERT INTO briefings (briefing_date, content, model, input_tokens, output_tokens,
+                               tool_calls, cost_usd)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (briefing_date) DO UPDATE SET
+            content = EXCLUDED.content,
+            model = EXCLUDED.model,
+            input_tokens = EXCLUDED.input_tokens,
+            output_tokens = EXCLUDED.output_tokens,
+            tool_calls = EXCLUDED.tool_calls,
+            cost_usd = EXCLUDED.cost_usd,
+            created_at = now()
+        """,
+        [
+            briefing_date,
+            content,
+            model,
+            input_tokens,
+            output_tokens,
+            tool_calls,
+            cost_usd,
+        ],
+    )
+
+
+def get_briefing(
+    con: psycopg.Connection, briefing_date: date
+) -> tuple[str, date] | None:
+    """Return (content, created_at) for a single date, or None."""
+    row = con.execute(
+        "SELECT content, created_at FROM briefings WHERE briefing_date = %s",
+        [briefing_date],
+    ).fetchone()
+    if row is None:
+        return None
+    return (row[0], row[1])
+
+
+def list_briefing_dates(con: psycopg.Connection) -> list[date]:
+    """Return all briefing dates, most recent first."""
+    rows = con.execute(
+        "SELECT briefing_date FROM briefings ORDER BY briefing_date DESC"
+    ).fetchall()
+    return [r[0] for r in rows]

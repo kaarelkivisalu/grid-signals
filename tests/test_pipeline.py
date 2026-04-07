@@ -1,19 +1,16 @@
 """Tests for the pipeline orchestration and validation modules.
 
-- Validation tests: pure in-memory DuckDB, no mocks
+- Validation tests: PostgreSQL via testcontainers, no mocks
 - Pipeline integration tests: mocked external clients
 """
 
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-import duckdb
 import httpx
 import pandas as pd
-import pytest
 
 from grid_signals.db.queries import insert_day_ahead_prices, insert_weather_forecasts
-from grid_signals.db.schema import create_tables
 from grid_signals.models import BiddingZone, DayAheadPrice, WeatherForecast
 from grid_signals.validation import (
     validate_price_bounds,
@@ -23,20 +20,6 @@ from grid_signals.validation import (
 
 _1H = timedelta(hours=1)
 _15M = timedelta(minutes=15)
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def con():
-    """In-memory DuckDB with all tables created."""
-    c = duckdb.connect(":memory:")
-    create_tables(c)
-    yield c
-    c.close()
 
 
 # ---------------------------------------------------------------------------
@@ -250,17 +233,14 @@ class TestWeatherFreshness:
 
 
 # ---------------------------------------------------------------------------
-# Pipeline integration: run_daily (mocked ENTSO-E)
+# Pipeline integration: run_daily (mocked ENTSO-E + DB connection)
 # ---------------------------------------------------------------------------
 
 
 class TestRunDaily:
     @patch("grid_signals.pipeline.get_entsoe_client")
     @patch("grid_signals.pipeline.get_connection")
-    def test_run_daily(self, mock_get_con, mock_get_client):
-        # Set up in-memory DB
-        con = duckdb.connect(":memory:")
-        create_tables(con)
+    def test_run_daily(self, mock_get_con, mock_get_client, con):
         mock_get_con.return_value = con
 
         # Mock ENTSO-E client: return valid data for prices, empty for rest
@@ -323,9 +303,7 @@ class TestRunWeather:
     @patch("grid_signals.pipeline.get_openmeteo_client")
     @patch("grid_signals.pipeline.get_connection")
     @patch("grid_signals.ingestion.openmeteo.fetch_forecast")
-    def test_run_weather(self, mock_fetch, mock_get_con, mock_get_client):
-        con = duckdb.connect(":memory:")
-        create_tables(con)
+    def test_run_weather(self, mock_fetch, mock_get_con, mock_get_client, con):
         mock_get_con.return_value = con
         mock_get_client.return_value = MagicMock(spec=httpx.Client)
 
@@ -393,11 +371,8 @@ class TestRateLimiter:
 
 class TestParallelIngest:
     @patch("grid_signals.pipeline.get_entsoe_client")
-    def test_parallel_entsoe_ingest(self, mock_get_client):
+    def test_parallel_entsoe_ingest(self, mock_get_client, con):
         """Parallel ingest fetches in threads and writes sequentially."""
-        con = duckdb.connect(":memory:")
-        create_tables(con)
-
         client = MagicMock()
         mock_get_client.return_value = client
 
@@ -448,4 +423,3 @@ class TestParallelIngest:
             end,
         )
         assert total > 0
-        con.close()

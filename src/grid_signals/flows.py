@@ -5,23 +5,13 @@ from __future__ import annotations
 import logging
 import os
 from datetime import UTC, datetime, timedelta
-from pathlib import (
-    Path,
-)
 
 from prefect import flow, task
 
-from grid_signals.db.connection import DEFAULT_DB_PATH
-
 logger = logging.getLogger(__name__)
 
-# The Prefect pull step clones the repo and os.chdir()s into the clone,
-# so relative paths resolve inside the ephemeral clone instead of the
-# persistent Docker volume mounts at /app/.  APP_DIR (set in Dockerfile)
-# anchors paths to the volume mount location regardless of CWD.
-_APP_DIR: Path | None = Path(d) if (d := os.environ.get("APP_DIR")) else None
-_RESOLVED_DB_PATH = _APP_DIR / DEFAULT_DB_PATH if _APP_DIR else DEFAULT_DB_PATH
-_RESOLVED_BRIEFINGS_DIR = _APP_DIR / "briefings" if _APP_DIR else None
+# DATABASE_URL is passed via environment; no file path needed.
+_DSN: str | None = os.environ.get("DATABASE_URL")
 
 
 def _setup_library_logging() -> None:
@@ -42,37 +32,37 @@ def _setup_library_logging() -> None:
 
 
 @task(retries=2, retry_delay_seconds=60, timeout_seconds=600)
-def ingest_daily(db_path: Path = _RESOLVED_DB_PATH) -> int:
+def ingest_daily(dsn: str | None = _DSN) -> int:
     """Pull day-ahead prices, generation, load, outages, and flows."""
     from grid_signals.pipeline import run_daily
 
-    return run_daily(db_path)
+    return run_daily(dsn)
 
 
 @task(retries=2, retry_delay_seconds=30, timeout_seconds=300)
-def ingest_weather(db_path: Path = _RESOLVED_DB_PATH) -> int:
+def ingest_weather(dsn: str | None = _DSN) -> int:
     """Update 7-day weather forecasts for all locations."""
     from grid_signals.pipeline import run_weather
 
-    return run_weather(db_path)
+    return run_weather(dsn)
 
 
 @task(retries=1, retry_delay_seconds=60, timeout_seconds=600)
-def backfill_gaps(db_path: Path, start: datetime, end: datetime) -> int:
+def backfill_gaps(dsn: str | None, start: datetime, end: datetime) -> int:
     """Detect and fill missing data for the given date range."""
     from grid_signals.pipeline import run_backfill_gaps
 
-    return run_backfill_gaps(db_path, start, end)
+    return run_backfill_gaps(dsn, start, end)
 
 
 @task(timeout_seconds=120)
-def validate_data(db_path: Path = _RESOLVED_DB_PATH) -> int:
+def validate_data(dsn: str | None = _DSN) -> int:
     """Run all data quality checks. Returns number of failures."""
     from grid_signals.db.connection import get_connection
     from grid_signals.db.schema import create_tables
     from grid_signals.validation import run_all_validations
 
-    con = get_connection(db_path)
+    con = get_connection(dsn)
     try:
         create_tables(con)
         results = run_all_validations(con)
@@ -83,21 +73,21 @@ def validate_data(db_path: Path = _RESOLVED_DB_PATH) -> int:
 
 @task(retries=1, retry_delay_seconds=30, timeout_seconds=300)
 def backup_db(
-    db_path: Path, s3_bucket: str, prefix: str = "grid-signals/backups"
+    dsn: str | None, s3_bucket: str, prefix: str = "grid-signals/backups"
 ) -> str:
-    """Backup the DuckDB database to S3."""
+    """Backup the database to S3."""
     from grid_signals.backup import backup_database
 
-    return backup_database(db_path, s3_bucket=s3_bucket, prefix=prefix)
+    return backup_database(dsn, s3_bucket=s3_bucket, prefix=prefix)
 
 
 @task(timeout_seconds=60)
-def health_check(db_path: Path = _RESOLVED_DB_PATH, max_age_hours: int = 26) -> bool:
+def health_check(dsn: str | None = _DSN, max_age_hours: int = 26) -> bool:
     """Check data freshness. Returns True if healthy."""
     from grid_signals.db.connection import get_connection
     from grid_signals.health import check_data_freshness
 
-    con = get_connection(db_path, read_only=True)
+    con = get_connection(dsn, read_only=True)
     try:
         status = check_data_freshness(con, max_age_hours=max_age_hours)
         return status.healthy
@@ -106,19 +96,18 @@ def health_check(db_path: Path = _RESOLVED_DB_PATH, max_age_hours: int = 26) -> 
 
 
 @task(retries=1, retry_delay_seconds=30, timeout_seconds=600)
-def generate_briefing(db_path: Path = _RESOLVED_DB_PATH) -> str:
+def generate_briefing(dsn: str | None = _DSN) -> str:
     """Generate the morning briefing. Returns briefing content."""
     from grid_signals.briefing import generate_briefing as _generate
     from grid_signals.db.connection import get_connection
     from grid_signals.db.schema import create_tables
 
-    con = get_connection(db_path)
+    con = get_connection(dsn)
     try:
         create_tables(con)
-        kwargs: dict = {"validate_first": False}
-        if _RESOLVED_BRIEFINGS_DIR is not None:
-            kwargs["output_dir"] = _RESOLVED_BRIEFINGS_DIR
-        result = _generate(con, **kwargs)  # validation runs as separate task
+        result = _generate(
+            con, validate_first=False
+        )  # validation runs as separate task
         return result.content
     finally:
         con.close()
@@ -131,63 +120,60 @@ def generate_briefing(db_path: Path = _RESOLVED_DB_PATH) -> str:
 
 @flow(name="morning-pipeline", log_prints=True)
 def morning_pipeline(
-    db_path: Path = _RESOLVED_DB_PATH,
+    dsn: str | None = _DSN,
     s3_bucket: str | None = None,
 ) -> None:
-    """Full morning pipeline: ingest → backfill → validate → briefing → backup → health.
-
-    Tasks run sequentially because DuckDB has a single-writer lock.
-    """
+    """Full morning pipeline: ingest → backfill → validate → briefing → backup → health."""
     if s3_bucket is None:
         s3_bucket = os.environ.get("S3_BUCKET") or None
 
     _setup_library_logging()
-    rows = ingest_daily(db_path)
+    rows = ingest_daily(dsn)
     logger.info("Daily ingestion: %d rows", rows)
 
     now = datetime.now(UTC)
     start = (now - timedelta(days=3)).replace(hour=0, minute=0, second=0, microsecond=0)
     end = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    gap_rows = backfill_gaps(db_path, start, end)
+    gap_rows = backfill_gaps(dsn, start, end)
     logger.info("Gap backfill: %d rows", gap_rows)
 
-    failures = validate_data(db_path)
+    failures = validate_data(dsn)
     if failures:
         logger.warning("Validation: %d failures", failures)
 
-    briefing = generate_briefing(db_path)
+    briefing = generate_briefing(dsn)
     logger.info("Briefing generated: %d chars", len(briefing))
 
     if s3_bucket:
-        backup_db(db_path, s3_bucket)
+        backup_db(dsn, s3_bucket)
 
-    healthy = health_check(db_path)
+    healthy = health_check(dsn)
     if not healthy:
         logger.warning("Health check: some tables have stale data")
 
 
 @flow(name="weather-update", log_prints=True)
-def weather_update(db_path: Path = _RESOLVED_DB_PATH) -> None:
+def weather_update(dsn: str | None = _DSN) -> None:
     """Weather forecast update flow."""
     _setup_library_logging()
-    rows = ingest_weather(db_path)
+    rows = ingest_weather(dsn)
     logger.info("Weather update: %d rows", rows)
 
 
 @task(retries=2, retry_delay_seconds=120, timeout_seconds=3600)
 def backfill_chunk(
-    db_path: Path, start: datetime, end: datetime, chunk_label: str
+    dsn: str | None, start: datetime, end: datetime, chunk_label: str
 ) -> int:
     """Backfill a single date range chunk."""
     from grid_signals.pipeline import run_backfill
 
     logger.info("Backfill chunk %s: %s → %s", chunk_label, start, end)
-    return run_backfill(db_path, start, end)
+    return run_backfill(dsn, start, end)
 
 
 @flow(name="initial-seed", log_prints=True, timeout_seconds=7200)
 def initial_seed(
-    db_path: Path = _RESOLVED_DB_PATH,
+    dsn: str | None = _DSN,
     days: int = 90,
 ) -> None:
     """One-time data seed: backfill historical data and weather, then validate.
@@ -202,14 +188,14 @@ def initial_seed(
     end = now + timedelta(days=1)
     start = now - timedelta(days=days)
 
-    # Split into 30-day chunks (sequential — DuckDB single-writer lock)
+    # Split into 30-day chunks
     chunk_start = start
     chunk_num = 0
     total_rows = 0
     while chunk_start < end:
         chunk_end = min(chunk_start + timedelta(days=30), end)
         chunk_num += 1
-        rows = backfill_chunk(db_path, chunk_start, chunk_end, f"{chunk_num}")
+        rows = backfill_chunk(dsn, chunk_start, chunk_end, f"{chunk_num}")
         total_rows += rows
         chunk_start = chunk_end
 
@@ -218,11 +204,11 @@ def initial_seed(
     )
 
     # Weather forecasts (next 7 days)
-    weather_rows = ingest_weather(db_path)
+    weather_rows = ingest_weather(dsn)
     logger.info("Weather seed: %d rows", weather_rows)
 
     # Validate
-    failures = validate_data(db_path)
+    failures = validate_data(dsn)
     if failures:
         logger.warning("Validation: %d failures after seed", failures)
     else:

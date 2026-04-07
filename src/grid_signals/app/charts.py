@@ -8,11 +8,11 @@ from typing import TYPE_CHECKING
 import plotly.graph_objects as go
 
 if TYPE_CHECKING:
-    import duckdb
+    import psycopg
 
 
 def hourly_prices(
-    con: duckdb.DuckDBPyConnection, zones: list[str], start: str, end: str
+    con: psycopg.Connection, zones: list[str], start: str, end: str
 ) -> go.Figure:
     """Line chart of hourly prices, one line per zone."""
     fig = go.Figure()
@@ -21,7 +21,7 @@ def hourly_prices(
             """
             SELECT period_start, price_eur_mwh
             FROM day_ahead_prices
-            WHERE zone = ? AND period_start >= ? AND period_start < ?
+            WHERE zone = %s AND period_start >= %s AND period_start < %s
             ORDER BY period_start
             """,
             [zone, start, end],
@@ -43,16 +43,16 @@ def hourly_prices(
 
 
 def generation_mix(
-    con: duckdb.DuckDBPyConnection, zone: str, start: str, end: str
+    con: psycopg.Connection, zone: str, start: str, end: str
 ) -> go.Figure:
     """Stacked bar chart of generation by fuel type."""
     rows = con.execute(
         """
         SELECT fuel_type,
                date_trunc('day', period_start) AS day,
-               sum(generation_mw * (epoch(period_end) - epoch(period_start)) / 3600) AS total_mwh
+               sum(generation_mw * EXTRACT(EPOCH FROM (period_end - period_start)) / 3600) AS total_mwh
         FROM generation_by_type
-        WHERE zone = ? AND period_start >= ? AND period_start < ?
+        WHERE zone = %s AND period_start >= %s AND period_start < %s
         GROUP BY fuel_type, day
         ORDER BY day, fuel_type
         """,
@@ -97,7 +97,7 @@ def generation_mix(
 
 
 def cross_border_flows(
-    con: duckdb.DuckDBPyConnection, zone: str, start: str, end: str
+    con: psycopg.Connection, zone: str, start: str, end: str
 ) -> go.Figure:
     """Line chart of cross-border flows for all interconnections of a zone.
 
@@ -108,7 +108,7 @@ def cross_border_flows(
         """
         SELECT from_zone, to_zone, period_start, flow_mw
         FROM cross_border_flows
-        WHERE (from_zone = ? OR to_zone = ?) AND period_start >= ? AND period_start < ?
+        WHERE (from_zone = %s OR to_zone = %s) AND period_start >= %s AND period_start < %s
         ORDER BY period_start
         """,
         [zone, zone, start, end],
@@ -160,14 +160,14 @@ def _display_zone(code: str) -> str:
 
 
 def wind_vs_price(
-    con: duckdb.DuckDBPyConnection, zone: str, location: str, start: str, end: str
+    con: psycopg.Connection, zone: str, location: str, start: str, end: str
 ) -> go.Figure:
     """Dual-axis chart: wind speed and price."""
     prices = con.execute(
         """
         SELECT period_start, price_eur_mwh
         FROM day_ahead_prices
-        WHERE zone = ? AND period_start >= ? AND period_start < ?
+        WHERE zone = %s AND period_start >= %s AND period_start < %s
         ORDER BY period_start
         """,
         [zone, start, end],
@@ -175,12 +175,16 @@ def wind_vs_price(
     weather = con.execute(
         """
         SELECT period_start, wind_speed_100m_ms
-        FROM weather_forecasts
-        WHERE location_name = ? AND period_start >= ? AND period_start < ?
-          AND wind_speed_100m_ms IS NOT NULL
-        QUALIFY ROW_NUMBER() OVER (
-            PARTITION BY period_start ORDER BY fetched_at DESC
-        ) = 1
+        FROM (
+            SELECT period_start, wind_speed_100m_ms, fetched_at,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY period_start ORDER BY fetched_at DESC
+                   ) AS rn
+            FROM weather_forecasts
+            WHERE location_name = %s AND period_start >= %s AND period_start < %s
+              AND wind_speed_100m_ms IS NOT NULL
+        ) t
+        WHERE rn = 1
         ORDER BY period_start
         """,
         [location, start, end],
@@ -222,15 +226,13 @@ def wind_vs_price(
     return fig
 
 
-def price_heatmap(
-    con: duckdb.DuckDBPyConnection, zones: list[str], date: str
-) -> go.Figure:
+def price_heatmap(con: psycopg.Connection, zones: list[str], date: str) -> go.Figure:
     """Heatmap: zones x hours, color = price for a single day."""
     rows = con.execute(
         """
         SELECT zone, extract(hour FROM period_start) AS hour, price_eur_mwh
         FROM day_ahead_prices
-        WHERE zone = ANY(?) AND period_start >= ?::DATE AND period_start < ?::DATE + INTERVAL 1 DAY
+        WHERE zone = ANY(%s) AND period_start >= %s::DATE AND period_start < %s::DATE + INTERVAL '1 DAY'
         ORDER BY zone, hour
         """,
         [zones, date, date],
@@ -372,13 +374,13 @@ def _label_pos(
     return mid_lat + (-dlon / length) * offset, mid_lon + (dlat / length) * offset
 
 
-def flow_map(con: duckdb.DuckDBPyConnection, start: str, end: str) -> go.Figure:
+def flow_map(con: psycopg.Connection, start: str, end: str) -> go.Figure:
     """Map of Nordic-Baltic zones with interconnector flows on real geography."""
     rows = con.execute(
         """
         SELECT from_zone, to_zone, avg(flow_mw) AS avg_mw
         FROM cross_border_flows
-        WHERE period_start >= ? AND period_start < ?
+        WHERE period_start >= %s AND period_start < %s
         GROUP BY from_zone, to_zone
         """,
         [start, end],

@@ -4,7 +4,7 @@ import logging
 from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
 
-import duckdb
+import psycopg
 from pydantic import BaseModel
 
 from grid_signals.ingestion.locations import LOCATIONS
@@ -22,7 +22,7 @@ class ValidationResult(BaseModel):
 
 
 def validate_price_completeness(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     zone: BiddingZone,
     date: datetime,
 ) -> list[ValidationResult]:
@@ -37,7 +37,7 @@ def validate_price_completeness(
     end = start + timedelta(days=1)
 
     total_rows_row = con.execute(
-        "SELECT COUNT(*) FROM day_ahead_prices WHERE zone = ? AND period_start >= ? AND period_start < ?",
+        "SELECT COUNT(*) FROM day_ahead_prices WHERE zone = %s AND period_start >= %s AND period_start < %s",
         [zone.value, start, end],
     ).fetchone()
     count = total_rows_row[0] if total_rows_row else 0
@@ -56,7 +56,7 @@ def validate_price_completeness(
         """
         SELECT MIN((EXTRACT(EPOCH FROM (period_end - period_start)) / 60)::INT) AS min_interval_min
         FROM day_ahead_prices
-        WHERE zone = ? AND period_start >= ? AND period_start < ?
+        WHERE zone = %s AND period_start >= %s AND period_start < %s
         """,
         [zone.value, start, end],
     ).fetchone()
@@ -82,7 +82,7 @@ def validate_price_completeness(
 
 
 def validate_price_bounds(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     zone: BiddingZone,
     date: datetime,
 ) -> list[ValidationResult]:
@@ -94,7 +94,7 @@ def validate_price_bounds(
         """
         SELECT COUNT(*) AS cnt
         FROM day_ahead_prices
-        WHERE zone = ? AND period_start >= ? AND period_start < ?
+        WHERE zone = %s AND period_start >= %s AND period_start < %s
           AND (price_eur_mwh < -500 OR price_eur_mwh > 4000)
         """,
         [zone.value, start, end],
@@ -112,7 +112,7 @@ def validate_price_bounds(
 
 
 def validate_weather_freshness(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     location: str,
     max_age_hours: int = 12,
 ) -> list[ValidationResult]:
@@ -121,7 +121,7 @@ def validate_weather_freshness(
         """
         SELECT MAX(fetched_at) AS latest
         FROM weather_forecasts
-        WHERE location_name = ?
+        WHERE location_name = %s
         """,
         [location],
     ).fetchone()
@@ -136,7 +136,6 @@ def validate_weather_freshness(
             )
         ]
 
-    # DuckDB may return a datetime without tzinfo; treat as UTC
     if latest.tzinfo is None:
         latest = latest.replace(tzinfo=UTC)
 
@@ -153,7 +152,7 @@ def validate_weather_freshness(
 
 
 def run_all_validations(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     start: datetime | None = None,
     end: datetime | None = None,
 ) -> list[ValidationResult]:
@@ -246,7 +245,7 @@ def _expected_dates(start: datetime, end: datetime) -> set[date]:
 
 
 def _find_zone_date_gaps(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     table: str,
     zones: list[BiddingZone],
     start: datetime,
@@ -257,7 +256,7 @@ def _find_zone_date_gaps(
         f"""
         SELECT zone, CAST(period_start AS DATE) AS d
         FROM {table}
-        WHERE period_start >= ? AND period_start < ?
+        WHERE period_start >= %s AND period_start < %s
         GROUP BY zone, d
         """,
         [start, end],
@@ -277,7 +276,7 @@ def _find_zone_date_gaps(
 
 
 def _find_flow_gaps(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     borders: list[tuple[str, str]],
     start: datetime,
     end: datetime,
@@ -287,7 +286,7 @@ def _find_flow_gaps(
         """
         SELECT from_zone, to_zone, CAST(period_start AS DATE) AS d
         FROM cross_border_flows
-        WHERE period_start >= ? AND period_start < ?
+        WHERE period_start >= %s AND period_start < %s
         GROUP BY from_zone, to_zone, d
         """,
         [start, end],
@@ -308,7 +307,7 @@ def _find_flow_gaps(
 
 
 def find_gaps(
-    con: duckdb.DuckDBPyConnection,
+    con: psycopg.Connection,
     start: datetime,
     end: datetime,
     borders: list[tuple[str, str]] | None = None,

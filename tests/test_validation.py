@@ -2,16 +2,12 @@
 
 from datetime import UTC, datetime, timedelta
 
-import duckdb
-import pytest
-
 from grid_signals.db.queries import (
     insert_cross_border_flows,
     insert_day_ahead_prices,
     insert_generation_by_type,
     insert_total_load,
 )
-from grid_signals.db.schema import create_tables
 from grid_signals.models import (
     BiddingZone,
     CrossBorderFlow,
@@ -26,14 +22,6 @@ from grid_signals.validation import (
 )
 
 _1H = timedelta(hours=1)
-
-
-@pytest.fixture
-def con():
-    c = duckdb.connect(":memory:")
-    create_tables(c)
-    yield c
-    c.close()
 
 
 def _make_hourly_prices(zone: BiddingZone, day: datetime) -> list[DayAheadPrice]:

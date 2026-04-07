@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 
-import duckdb
+import psycopg
 import streamlit as st
 
 from grid_signals.app.charts import (
@@ -60,20 +60,12 @@ WEATHER_LOCATIONS = [
 
 
 @st.cache_resource
-def get_dash_db() -> duckdb.DuckDBPyConnection:
+def get_dash_db() -> psycopg.Connection:
     """Read-only DB connection for the dashboard."""
     return get_read_connection()
 
 
-try:
-    con = get_dash_db()
-except duckdb.IOException:
-    st.warning(
-        "Data ingestion is currently running. The dashboard will be available "
-        "once ingestion completes. Refresh the page to retry.",
-        icon="\u23f3",
-    )
-    st.stop()
+con = get_dash_db()
 
 # --- Date range selector (shared) ---
 col1, col2 = st.columns(2)

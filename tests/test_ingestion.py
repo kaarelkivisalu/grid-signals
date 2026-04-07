@@ -2,13 +2,12 @@
 
 - Transformer tests: pure functions, no mocks
 - Fuel type tests: mapping + fallback
-- Integration tests: mocked client + in-memory DuckDB
+- Integration tests: mocked client + PostgreSQL
 """
 
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
-import duckdb
 import numpy as np
 import pandas as pd
 import pytest
@@ -16,7 +15,6 @@ import requests.exceptions
 from entsoe.exceptions import NoMatchingDataError
 
 from grid_signals.db.queries import get_day_ahead_prices, get_outages
-from grid_signals.db.schema import create_tables
 from grid_signals.ingestion.client import BORDERS, ZONE_TO_ENTSOE
 from grid_signals.ingestion.entsoe import (
     _retry_on_server_error,  # noqa: PLC2701
@@ -35,20 +33,6 @@ from grid_signals.ingestion.transformers import (
     transform_outages,
 )
 from grid_signals.models import BiddingZone
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def con():
-    """In-memory DuckDB with all tables created."""
-    c = duckdb.connect(":memory:")
-    create_tables(c)
-    yield c
-    c.close()
-
 
 # ---------------------------------------------------------------------------
 # Fuel type tests
@@ -299,7 +283,7 @@ class TestZoneMapping:
 
 
 # ---------------------------------------------------------------------------
-# Integration tests (mocked client + in-memory DuckDB)
+# Integration tests (mocked client + PostgreSQL)
 # ---------------------------------------------------------------------------
 
 

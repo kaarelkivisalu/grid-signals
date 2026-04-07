@@ -6,8 +6,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from grid_signals.config import ConfigError
-from grid_signals.db.connection import DEFAULT_DB_PATH
+from grid_signals.config import DEFAULT_DATABASE_URL, ConfigError
 from grid_signals.logging_config import configure_logging
 
 
@@ -19,8 +18,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--db",
         type=str,
-        default=str(DEFAULT_DB_PATH),
-        help=f"Path to DuckDB file (default: {DEFAULT_DB_PATH})",
+        default=None,
+        help=f"PostgreSQL connection string (default: DATABASE_URL env or {DEFAULT_DATABASE_URL})",
     )
     log_group = parser.add_mutually_exclusive_group()
     log_group.add_argument(
@@ -70,7 +69,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Maximum acceptable age in hours (default: 26)",
     )
 
-    backup_cmd = sub.add_parser("backup", help="Backup DuckDB to S3")
+    backup_cmd = sub.add_parser("backup", help="Backup database to S3")
     backup_cmd.add_argument("--bucket", required=True, help="S3 bucket name")
     backup_cmd.add_argument(
         "--prefix",
@@ -99,17 +98,6 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--date",
         default=None,
         help="Date to generate briefing for (YYYY-MM-DD, default: today)",
-    )
-    briefing_cmd.add_argument(
-        "--output",
-        default=None,
-        help="Output directory for Markdown file (default: briefings/)",
-    )
-    briefing_cmd.add_argument(
-        "--no-save",
-        action="store_true",
-        default=False,
-        help="Do not save the briefing to a file",
     )
     briefing_cmd.add_argument(
         "--model",
@@ -295,25 +283,25 @@ def main(argv: list[str] | None = None) -> int:
         json_log = False
     configure_logging(json_output=json_log)
 
-    db_path = Path(args.db)
+    dsn = args.db  # None means use DATABASE_URL env or default
 
     try:
-        return _run_command(args, db_path)
+        return _run_command(args, dsn)
     except ConfigError as exc:
         print(f"Configuration error: {exc}", file=sys.stderr)
         return 1
 
 
-def _run_command(args: argparse.Namespace, db_path: Path) -> int:
+def _run_command(args: argparse.Namespace, dsn: str | None) -> int:
     if args.command == "daily":
         from grid_signals.pipeline import run_daily
 
-        run_daily(db_path)
+        run_daily(dsn)
 
     elif args.command == "weather":
         from grid_signals.pipeline import run_weather
 
-        run_weather(db_path)
+        run_weather(dsn)
 
     elif args.command == "backfill":
         start = datetime.strptime(args.start, "%Y-%m-%d").replace(tzinfo=UTC)
@@ -321,11 +309,11 @@ def _run_command(args: argparse.Namespace, db_path: Path) -> int:
         if args.gaps_only:
             from grid_signals.pipeline import run_backfill_gaps
 
-            run_backfill_gaps(db_path, start, end)
+            run_backfill_gaps(dsn, start, end)
         else:
             from grid_signals.pipeline import run_backfill
 
-            run_backfill(db_path, start, end)
+            run_backfill(dsn, start, end)
 
     elif args.command == "validate":
         from grid_signals.db.connection import get_connection
@@ -339,7 +327,7 @@ def _run_command(args: argparse.Namespace, db_path: Path) -> int:
         if args.end:
             v_end = datetime.strptime(args.end, "%Y-%m-%d").replace(tzinfo=UTC)
 
-        con = get_connection(db_path)
+        con = get_connection(dsn)
         try:
             create_tables(con)
             run_all_validations(con, start=v_start, end=v_end)
@@ -360,7 +348,7 @@ def _run_command(args: argparse.Namespace, db_path: Path) -> int:
         from grid_signals.db.connection import get_connection
         from grid_signals.db.schema import create_tables
 
-        con = get_connection(db_path)
+        con = get_connection(dsn)
         try:
             create_tables(con)
             agent_kwargs: dict = {"model": args.model}
@@ -385,7 +373,7 @@ def _run_command(args: argparse.Namespace, db_path: Path) -> int:
         from grid_signals.agent.tools import execute_tool
         from grid_signals.db.connection import get_connection
 
-        con = get_connection(db_path, read_only=True)
+        con = get_connection(dsn, read_only=True)
         try:
             tool_name, tool_input = _build_tool_input(args)
             result_json = execute_tool(tool_name, tool_input, con)
@@ -394,7 +382,7 @@ def _run_command(args: argparse.Namespace, db_path: Path) -> int:
             con.close()
 
     elif args.command == "briefing":
-        from grid_signals.briefing import DEFAULT_OUTPUT_DIR, generate_briefing
+        from grid_signals.briefing import generate_briefing
         from grid_signals.db.connection import get_connection
         from grid_signals.db.schema import create_tables
 
@@ -404,19 +392,11 @@ def _run_command(args: argparse.Namespace, db_path: Path) -> int:
                 datetime.strptime(args.date, "%Y-%m-%d").replace(tzinfo=UTC).date()
             )
 
-        if args.no_save:
-            output_dir = None
-        elif args.output:
-            output_dir = Path(args.output)
-        else:
-            output_dir = DEFAULT_OUTPUT_DIR
-
-        con = get_connection(db_path)
+        con = get_connection(dsn)
         try:
             create_tables(con)
             kwargs = {
                 "target_date": target_date,
-                "output_dir": output_dir,
                 "model": args.model,
             }
             if args.max_turns is not None:
@@ -424,8 +404,6 @@ def _run_command(args: argparse.Namespace, db_path: Path) -> int:
             result = generate_briefing(con, **kwargs)
             print(result.content)
             logger = logging.getLogger(__name__)
-            if result.output_path:
-                logger.info("Briefing saved to %s", result.output_path)
             logger.info(
                 "tokens: %d in / %d out, tool calls: %d, cost: $%.4f",
                 result.agent_result.input_tokens,
@@ -441,7 +419,7 @@ def _run_command(args: argparse.Namespace, db_path: Path) -> int:
         from grid_signals.db.schema import create_tables
         from grid_signals.health import check_data_freshness
 
-        con = get_connection(db_path, read_only=True)
+        con = get_connection(dsn, read_only=True)
         try:
             create_tables(con)
             status = check_data_freshness(con, max_age_hours=args.max_age)
@@ -455,7 +433,7 @@ def _run_command(args: argparse.Namespace, db_path: Path) -> int:
     elif args.command == "backup":
         from grid_signals.backup import backup_database
 
-        uri = backup_database(db_path, s3_bucket=args.bucket, prefix=args.prefix)
+        uri = backup_database(dsn, s3_bucket=args.bucket, prefix=args.prefix)
         print(f"Backup uploaded: {uri}")
 
     return 0
