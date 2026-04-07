@@ -21,4 +21,4 @@ COPY prefect.yaml ./
 # Create data and briefings directories for volume mounts
 RUN mkdir -p data briefings
 
-CMD ["uv", "run", "prefect", "worker", "start", "--pool", "grid-signals"]
+CMD ["uv", "run", "--no-project", "prefect", "worker", "start", "--pool", "grid-signals"]
