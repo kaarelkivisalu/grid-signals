@@ -7,7 +7,7 @@ pull:
   - prefect.deployments.steps.set_working_directory:
       directory: "{{ clone-step.directory }}"
   - prefect.deployments.steps.run_shell_script:
-      script: uv sync --frozen --no-dev
+      script: uv sync --frozen --no-dev --reinstall-package grid-signals
 
 deployments:
   - name: morning-pipeline

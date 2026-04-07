@@ -13,13 +13,14 @@ ENV UV_PROJECT_ENVIRONMENT=/app/.venv
 
 # Install dependencies first for layer caching
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project \
-    && rm pyproject.toml uv.lock
+RUN uv sync --frozen --no-dev --no-install-project
 
-# prefect.yaml is needed by the worker; source code comes via git_clone pull step
+# Copy project source and install it
+COPY src/ src/
 COPY prefect.yaml ./
+RUN uv sync --frozen --no-dev
 
 # Create data and briefings directories for volume mounts
 RUN mkdir -p data briefings
 
-CMD ["uv", "run", "--no-project", "prefect", "worker", "start", "--pool", "grid-signals"]
+CMD ["uv", "run", "prefect", "worker", "start", "--pool", "grid-signals"]
