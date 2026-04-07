@@ -6,6 +6,8 @@ pull:
       access_token: "{{ prefect.blocks.secret.github-access-token }}"
   - prefect.deployments.steps.set_working_directory:
       directory: "{{ clone-step.directory }}"
+  - prefect.deployments.steps.run_shell_script:
+      script: uv sync --frozen --no-dev
 
 deployments:
   - name: morning-pipeline

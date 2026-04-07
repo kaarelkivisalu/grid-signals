@@ -8,15 +8,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends awscli git \
 
 WORKDIR /app
 ENV APP_DIR=/app
+# Let uv sync in the pull step reuse this venv instead of creating a new one
+ENV UV_PROJECT_ENVIRONMENT=/app/.venv
 
 # Install dependencies first for layer caching
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
-# Copy project source
-COPY src/ src/
+# prefect.yaml is needed by the worker; source code comes via git_clone pull step
 COPY prefect.yaml ./
-RUN uv sync --frozen --no-dev
 
 # Create data and briefings directories for volume mounts
 RUN mkdir -p data briefings
