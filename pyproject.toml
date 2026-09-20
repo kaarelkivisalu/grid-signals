@@ -13,6 +13,11 @@ dependencies = [
     "streamlit>=1.45, <2",
     "plotly>=6.0, <7",
     "prefect>=3.0, <4",
+    "ecmwf-opendata>=0.3.34",
+    "earthkit>=1.0.0",
+    "cdsapi>=0.7.7",
+    "python-dotenv>=1.2.2",
+    "ecmwf-datastores-client>=0.5",
 ]
 
 [dependency-groups]
@@ -23,6 +28,8 @@ dev = [
     "pandas-stubs>=2.2",
     "ruff>=0.9",
     "testcontainers[postgres]>=4, <5",
+    "ipykernel>=7.3.0",
+    "nbclient>=0.11.0",
 ]
 
 [project.scripts]
@@ -48,13 +55,13 @@ ignore = [
     "ANN201",
     "ANN202",
     "C901",
-    "CPY001", # Missing copyright notice at top of file
-    "D100",   # Missing docstring in public module
-    "D101",   # Missing docstring in public class
-    "D102",   # Missing docstring in public method
-    "D103",   # Missing docstring in public function
-    "D104",   # Missing docstring in public package
-    "D107",   # Missing docstring in __init__
+    "CPY001",  # Missing copyright notice at top of file
+    "D100",    # Missing docstring in public module
+    "D101",    # Missing docstring in public class
+    "D102",    # Missing docstring in public method
+    "D103",    # Missing docstring in public function
+    "D104",    # Missing docstring in public package
+    "D107",    # Missing docstring in __init__
     "DOC201",
     "DOC402",
     "DOC501",
@@ -71,6 +78,7 @@ ignore = [
     "S607",
     "S608",
     "T201",
+    "TD",
 
     # https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules
     "W191",   # tab-indentation
@@ -92,6 +100,8 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
 "scripts/**" = ["INP001"]
+"**.ipynb" = ["ERA001", "F401", "PT018"]
+"exercises.ipynb" = ["S101", "FIX"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
