@@ -135,13 +135,25 @@ ignore = [
 "research/tests/**" = ["S101", "PLR2004", "INP001"]
 # Research code: `X`/`y`/`df` are the idiom, and long inline exception messages are
 # not worth the workaround noise.
-"research/src/**" = ["N803", "N806", "PD901", "PD011", "TRY003", "EM101", "EM102", "S311"]
+# PD013: `.stack` keeps the DatetimeIndex; `.melt` would require discarding it first.
+"research/src/**" = ["N803", "N806", "PD901", "PD011", "PD013", "TRY003", "EM101", "EM102", "S311"]
 # Exploratory notebooks are not linted; anything promoted out of one lands in
 # research/src/ where full lint applies.
 "research/notebooks/**" = ["ALL"]
 "scripts/**" = ["INP001"]
 "**.ipynb" = ["ERA001", "F401", "PT018"]
 "exercises.ipynb" = ["S101", "FIX"]
+
+[tool.ruff.lint.isort]
+# research/src is not on ruff's inferred src path, so name it explicitly.
+known-first-party = ["grid_signals", "renewable_forecast"]
+
+[tool.ruff.lint.flake8-import-conventions]
+# `gpd` is the universal geopandas convention; ruff's preview default bans it.
+banned-aliases = {}
+
+[tool.ruff.lint.flake8-import-conventions.aliases]
+geopandas = "gpd"
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

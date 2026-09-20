@@ -1,0 +1,72 @@
+# Frozen by the Phase 2 data audit (research/reports/data_audit.md, 2026-09-20).
+# Changing anything here invalidates the audit; re-run it and re-date this file.
+
+audit:
+  report: reports/data_audit.md
+  generated: 2026-09-20
+  data_span: "2017-12-31 .. 2026-09-19"
+
+targets:
+  se3_wind:
+    verdict: GO
+    zone: SE3
+    fuel_types: [wind_onshore]
+    # Check B: SE3 offshore never appears in A75 (peak 0 MW) though the registry lists
+    # 30 MW. Not modelled separately, not merged -- simply absent from the target.
+    include_offshore: false
+    source: ENTSO-E A75 actual generation per production type
+    first_month: "2017-12"
+    coverage_pct_since_2021: 99.46
+
+  delu_solar:
+    verdict: GO
+    zone: DE_LU
+    fuel_types: [solar]
+    source: ENTSO-E A75, cross-checked against netztransparenz/SMARD
+    first_month: "2018-09"
+    peak_over_installed: 0.56
+
+  se3_solar:
+    verdict: CONDITIONAL
+    # The series is physically credible -- night/peak 0.00, summer:December 93:1, and the
+    # SE1<SE2<SE4<SE3 ordering tracks population and latitude as a real fleet would.
+    # The blocker is that ENTSO-E A68 is national for Sweden, so there is no zonal
+    # capacity denominator to normalise by. Revisit if a zonal PV capacity estimate is
+    # obtained; until then solar development proceeds on DE-LU.
+    blocker: no_zonal_capacity_denominator
+
+grid:
+  timezone: UTC
+  label: left
+  resolution: 1h            # market MTU is 15 min; migration is a config change
+  aggregation: mean_mw
+  partial_hours: flagged_and_excluded_from_training
+
+capacity:
+  # A68 is published per country for Sweden -- SE_1..SE_4 return NoMatchingDataError --
+  # so the zonal denominator comes from the registry, anchored nationally to A68.
+  level_authority: entsoe_a68_national
+  timing_authority: vindbrukskollen
+  national_agreement: "18,198 MW registry vs 18,000 MW A68 (1.1%)"
+  zone_polygons: configs/se_bidding_zones.geojson
+  diagnostic: p99.9_of_implied_cf_per_year   # never the maximum; see Check G
+
+benchmark:
+  name: A69_latest_vintage
+  # The Transparency Platform serves the latest revision for a target time and entsoe-py
+  # exposes no publication timestamp, so this is an OPTIMISTIC benchmark. Every claim
+  # against it must carry the caveat.
+  vintage_recoverable: false
+  se3_wind_months: 106
+  se3_solar_months: 58
+
+resolution_transition:
+  SE1: "2025-12-01T23:15:00Z"
+  SE2: "2025-12-01T23:15:00Z"
+  SE3: "2025-12-01T23:15:00Z"
+  SE4: "2025-12-01T23:15:00Z"
+  DE_LU: "2018-09-30T22:15:00Z"   # German data has been 15-minute throughout
+
+exclusions:
+  - reason: partial_first_day
+    period: "2017-12-31"

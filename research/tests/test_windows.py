@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime, timedelta
 from itertools import pairwise
 
 import pytest
+
 from renewable_forecast import windows
 
 # EU daylight-saving transitions: last Sunday of March and of October.
