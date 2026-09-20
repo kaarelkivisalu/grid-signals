@@ -78,9 +78,11 @@ mlruns/    gitignored (MLflow local file backend)
 | 2 — data audit (hard gate) | done — `reports/data_audit.md`, GO for SE3 wind |
 | 3 — targets, frozen protocol, baselines | done — `reports/protocol.md` |
 | 4 — NWP feature pipeline | done — `reports/openmeteo_vintage.md`, design matrix built |
-| 5 — modelling | in progress |
-| 6 — ensemble spike + DE-LU solar | not started |
-| 7 — dry-run + integration contract | not started |
+| 5 — modelling | done — `reports/modelling.md` |
+| 6 — ensemble spike | done — `reports/meps_archive.md`, conditional GO |
+| 6 — DE-LU solar | not started |
+| 7 — integration contract | drafted — `docs/integration_contract.md` |
+| 7 — operational dry-run | not started |
 
 Two findings worth knowing before reading anything else:
 

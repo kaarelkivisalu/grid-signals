@@ -114,9 +114,11 @@ written contract only. Renewable quantiles are the highest-value input to Direct
 - [x] Phase 2 — data audit (`research/reports/data_audit.md`) — GO for SE3 wind
 - [x] Phase 3 — targets, frozen protocol (`research/reports/protocol.md`), baselines
 - [x] Phase 4 — NWP feature pipeline (`research/reports/openmeteo_vintage.md`)
-- [ ] Phase 5 — deterministic then probabilistic modelling (in progress)
-- [ ] Phase 6 — ensemble spike (MEPS) and DE-LU solar
-- [ ] Phase 7 — operational dry-run and integration contract
+- [x] Phase 5 — modelling (`research/reports/modelling.md`)
+- [x] Phase 6a — MEPS ensemble spike (`research/reports/meps_archive.md`) — conditional GO
+- [ ] Phase 6b — DE-LU solar
+- [x] Phase 7a — integration contract (`research/docs/integration_contract.md`)
+- [ ] Phase 7b — operational dry-run
 
 ### Direction G: Multi-Tenant SaaS
 
