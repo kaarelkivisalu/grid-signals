@@ -1,9 +1,14 @@
 """Wind features: physics first, statistics second.
 
 The power-curve transform is the highest-value feature here, and the order of operations
-matters: transform **per cluster, then capacity-weight**. The curve is convex below rated
-and concave above, so transforming a spatial mean discards exactly the smoothing that
-makes zonal capacity factor far less peaky than point capacity factor.
+matters: transform **per cluster, then capacity-weight**, never the other way round.
+
+By Jensen's inequality the two orders differ wherever the curve bends, and in opposite
+directions either side of rated speed -- below rated it is convex, so transforming the
+spatial mean understates output; approaching and beyond rated it saturates, so
+transforming the mean overstates it. The saturating case is the one that bites: it
+manufactures zonal peaks the fleet cannot physically reach, because in reality only some
+clusters are at rated while others are not.
 """
 
 import numpy as np

@@ -89,7 +89,7 @@ and Phase 5 does not start without it.
 ## Reproducing
 
 ```bash
-PYTHONPATH=research/src uv run python -m renewable_forecast.pipelines.backtest
+PYTHONPATH=research/src uv run python -m renewable_forecast.pipelines.train
 PYTHONPATH=research/src uv run python -c "
 from renewable_forecast import experiment; print(experiment.leaderboard())"
 ```
