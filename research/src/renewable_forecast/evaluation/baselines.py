@@ -9,6 +9,7 @@ data only.
 import numpy as np
 import pandas as pd
 
+from renewable_forecast.evaluation.splits import calibration_split
 from renewable_forecast.sources import entsoe
 from renewable_forecast.targets import actuals
 
@@ -144,13 +145,18 @@ class PhysicalPowerCurve:
         self._residuals = np.array([0.0])
 
     def fit(self, train: pd.DataFrame) -> "PhysicalPowerCurve":
-        """Fit the affine correction and the residual distribution."""
-        physical = train[self.feature].to_numpy()
-        actual = train.cf.to_numpy()
+        """Fit the affine correction, then estimate residuals on held-out days."""
+        inner, calib = calibration_split(train)
+        physical = inner[self.feature].to_numpy()
+        actual = inner.cf.to_numpy()
         usable = np.isfinite(physical) & np.isfinite(actual)
         if self.calibrate and usable.sum() > 100:
             self._scale, self._offset = np.polyfit(physical[usable], actual[usable], 1)
-        self._residuals = actual[usable] - self._point(physical[usable])
+
+        held = calib[self.feature].to_numpy()
+        held_actual = calib.cf.to_numpy()
+        keep = np.isfinite(held) & np.isfinite(held_actual)
+        self._residuals = held_actual[keep] - self._point(held[keep])
         return self
 
     def _point(self, physical: np.ndarray) -> np.ndarray:

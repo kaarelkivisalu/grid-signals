@@ -11,7 +11,9 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
+from renewable_forecast.evaluation.splits import calibration_split
 from renewable_forecast.models import base
+from renewable_forecast.models.conformal import StratifiedCQR
 
 logger = logging.getLogger(__name__)
 
@@ -31,21 +33,35 @@ DEFAULT_PARAMS = {
 
 
 class QuantileGBM:
-    """LightGBM quantile regression across a set of levels."""
+    """LightGBM quantile regression across a set of levels.
+
+    Optionally conformalised. Quantile regression fitted in-sample is systematically
+    too narrow out of sample -- uncalibrated, this model returned 61% coverage at a
+    nominal 80% -- so the conformal layer is on by default.
+    """
 
     name = "lightgbm_quantile"
 
-    def __init__(self, levels: np.ndarray, params: dict | None = None) -> None:
+    def __init__(
+        self,
+        levels: np.ndarray,
+        params: dict | None = None,
+        *,
+        conformalise: bool = True,
+    ) -> None:
         self.levels = levels
         self.params = {**DEFAULT_PARAMS, **(params or {})}
+        self.conformalise = conformalise
         self.columns: list[str] = []
         self._models: list[lgb.LGBMRegressor] = []
+        self._conformal: StratifiedCQR | None = None
 
     def fit(self, train: pd.DataFrame) -> "QuantileGBM":
-        """Fit one booster per quantile level."""
+        """Fit one booster per level, then calibrate on days it did not see."""
+        inner, calib = calibration_split(train) if self.conformalise else (train, None)
         self.columns = base.feature_columns(train)
-        features = base.matrix(train, self.columns)
-        target = train.cf.to_numpy(dtype=float)
+        features = base.matrix(inner, self.columns)
+        target = inner.cf.to_numpy(dtype=float)
 
         # LightGBM refuses monotone constraints under the quantile objective, so the
         # constraint idea is exercised by PointGBM instead. The non-crossing repair and
@@ -55,15 +71,26 @@ class QuantileGBM:
             model = lgb.LGBMRegressor(**self.params, alpha=float(level))
             model.fit(features, target)
             self._models.append(model)
+
+        if self.conformalise and calib is not None and len(calib) > 200:
+            self._conformal = StratifiedCQR(self.levels).fit(
+                calib, self._raw_predict(calib)
+            )
         return self
 
-    def predict(self, test: pd.DataFrame) -> np.ndarray:
-        """Predict every level, then repair crossings by sorting."""
-        features = base.matrix(test, self.columns)
+    def _raw_predict(self, frame: pd.DataFrame) -> np.ndarray:
+        features = base.matrix(frame, self.columns)
         raw = np.column_stack([model.predict(features) for model in self._models])
-        # Quantile regressions are fitted independently and can cross; sorting is the
-        # standard non-crossing repair and is monotone-preserving.
         return np.sort(np.clip(raw, 0.0, 1.0), axis=1)
+
+    def predict(self, test: pd.DataFrame) -> np.ndarray:
+        """Predict every level, repair crossings, then apply the conformal correction.
+
+        Quantile regressions are fitted independently and can cross; sorting is the
+        standard non-crossing repair and preserves monotonicity.
+        """
+        raw = self._raw_predict(test)
+        return self._conformal.apply(test, raw) if self._conformal else raw
 
     def importance(self) -> pd.DataFrame:
         """Gain-based importance of the median booster."""

@@ -11,6 +11,7 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
+from renewable_forecast.evaluation.splits import calibration_split
 from renewable_forecast.models import base
 
 DEFAULT_PARAMS = {
@@ -45,15 +46,21 @@ class PointGBM:
 
     def fit(self, train: pd.DataFrame) -> "PointGBM":
         """Fit the constrained booster and the residual quantiles."""
+        inner, calib = calibration_split(train)
         self.columns = base.feature_columns(train)
-        features = base.matrix(train, self.columns)
-        target = train.cf.to_numpy(dtype=float)
         self._model = lgb.LGBMRegressor(
             **self.params,
             monotone_constraints=base.monotone_constraints(self.columns),
         )
-        self._model.fit(features, target)
-        self._offsets = np.quantile(target - self._model.predict(features), self.levels)
+        self._model.fit(
+            base.matrix(inner, self.columns), inner.cf.to_numpy(dtype=float)
+        )
+        # In-sample residuals for a boosted tree are tiny and meaningless out of sample:
+        # dressing with them gave 33% coverage at a nominal 80%.
+        residuals = calib.cf.to_numpy(dtype=float) - self._model.predict(
+            base.matrix(calib, self.columns)
+        )
+        self._offsets = np.quantile(residuals, self.levels)
         return self
 
     def predict(self, test: pd.DataFrame) -> np.ndarray:

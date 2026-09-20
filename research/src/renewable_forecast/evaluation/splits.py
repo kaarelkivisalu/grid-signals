@@ -86,3 +86,20 @@ def bootstrap_ci(
     return float(np.quantile(draws, alpha / 2)), float(
         np.quantile(draws, 1 - alpha / 2)
     )
+
+
+def calibration_split(
+    train: pd.DataFrame, fraction: float = 0.25, day_column: str = "delivery_day"
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Reserve the most recent part of a training window for estimating spread.
+
+    Residual distributions and conformal corrections must be estimated on data the
+    model did not fit, or the intervals inherit the in-sample residuals -- which are
+    systematically too small, and the more capacity the model has the worse it gets.
+    Split by whole delivery days, like everything else here.
+    """
+    days = pd.DatetimeIndex(sorted(train[day_column].unique()))
+    if len(days) < 30:
+        return train, train
+    cut = days[int(len(days) * (1 - fraction))]
+    return train[train[day_column] < cut], train[train[day_column] >= cut]

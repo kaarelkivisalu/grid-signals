@@ -11,6 +11,8 @@ from sklearn.linear_model import Ridge
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
+from renewable_forecast.evaluation.splits import calibration_split
+
 PHYSICS_FEATURES = (
     "power_curve_model_mean",
     "wind_speed_100m_model_mean",
@@ -40,11 +42,14 @@ class RidgeSanityFloor:
 
     def fit(self, train: pd.DataFrame) -> "RidgeSanityFloor":
         """Fit the linear model and the empirical residual quantiles."""
+        inner, calib = calibration_split(train)
         self.columns = [c for c in PHYSICS_FEATURES if c in train.columns]
-        features = self._matrix(train)
-        target = train.cf.to_numpy(dtype=float)
-        self._model.fit(features, target)
-        residuals = target - self._model.predict(features)
+        self._model.fit(self._matrix(inner), inner.cf.to_numpy(dtype=float))
+        # Residuals must come from days the model did not fit, or the intervals inherit
+        # the in-sample spread and come out far too narrow.
+        residuals = calib.cf.to_numpy(dtype=float) - self._model.predict(
+            self._matrix(calib)
+        )
         self._offsets = np.quantile(residuals, self.levels)
         return self
 
