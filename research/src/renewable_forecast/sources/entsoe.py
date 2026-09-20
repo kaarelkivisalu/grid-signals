@@ -45,6 +45,7 @@ DATASET_ZONES = {
     "actual_generation": ["SE1", "SE2", "SE3", "SE4", "DE_LU"],
     "da_wind_solar_forecast": ["SE1", "SE2", "SE3", "SE4", "DE_LU"],
     "installed_capacity": ["SE", "DE_LU"],
+    "day_ahead_prices": ["SE3", "DE_LU"],
 }
 
 #: ENTSO-E allows 400 requests/minute; stay well under it.
@@ -167,6 +168,8 @@ _FETCHERS = {
     "installed_capacity": lambda c, z, s, e: c.query_installed_generation_capacity(
         z, start=s, end=e
     ),
+    # A44 day-ahead prices -- only used to flag hours where curtailment is plausible.
+    "day_ahead_prices": lambda c, z, s, e: c.query_day_ahead_prices(z, start=s, end=e),
 }
 
 

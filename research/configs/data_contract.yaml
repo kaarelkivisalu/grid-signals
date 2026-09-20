@@ -59,6 +59,14 @@ benchmark:
   vintage_recoverable: false
   se3_wind_months: 106
   se3_solar_months: 58
+  # Phase 3 quantified the vintage problem: A69 scores nMAE = 1.77% of installed
+  # capacity against SE3 actuals, versus 3-6% for published day-ahead wind skill. It is
+  # a genuine forecast (error autocorrelation 0.93 at lag 1, only 0.1% exact matches),
+  # but far too good to have been made before gate closure. Treat it as an upper
+  # reference, never as a bar to clear. The operative bars are climatology, persistence
+  # and the physical power-curve baseline.
+  usable_as_day_ahead_bar: false
+  measured_nmae_vs_se3_actual: 0.0177
 
 resolution_transition:
   SE1: "2025-12-01T23:15:00Z"

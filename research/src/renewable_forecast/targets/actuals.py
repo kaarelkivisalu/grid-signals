@@ -75,12 +75,6 @@ def to_hourly(
         ["zone", "fuel_type", "period_start"], keep="last"
     )
 
-    native = (
-        frame.groupby(["zone", "fuel_type"])["period_start"]
-        .apply(lambda s: detect_resolution(pd.DatetimeIndex(s)).total_seconds() / 60)
-        .rename("native_minutes")
-    )
-
     frame["hour"] = frame["period_start"].dt.floor("h")
     hourly = (
         frame.groupby(["zone", "fuel_type", "hour"])["value_mw"]
@@ -88,4 +82,13 @@ def to_hourly(
         .reset_index()
         .rename(columns={"hour": "period_start"})
     )
-    return hourly.merge(native, on=["zone", "fuel_type"], how="left")
+
+    # Resolution must be inferred per day, not once over all history: a zone that moved
+    # to 15-minute settlement mid-series would otherwise keep claiming hourly, and no
+    # hour would ever be flagged partial.
+    day = hourly.period_start.dt.floor("D")
+    hourly["expected_sub"] = hourly.groupby(["zone", "fuel_type", day]).n_sub.transform(
+        "max"
+    )
+    hourly["native_minutes"] = 60.0 / hourly.expected_sub
+    return hourly

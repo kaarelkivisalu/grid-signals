@@ -191,4 +191,5 @@ Tracked here so the diagram stays honest about what is not yet settled:
 | Date | Change |
 |---|---|
 | 2026-09-20 | Initial version — task definition, known/not-known boundary, pipeline, storage, evaluation. |
+| 2026-09-20 | Phase 3: protocol frozen (`reports/protocol.md`), baselines scored. A69 turns out not to be a usable day-ahead bar — 1.77% nMAE, 3-4x better than published day-ahead skill — so climatology, persistence and the physical baseline carry the comparison. Two silently-vacuous quality checks found and fixed. |
 | 2026-09-20 | Phase 2 audit landed. Resolved: SE3 offshore is absent from A75 (drop it); A68 is national for Sweden so the zonal denominator comes from Vindbrukskollen; A69 vintage is not recoverable, benchmark renamed `A69_latest_vintage`; SE zones went 15-minute on 2025-12-01. SE3 solar moved from assumed-unusable to CONDITIONAL — the series is credible, only the denominator is missing. |
