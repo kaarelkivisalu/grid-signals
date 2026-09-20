@@ -1,0 +1,193 @@
+# Dataflow — day-ahead VRE forecasting
+
+**Status:** living document. Amend whenever the pipeline shape changes; this is the shared mental
+model the rest of the project is written against.
+
+Scope: probabilistic day-ahead forecasting of variable renewable generation. Wind on **SE3** first,
+solar on **DE-LU** second. Standalone research project under `research/` — no integration with
+`grid-signals` beyond a written contract (`research/docs/integration_contract.md`, Phase 7).
+
+---
+
+## 1. The forecast task in time
+
+The whole project hinges on one boundary: what is knowable at issue time. Everything else is
+plumbing.
+
+```
+  ───── day D-1 ─────┼──────────────── day D ────────────────┼───── day D+1 ─────▶
+                     │                                       │
+   23:00 UTC         │   00z      09:00 UTC     10:00 (CEST) │  00:00 ······ 24:00
+   last actual we    │   run      ISSUE TIME    11:00 (CET)  │  local         local
+   may use ──────────┤    │           │         gate closure │  ╰─ DELIVERY DAY ─╯
+                     │    │           │                      │   23 / 24 / 25
+                     │    └───────────┴─── +22 … +47 h ──────────▶ hourly targets
+                     │                                       │   expressed in UTC
+```
+
+Frozen in `configs/base.yaml`:
+
+| Parameter | Value | Why |
+|---|---|---|
+| Issue time | **09:00 UTC** | Gate closure is 12:00 local = 11:00 UTC winter but **10:00 UTC summer**. 09:00 keeps ≥1 h slack year-round. |
+| NWP run | **00z of day D, explicitly** | Never "latest available" — that is how train/serve skew creeps in. |
+| Lead window | **+22 … +47 h** | Interval *starts* span +22…+46 (+23…+46 under CET, +22…+45 under CEST); the last interval ends at +47. Verified by `test_lead_hours_stay_within_the_frozen_window`. |
+| Target grid | hourly UTC, left-labelled | 23/24/25 targets per delivery day depending on DST. |
+| Resolution | config param, default `1h` | Market MTU is now 15-min; the eventual product must follow. |
+
+---
+
+## 2. The known / not-known boundary
+
+```
+┌─────────────────────────────────────┬─────────────────────────────────────┐
+│  KNOWN AT 09:00 UTC, DAY D          │  NOT KNOWN — never use as a feature │
+│  ─────────────────────────          │  ──────────────────────────────────  │
+│  NWP 00z run of day D               │  actuals after 23:00 UTC of D-1     │
+│    leads +22…+47 h                  │  revised A75 values                 │
+│    4-5 pinned providers             │  latest-vintage A69                 │
+│  Actuals up to 23:00 UTC of D-1     │  `best_match` blends (composition   │
+│  Fleet / installed capacity as-of D │    changes over time → silent        │
+│  Calendar                           │    non-stationarity)                │
+│                                     │  capacity only knowable later       │
+└─────────────────────────────────────┴─────────────────────────────────────┘
+```
+
+Enforced mechanically: every feature column carries a `max_source_time`, and the leakage test asserts
+`max_source_time <= issue_time` for every column in the assembled design matrix. This is the most
+important test in the project.
+
+---
+
+## 3. Pipeline
+
+```
+  SOURCES                     PARSED                DERIVED                 MODEL
+  ───────                     ──────                ───────                 ─────
+
+  ENTSO-E A75 actual ──┐
+   (target)            │
+                       ├──▶ parquet ──┬──────────────▶ target CF ──────┐
+  ENTSO-E A68 capacity ┤              │                     ▲          │
+                       │              └──▶ capacity series ─┘          │
+  Vindbrukskollen ─────┘                     (denominator)             │
+   (fleet registry)                                                    │
+        │                                                              │
+        └──▶ k-means, capacity-weighted ──▶ N cluster points           │
+                                                 │                     │
+                                                 ▼                     ▼
+  Open-Meteo Previous Runs ──▶ parquet ──▶ ┌──────────────┐     ┌─────────────┐
+   (matched lead, pinned models)           │ power curve  │     │   DESIGN    │
+                                           │ air density  │     │   MATRIX    │
+  ERA5 via CDS ─────────────▶ parquet ──▶  │ spatial std  ├────▶│ keyed by    │
+   (physics fitting, ~10 yr)               │ clear-sky kt │     │ (issue_time,│
+                                           │ icing flags  │     │  target_time│
+  MEPS / thredds (Phase 6) ─▶ parquet ──▶  │ lags & ramps │     │  fuel_type) │
+   (ensemble, if archive allows)           └──────────────┘     └──────┬──────┘
+                                                                       │
+                                                                       ▼
+                                                              ┌────────────────┐
+                                                              │ quantile GBM   │
+                                                              │ + conformal    │
+                                                              │ + Schaake      │
+                                                              └────────┬───────┘
+                                                                       │
+                                                                       ▼
+  ENTSO-E A69 (TSO forecast) ─────────┐                        quantile forecast
+  climatology / persistence ──────────┼──▶  EVALUATION  ◀───────  (CF and MW)
+  physical power-curve baseline ──────┘          │
+                                                 ▼
+                                         MLflow run + metrics.parquet
+```
+
+### Why the physics sits where it does
+
+The power-curve transform is applied **per cluster, then capacity-weighted** — never to the spatial
+mean. The curve is convex below rated and concave above, so transforming the mean discards exactly
+the spatial smoothing that makes zonal capacity factor far less peaky than point capacity factor.
+
+The same applies to ensemble members once they exist: transform each member first, summarise after.
+
+### Why ERA5 is still here
+
+Physical transforms (power curve, air density, clear-sky index) are *deterministic functions*, not
+fitted parameters, so they carry no train/serve skew. The split is:
+
+- **ERA5, ~10 years** → fit the fleet-response physics and validate the chain (cross-checked against
+  PECD `peon` SE03 capacity factors).
+- **Matched-lead forecast archive, ~Jan 2024 onward** → fit only the thin statistical correction layer.
+
+This is why ERA5 appears as an input to the derived-features box but not to the model box.
+
+---
+
+## 4. Storage
+
+```
+research/data/
+  raw/<source>/<sha256-of-request>.json.gz    ← verbatim responses, never parsed in place
+  raw/requests_ledger.parquet                 ← params → hash → fetch time
+  parsed/<source>/model=/point=/year=/*.parquet
+  interim/targets_se3.parquet
+  features/design_matrix.parquet
+  predictions/issue_date=YYYY-MM-DD/*.parquet ← append-only vintages
+research/mlruns/                              ← MLflow local file backend
+```
+
+Parquet is the source of truth. DuckDB holds **views only** over parquet globs plus small dimension
+tables — rebuildable in seconds by `store.rebuild_views()`, so it never needs backing up.
+
+Raw responses are archived keyed by a hash of the request params, which means a parser bug costs zero
+API calls to fix and every pull is resumable (compute the full request set, subtract the ledger,
+fetch the remainder).
+
+---
+
+## 5. Evaluation flow
+
+```
+  full history
+  ├─────────────────────────────────────────────────┬──────────────────┐
+  │        rolling-origin, monthly origins          │  SEALED HOLDOUT  │
+  │  ┌────────────┐ ▒▒ ┌────┐                       │   last 6 months  │
+  │  │   train    │ ▒▒ │test│                       │  opened ONCE, at │
+  │  └────────────┘ ▒▒ └────┘                       │  end of Phase 5  │
+  │       ▒▒ = 7-day embargo                        │                  │
+  └─────────────────────────────────────────────────┴──────────────────┘
+
+  resampling unit = the DELIVERY DAY, never the hour
+  (adjacent hours are ~0.95 correlated; effective n is the day count, ~630)
+```
+
+Metrics are normalised by **installed capacity, not mean generation** — mean-normalising makes
+numbers incomparable across years as the fleet grows. Reported per lead hour and per season, since
+drivers like icing are seasonal by nature.
+
+Headline scalars go to MLflow; the full metric grid (metric × lead hour × season × CF quintile) goes
+as a `metrics.parquet` artifact attached to the run, queried with DuckDB.
+
+---
+
+## 6. Open questions this diagram will have to absorb
+
+Tracked here so the diagram stays honest about what is not yet settled:
+
+- **Open-Meteo Previous Runs lead-time semantics** — which run initialisation and lead hours does
+  `<var>_previous_dayN` actually correspond to? Phase 4 sub-gate. If it cannot be pinned down, the
+  MOS premise weakens and the ERA5 physics layer carries more weight.
+- **MEPS retroactive archive depth** — determines whether a true 30-member ensemble track exists in
+  v1 at all. Phase 6 spike.
+- **SE3 offshore materiality** — if immaterial, the `wind_offshore` box merges into a single `wind`
+  target.
+- **A69 vintage recoverability** — if publication time cannot be recovered, the benchmark is renamed
+  `A69_latest_vintage` and treated as optimistic.
+- **DE-LU solar** — is A75 really upscaled total feed-in (consistent with netztransparenz/SMARD), or
+  metered-only?
+
+---
+
+## Changelog
+
+| Date | Change |
+|---|---|
+| 2026-09-20 | Initial version — task definition, known/not-known boundary, pipeline, storage, evaluation. |

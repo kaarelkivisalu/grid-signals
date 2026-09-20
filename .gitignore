@@ -9,3 +9,5 @@ briefings/
 .envrc
 .env*
 !.env.example
+research/mlruns/
+research/runs/

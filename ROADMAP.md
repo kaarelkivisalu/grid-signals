@@ -97,6 +97,25 @@ Generate weekly/monthly PDF reports suitable for distribution within a trading o
 - [x] Add ruff and mypy to project dev dependencies and CI
 - [x] Add pytest coverage reporting (pytest-cov)
 
+### Direction I: VRE Generation Forecast Models (in progress)
+
+Standalone ML development of probabilistic day-ahead wind and solar generation forecasts, in
+`research/` — deliberately **not integrated** with grid-signals; the integration deliverable is a
+written contract only. Renewable quantiles are the highest-value input to Direction H.
+
+- Targets: **SE3 onshore wind** first, then **DE-LU solar** (Swedish PV is largely behind-the-meter,
+  so ENTSO-E sees only a small metered slice — see `research/docs/dataflow.md`)
+- Approach: physics fitted on ERA5, thin statistical correction fitted on matched-lead NWP archives;
+  quantile GBM with multi-model spread as the uncertainty signal
+- Benchmark: ENTSO-E A69 TSO day-ahead forecast, plus climatology, persistence and a physical baseline
+- [x] Phase 1 — dataflow diagram (`research/docs/dataflow.md`) and project scaffold
+- [ ] Phase 2 — data audit (hard gate: GO/NO-GO per target)
+- [ ] Phase 3 — targets, frozen evaluation protocol, baselines
+- [ ] Phase 4 — NWP feature pipeline
+- [ ] Phase 5 — deterministic then probabilistic modelling
+- [ ] Phase 6 — ensemble spike (MEPS) and DE-LU solar
+- [ ] Phase 7 — operational dry-run and integration contract
+
 ### Direction G: Multi-Tenant SaaS
 
 Turn the tool into a product that multiple trading desks can use.

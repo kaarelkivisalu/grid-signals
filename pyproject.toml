@@ -32,6 +32,37 @@ dev = [
     "nbclient>=0.11.0",
 ]
 
+research = [
+    # experiment tracking
+    "mlflow>=2.18",
+    # modelling
+    "lightgbm>=4.5",
+    "scikit-learn>=1.5",
+    # physics
+    "pvlib>=0.11",
+    "windpowerlib>=0.2",
+    # geo / fleet registry
+    "geopandas>=1.0",
+    # scoring
+    "scoringrules>=0.7",
+    # storage & compute
+    "duckdb>=1.1",
+    "pyarrow>=18",
+    "xarray>=2024.10",
+    # io
+    "tenacity>=9.0",
+    "pyyaml>=6.0",
+    "pydantic-settings>=2.6",
+    # exploration
+    "matplotlib>=3.9",
+    "jupyterlab>=4.3",
+    # NOTE: `darts` is deliberately deferred to the Phase 4 spike -- it pulls torch
+    # for its deep models and we do not yet know which extra we need.
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
 [project.scripts]
 grid-signals = "grid_signals.cli:main"
 
@@ -40,7 +71,8 @@ requires = ["uv_build>=0.11.2, <0.12"]
 build-backend = "uv_build"
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "research/tests"]
+pythonpath = ["research/src"]
 
 [tool.ruff]
 target-version = "py312"
@@ -99,6 +131,14 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
+# No __init__.py: it would collide with the root `tests` package at import time.
+"research/tests/**" = ["S101", "PLR2004", "INP001"]
+# Research code: `X`/`y`/`df` are the idiom, and long inline exception messages are
+# not worth the workaround noise.
+"research/src/**" = ["N803", "N806", "PD901", "PD011", "TRY003", "EM101", "EM102", "S311"]
+# Exploratory notebooks are not linted; anything promoted out of one lands in
+# research/src/ where full lint applies.
+"research/notebooks/**" = ["ALL"]
 "scripts/**" = ["INP001"]
 "**.ipynb" = ["ERA001", "F401", "PT018"]
 "exercises.ipynb" = ["S101", "FIX"]

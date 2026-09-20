@@ -1,0 +1,31 @@
+# Base configuration. Experiment files under configs/experiments/ are deep-merged
+# on top of this. See research/docs/dataflow.md for what these values mean.
+name: base
+
+task:
+  zone: SE3
+  fuel_types: [wind_onshore]
+  # The market MTU is now 15 minutes; the eventual product must follow. Kept as a
+  # parameter from day one so that migration is a config change, not a rewrite.
+  resolution: 1h
+  # Gate closure is 11:00 UTC under CET but 10:00 UTC under CEST.
+  issue_hour_utc: 9
+  # Named explicitly -- never "latest available".
+  nwp_run_hour_utc: 0
+
+splits:
+  embargo_days: 7
+  origin_freq: MS
+  holdout_months: 6
+
+sources:
+  entsoe:
+    zones: [SE1, SE2, SE3, SE4]
+    start: "2018-01-01"
+  # Blends such as `best_match` are deliberately excluded: their composition changes
+  # over time, which is a silent non-stationarity in a training set.
+  openmeteo:
+    models: []   # pinned in Phase 4, after the lead-time semantics sub-gate
+
+features: {}
+model: {}
