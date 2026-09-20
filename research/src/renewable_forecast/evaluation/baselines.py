@@ -117,3 +117,47 @@ class TsoForecast:
         point = forecast_cf.reindex(test.period_start).to_numpy()
         point = np.nan_to_num(point, nan=float(np.nanmean(test.cf)))
         return _dress(point, self._residuals, self.levels)
+
+
+class PhysicalPowerCurve:
+    """Capacity-weighted NWP wind speed through a fleet power curve. No learning.
+
+    This is the baseline that matters most: it says whether machine learning adds
+    anything over physics, or is merely rediscovering the power curve at greater expense.
+
+    The point forecast is the physical chain's own output. Two things *are* fitted on
+    training data -- a single affine correction, and the residual distribution used to
+    dress the point into quantiles -- because a raw physical chain is systematically
+    biased (a generic curve, a nominal hub height, no wake or terrain losses) and
+    comparing an uncalibrated forecast against calibrated models would flatter the models
+    rather than test them.
+    """
+
+    name = "physical_power_curve"
+    feature = "power_curve_model_mean"
+
+    def __init__(self, levels: np.ndarray, *, calibrate: bool = True) -> None:
+        self.levels = levels
+        self.calibrate = calibrate
+        self._scale = 1.0
+        self._offset = 0.0
+        self._residuals = np.array([0.0])
+
+    def fit(self, train: pd.DataFrame) -> "PhysicalPowerCurve":
+        """Fit the affine correction and the residual distribution."""
+        physical = train[self.feature].to_numpy()
+        actual = train.cf.to_numpy()
+        usable = np.isfinite(physical) & np.isfinite(actual)
+        if self.calibrate and usable.sum() > 100:
+            self._scale, self._offset = np.polyfit(physical[usable], actual[usable], 1)
+        self._residuals = actual[usable] - self._point(physical[usable])
+        return self
+
+    def _point(self, physical: np.ndarray) -> np.ndarray:
+        return np.clip(self._scale * physical + self._offset, 0.0, 1.0)
+
+    def predict(self, test: pd.DataFrame) -> np.ndarray:
+        """Dress the corrected physical forecast into quantiles."""
+        physical = test[self.feature].to_numpy()
+        point = self._point(np.nan_to_num(physical, nan=float(np.nanmean(physical))))
+        return _dress(point, self._residuals, self.levels)

@@ -10,43 +10,26 @@ import logging
 import numpy as np
 import pandas as pd
 
-from renewable_forecast import config, experiment, paths, windows
+from renewable_forecast import config, experiment, paths
 from renewable_forecast.evaluation import baselines, metrics, splits
 
 logger = logging.getLogger(__name__)
 
 
-def load_targets(zone: str, fuel: str) -> pd.DataFrame:
-    """Read the target table built in Phase 3."""
-    path = paths.INTERIM / f"targets_{zone.lower()}_{fuel}.parquet"
+def load_design_matrix(zone: str, fuel: str) -> pd.DataFrame:
+    """Read the design matrix built in Phase 4.
+
+    It already carries the task columns (delivery day, lead hour, season) and the NWP
+    features, so the baselines and the models are scored on exactly the same rows.
+    """
+    path = paths.FEATURES / f"design_matrix_{zone.lower()}_{fuel}.parquet"
     if not path.exists():
-        msg = f"{path} missing; run renewable_forecast.targets.labels first"
+        msg = f"{path} missing; run renewable_forecast.features.assemble first"
         raise FileNotFoundError(msg)
     frame = pd.read_parquet(path)
-    frame["period_start"] = pd.to_datetime(frame.period_start, utc=True)
-    return frame[frame.trainable].reset_index(drop=True)
-
-
-def attach_task_columns(frame: pd.DataFrame) -> pd.DataFrame:
-    """Add delivery day, issue day and lead hour for every target hour.
-
-    A target hour belongs to the delivery day whose *local* calendar day contains it,
-    and the forecast for it was issued the morning before.
-    """
-    local = frame.period_start.dt.tz_convert(windows.MARKET_TZ)
-    frame = frame.assign(
-        delivery_day=local.dt.normalize().dt.tz_localize(None),
-        season=local.dt.month.map(
-            lambda m: ["DJF", "MAM", "JJA", "SON"][(m % 12) // 3]
-        ),
-    )
-    issue_day = frame.delivery_day - pd.Timedelta(days=1)
-    run_time = issue_day.dt.tz_localize("UTC")
-    frame["issue_day"] = issue_day
-    frame["lead_hour"] = (
-        (frame.period_start - run_time).dt.total_seconds() // 3600
-    ).astype(int)
-    return frame
+    frame["valid_time"] = pd.to_datetime(frame.valid_time, utc=True)
+    frame["delivery_day"] = pd.to_datetime(frame.delivery_day)
+    return frame.sort_values("valid_time").reset_index(drop=True)
 
 
 def _score(
@@ -88,8 +71,8 @@ def run(zone: str = "SE3", fuel: str = "wind_onshore") -> pd.DataFrame:
     cfg = config.load()
     levels = np.array(cfg.task.quantiles)
 
-    frame = attach_task_columns(load_targets(zone, fuel))
-    history = frame.set_index("period_start").cf
+    frame = load_design_matrix(zone, fuel)
+    history = frame.set_index("valid_time").cf
 
     days = pd.DatetimeIndex(sorted(frame.delivery_day.unique()))
     development, holdout = splits.seal_holdout(days, cfg.splits.holdout_months)
@@ -130,6 +113,9 @@ def run(zone: str = "SE3", fuel: str = "wind_onshore") -> pd.DataFrame:
         )
         collected["tso"].append(
             baselines.TsoForecast(levels).fit(train, tso_cf).predict(test, tso_cf)
+        )
+        collected["physical"].append(
+            baselines.PhysicalPowerCurve(levels).fit(train).predict(test)
         )
         truth.append(test.cf.to_numpy())
         context.append(test)
