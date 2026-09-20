@@ -107,12 +107,14 @@ written contract only. Renewable quantiles are the highest-value input to Direct
   so ENTSO-E sees only a small metered slice — see `research/docs/dataflow.md`)
 - Approach: physics fitted on ERA5, thin statistical correction fitted on matched-lead NWP archives;
   quantile GBM with multi-model spread as the uncertainty signal
-- Benchmark: ENTSO-E A69 TSO day-ahead forecast, plus climatology, persistence and a physical baseline
+- Benchmark: climatology, persistence and a physical power-curve baseline. **ENTSO-E A69 turned out
+  not to be a usable day-ahead bar** — it scores 1.77% nMAE against SE3 actuals where published
+  day-ahead wind skill is 3–6%, so the served revision postdates gate closure
 - [x] Phase 1 — dataflow diagram (`research/docs/dataflow.md`) and project scaffold
-- [ ] Phase 2 — data audit (hard gate: GO/NO-GO per target)
-- [ ] Phase 3 — targets, frozen evaluation protocol, baselines
-- [ ] Phase 4 — NWP feature pipeline
-- [ ] Phase 5 — deterministic then probabilistic modelling
+- [x] Phase 2 — data audit (`research/reports/data_audit.md`) — GO for SE3 wind
+- [x] Phase 3 — targets, frozen protocol (`research/reports/protocol.md`), baselines
+- [x] Phase 4 — NWP feature pipeline (`research/reports/openmeteo_vintage.md`)
+- [ ] Phase 5 — deterministic then probabilistic modelling (in progress)
 - [ ] Phase 6 — ensemble spike (MEPS) and DE-LU solar
 - [ ] Phase 7 — operational dry-run and integration contract
 
