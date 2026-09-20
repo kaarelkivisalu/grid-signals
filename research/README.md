@@ -72,5 +72,21 @@ mlruns/    gitignored (MLflow local file backend)
 
 ## Status
 
-Phase 1 (dataflow diagram + scaffold) is done. Phase 2 is the data audit, which is a **hard gate** —
-no modelling code until `reports/data_audit.md` carries an explicit GO/NO-GO per target.
+| Phase | State |
+|---|---|
+| 1 — dataflow diagram + scaffold | done |
+| 2 — data audit (hard gate) | done — `reports/data_audit.md`, GO for SE3 wind |
+| 3 — targets, frozen protocol, baselines | done — `reports/protocol.md` |
+| 4 — NWP feature pipeline | done — `reports/openmeteo_vintage.md`, design matrix built |
+| 5 — modelling | in progress |
+| 6 — ensemble spike + DE-LU solar | not started |
+| 7 — dry-run + integration contract | not started |
+
+Two findings worth knowing before reading anything else:
+
+- **A69 is not a usable day-ahead benchmark.** It scores 1.77% nMAE against SE3 actuals where
+  published day-ahead wind skill is 3–6%, so the served revision almost certainly postdates gate
+  closure. Climatology, persistence and the physical power-curve baseline are the operative bars.
+- **The obvious NWP construction leaks.** A fixed 24-hour forecast offset consumes data that did
+  not exist at issue time on 13 of every 24 delivery hours. The design matrix picks the smallest
+  safe offset per hour; see `reports/openmeteo_vintage.md`.

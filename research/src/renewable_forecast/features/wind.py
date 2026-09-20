@@ -148,10 +148,15 @@ def aggregate(points: pd.DataFrame, weights: pd.DataFrame) -> pd.DataFrame:
         # Dispersion across clusters, for the features where it is physically meaningful.
         for column in ("wind_speed_100m", "power_curve"):
             series = group[column].to_numpy(dtype=float)
-            result[f"{column}_spatial_std"] = float(np.nanstd(series))
-            result[f"{column}_spatial_range"] = float(
-                np.nanmax(series) - np.nanmin(series)
-            )
+            finite = series[np.isfinite(series)]
+            # A cluster-hour with no finite values happens where a model has a gap;
+            # nan is the honest answer, and numpy's all-NaN warnings are just noise.
+            if finite.size == 0:
+                result[f"{column}_spatial_std"] = np.nan
+                result[f"{column}_spatial_range"] = np.nan
+            else:
+                result[f"{column}_spatial_std"] = float(finite.std())
+                result[f"{column}_spatial_range"] = float(finite.max() - finite.min())
         return pd.Series(result)
 
     return (

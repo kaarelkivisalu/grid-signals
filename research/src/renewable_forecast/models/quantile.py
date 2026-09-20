@@ -46,13 +46,13 @@ class QuantileGBM:
         self.columns = base.feature_columns(train)
         features = base.matrix(train, self.columns)
         target = train.cf.to_numpy(dtype=float)
-        constraints = base.monotone_constraints(self.columns)
 
+        # LightGBM refuses monotone constraints under the quantile objective, so the
+        # constraint idea is exercised by PointGBM instead. The non-crossing repair and
+        # the modest tree size carry the regularisation burden here.
         self._models = []
         for level in self.levels:
-            model = lgb.LGBMRegressor(
-                **self.params, alpha=float(level), monotone_constraints=constraints
-            )
+            model = lgb.LGBMRegressor(**self.params, alpha=float(level))
             model.fit(features, target)
             self._models.append(model)
         return self

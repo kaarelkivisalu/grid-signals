@@ -77,7 +77,8 @@ important test in the project.
                                                  │                     │
                                                  ▼                     ▼
   Open-Meteo Previous Runs ──▶ parquet ──▶ ┌──────────────┐     ┌─────────────┐
-   (matched lead, pinned models)           │ power curve  │     │   DESIGN    │
+   offsets 1,2 (+3 for spread)             │ power curve  │     │   DESIGN    │
+   pinned: ecmwf_ifs025, gfs025, icon_eu   │              │     │             │
                                            │ air density  │     │   MATRIX    │
   ERA5 via CDS ─────────────▶ parquet ──▶  │ spatial std  ├────▶│ keyed by    │
    (physics fitting, ~10 yr)               │ clear-sky kt │     │ (issue_time,│
@@ -191,5 +192,6 @@ Tracked here so the diagram stays honest about what is not yet settled:
 | Date | Change |
 |---|---|
 | 2026-09-20 | Initial version — task definition, known/not-known boundary, pipeline, storage, evaluation. |
+| 2026-09-20 | Phase 4: NWP pipeline built. The leakage guard rejected the obvious construction — a fixed `previous_day1` offset leaks on 13 of every 24 delivery hours — so the design matrix now picks the smallest *safe* offset per hour and carries `nwp_offset_days`. Minimum safe lag for actuals raised 24 h → 48 h for the same reason. Archive depth is shorter than planned: 2024-03 onward, three usable models, ~946 delivery days. |
 | 2026-09-20 | Phase 3: protocol frozen (`reports/protocol.md`), baselines scored. A69 turns out not to be a usable day-ahead bar — 1.77% nMAE, 3-4x better than published day-ahead skill — so climatology, persistence and the physical baseline carry the comparison. Two silently-vacuous quality checks found and fixed. |
 | 2026-09-20 | Phase 2 audit landed. Resolved: SE3 offshore is absent from A75 (drop it); A68 is national for Sweden so the zonal denominator comes from Vindbrukskollen; A69 vintage is not recoverable, benchmark renamed `A69_latest_vintage`; SE zones went 15-minute on 2025-12-01. SE3 solar moved from assumed-unusable to CONDITIONAL — the series is credible, only the denominator is missing. |

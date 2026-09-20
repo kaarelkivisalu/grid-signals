@@ -39,8 +39,8 @@ class Climatology:
         self._fallback = np.quantile(train.cf.dropna(), self.levels)
         for key, group in train.groupby(
             [
-                train.period_start.dt.month,
-                train.period_start.dt.hour,
+                train.valid_time.dt.month,
+                train.valid_time.dt.hour,
             ]
         ):
             values = group.cf.dropna()
@@ -50,7 +50,7 @@ class Climatology:
 
     def predict(self, test: pd.DataFrame) -> np.ndarray:
         """Look up the quantiles for each target hour."""
-        keys = zip(test.period_start.dt.month, test.period_start.dt.hour, strict=True)
+        keys = zip(test.valid_time.dt.month, test.valid_time.dt.hour, strict=True)
         return np.vstack([self._table.get(k, self._fallback) for k in keys])
 
 
@@ -63,7 +63,7 @@ class Persistence:
 
     @staticmethod
     def _lagged(frame: pd.DataFrame, history: pd.Series) -> np.ndarray:
-        lagged_index = frame.period_start - pd.Timedelta(hours=PERSISTENCE_LAG_HOURS)
+        lagged_index = frame.valid_time - pd.Timedelta(hours=PERSISTENCE_LAG_HOURS)
         return history.reindex(lagged_index).to_numpy()
 
     def fit(self, train: pd.DataFrame, history: pd.Series) -> "Persistence":
@@ -108,13 +108,13 @@ class TsoForecast:
 
     def fit(self, train: pd.DataFrame, forecast_cf: pd.Series) -> "TsoForecast":
         """Learn the published forecast's own error distribution."""
-        point = forecast_cf.reindex(train.period_start).to_numpy()
+        point = forecast_cf.reindex(train.valid_time).to_numpy()
         self._residuals = train.cf.to_numpy() - point
         return self
 
     def predict(self, test: pd.DataFrame, forecast_cf: pd.Series) -> np.ndarray:
         """Dress the published point forecast into quantiles."""
-        point = forecast_cf.reindex(test.period_start).to_numpy()
+        point = forecast_cf.reindex(test.valid_time).to_numpy()
         point = np.nan_to_num(point, nan=float(np.nanmean(test.cf)))
         return _dress(point, self._residuals, self.levels)
 

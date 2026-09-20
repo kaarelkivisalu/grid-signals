@@ -7,6 +7,7 @@ import pandas as pd
 
 from renewable_forecast import config
 from renewable_forecast.evaluation import baselines
+from renewable_forecast.models.gbm import PointGBM
 from renewable_forecast.models.quantile import QuantileGBM
 from renewable_forecast.models.sanity import RidgeSanityFloor
 from renewable_forecast.pipelines import evaluate
@@ -30,6 +31,7 @@ def forecasters(levels: np.ndarray, history: pd.Series, tso_cf: pd.Series) -> di
             baselines.PhysicalPowerCurve(levels)
         ),
         RidgeSanityFloor.name: lambda: _Adapter(RidgeSanityFloor(levels)),
+        PointGBM.name: lambda: _Adapter(PointGBM(levels)),
         QuantileGBM.name: lambda: _Adapter(QuantileGBM(levels)),
     }
 
@@ -83,7 +85,7 @@ def run(zone: str = "SE3", fuel: str = "wind_onshore") -> pd.DataFrame:
             levels,
             context,
             cfg,
-            kind="model" if "quantile" in name or "ridge" in name else "baseline",
+            kind="model" if "lightgbm" in name or "ridge" in name else "baseline",
         )
         for name, quantiles in predictions.items()
     ]

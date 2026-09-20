@@ -139,6 +139,10 @@ def _parse(payload: dict, point_id: str, model: str) -> pd.DataFrame:
     frame = pd.DataFrame(hourly)
     frame["time"] = pd.to_datetime(frame["time"], utc=True)
     frame = frame.rename(columns={"time": "valid_time"})
+    # Nulls arrive as None and make the column object dtype, which then breaks every
+    # downstream numpy call. Coerce once, here, where the data enters the project.
+    for column in frame.columns.drop("valid_time"):
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
     frame["point_id"] = point_id
     frame["model"] = model
     return frame
