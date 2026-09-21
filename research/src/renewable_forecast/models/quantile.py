@@ -13,7 +13,7 @@ import pandas as pd
 
 from renewable_forecast.evaluation.splits import calibration_split
 from renewable_forecast.models import base
-from renewable_forecast.models.conformal import StratifiedCQR
+from renewable_forecast.models.conformal import SpreadCQR
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ class QuantileGBM:
         self.conformalise = conformalise
         self.columns: list[str] = []
         self._models: list[lgb.LGBMRegressor] = []
-        self._conformal: StratifiedCQR | None = None
+        self._conformal: SpreadCQR | None = None
 
     def fit(self, train: pd.DataFrame) -> "QuantileGBM":
         """Fit one booster per level, then calibrate on days it did not see."""
@@ -73,7 +73,10 @@ class QuantileGBM:
             self._models.append(model)
 
         if self.conformalise and calib is not None and len(calib) > 200:
-            self._conformal = StratifiedCQR(self.levels).fit(
+            # Additive, level x NWP-spread strata: same CRPS as the lead x level layer
+            # it replaced, with 80% coverage 0.737 -> 0.774 and flat across spread
+            # quartiles (`reports/calibration.md`, `pipelines/compare_calibration.py`).
+            self._conformal = SpreadCQR(self.levels, normalise=False).fit(
                 calib, self._raw_predict(calib)
             )
         return self

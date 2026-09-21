@@ -558,100 +558,120 @@ def plot_latest_forecast(zone: str = "SE3", fuel: str = "wind_onshore") -> str: 
 CF_BUCKETS = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
 
 #: Below this many observations a bucket is anecdote, not evidence, and is drawn as
-#: such. SE3 reached a capacity factor above 0.8 in five hours of the scored window.
+#: such.
 MIN_BUCKET_N = 30
 
+#: NWP disagreement quartiles for the spread breakdown.
+SPREAD_COLUMN = "power_curve_model_std"
 
-def coverage_by_output(zone: str = "SE3", fuel: str = "wind_onshore") -> pd.DataFrame:
-    """Interval coverage and width as a function of how much the fleet is producing.
 
-    Pooled coverage can be near nominal while the intervals fail systematically in one
-    regime. This is the breakdown that exposes it, and it needs the per-row forecasts
-    rather than the metric grid.
+def _coverage_stats(g: pd.DataFrame) -> pd.Series:
+    return pd.Series(
+        {
+            "n": len(g),
+            "coverage_80": ((g.cf >= g["cf_q0.10"]) & (g.cf <= g["cf_q0.90"])).mean(),
+            "coverage_90": ((g.cf >= g["cf_q0.05"]) & (g.cf <= g["cf_q0.95"])).mean(),
+            "width_mw": (g["mw_q0.95"] - g["mw_q0.05"]).mean(),
+        }
+    )
+
+
+def coverage_by_output(
+    zone: str = "SE3", fuel: str = "wind_onshore", by: str = "forecast"
+) -> pd.DataFrame:
+    """Interval coverage and width as a function of how much output is *forecast*.
+
+    Binning by the forecast median is the only honest conditioning. Binning by the
+    realised output selects on the outcome: hours that turned out high are over-
+    represented among hours the forecast under-shot, so even a perfectly calibrated
+    forecast shows sub-nominal coverage in the top bins (the forecaster's dilemma,
+    Lerch et al. 2017). The earlier version of this figure did exactly that and
+    overstated the high-output shortfall. `by="actual"` is kept for comparison only.
     """
     frame = load_backtest(zone, fuel)
     frame = frame[frame.forecaster == "lightgbm_quantile"]
-    bucket = pd.cut(frame.cf, CF_BUCKETS)
+    source = frame["cf_q0.50"] if by == "forecast" else frame.cf
+    bucket = pd.cut(source, CF_BUCKETS, include_lowest=True)
     return (
         frame.assign(bucket=bucket)
         .groupby("bucket", observed=True)
-        .apply(
-            lambda g: pd.Series(
-                {
-                    "n": len(g),
-                    "coverage_80": (
-                        (g.cf >= g["cf_q0.10"]) & (g.cf <= g["cf_q0.90"])
-                    ).mean(),
-                    "coverage_90": (
-                        (g.cf >= g["cf_q0.05"]) & (g.cf <= g["cf_q0.95"])
-                    ).mean(),
-                    "width_mw": (g["mw_q0.95"] - g["mw_q0.05"]).mean(),
-                }
-            ),
-            include_groups=False,
-        )
+        .apply(_coverage_stats, include_groups=False)
         .reset_index()
     )
 
 
-def plot_coverage_by_output(zone: str = "SE3", fuel: str = "wind_onshore") -> str:
-    """Where the intervals fail: coverage falls as output rises.
+def coverage_by_spread(zone: str = "SE3", fuel: str = "wind_onshore") -> pd.DataFrame:
+    """Coverage by quartile of NWP model disagreement.
 
-    The pooled coverage figures on the leaderboard average over this. Intervals are
-    worst exactly where generation -- and therefore the MW error and the money -- is
-    largest.
+    The spread is a forecast-time quantity, so this conditioning is legitimate. It is
+    the breakdown that motivates `SpreadCQR`.
     """
-    grid = coverage_by_output(zone, fuel)
-    labels = [str(b) for b in grid.bucket]
-    fig, (left, right) = plt.subplots(1, 2, figsize=(10, 3.4), constrained_layout=True)
+    frame = load_backtest(zone, fuel)
+    frame = frame[frame.forecaster == "lightgbm_quantile"]
+    spread = pd.read_parquet(
+        paths.FEATURES / f"design_matrix_{zone.lower()}_{fuel}.parquet",
+        columns=["valid_time", SPREAD_COLUMN],
+    )
+    spread["valid_time"] = pd.to_datetime(spread.valid_time, utc=True)
+    frame = frame.merge(spread, on="valid_time", how="left")
+    quartile = pd.qcut(frame[SPREAD_COLUMN], 4, labels=["Q1", "Q2", "Q3", "Q4"])
+    return (
+        frame.assign(bucket=quartile)
+        .groupby("bucket", observed=True)
+        .apply(_coverage_stats, include_groups=False)
+        .reset_index()
+    )
 
-    solid = int((grid.n >= MIN_BUCKET_N).sum())
+
+def _coverage_panel(ax, grid: pd.DataFrame, xlabel: str, title: str) -> None:
+    labels = [str(b) for b in grid.bucket]
+    solid = grid.n >= MIN_BUCKET_N
     for column, colour, marker, label in (
         ("coverage_90", "#bc4b51", "o", "observed 90%"),
         ("coverage_80", "#f4a259", "s", "observed 80%"),
     ):
-        left.plot(
-            labels[:solid],
-            grid[column][:solid],
-            marker=marker,
-            color=colour,
-            label=label,
-        )
-        if solid < len(grid):
-            left.plot(
-                labels[solid - 1 :],
-                grid[column][solid - 1 :],
-                marker=marker,
-                color=colour,
-                ls="--",
-                alpha=0.45,
-                markerfacecolor="white",
-            )
-    left.axhline(NOMINAL_90, color="#bc4b51", ls=":", lw=1.2)
-    left.axhline(NOMINAL_80, color="#f4a259", ls=":", lw=1.2)
-    left.set_ylim(0, 1.0)
-    left.set_ylabel("interval coverage")
-    left.set_xlabel("actual capacity factor")
-    left.set_title("Coverage falls as output rises", fontsize=10)
-    left.grid(alpha=0.3)
-    left.legend(fontsize=7.5, loc="lower left")
+        ax.plot(labels, grid[column].where(solid), marker=marker, color=colour, label=label)
+    ax.axhline(NOMINAL_90, color="#bc4b51", ls=":", lw=1.2)
+    ax.axhline(NOMINAL_80, color="#f4a259", ls=":", lw=1.2)
+    ax.set_ylim(0.5, 1.0)
+    ax.set_ylabel("interval coverage")
+    ax.set_xlabel(xlabel)
+    ax.set_title(title, fontsize=10)
+    ax.grid(alpha=0.3)
+    ax.legend(fontsize=7.5, loc="lower left")
     for x, (n, cov) in enumerate(zip(grid.n, grid.coverage_90, strict=True)):
-        left.annotate(
-            f"n={n:,.0f}" + ("\nanecdote" if n < MIN_BUCKET_N else ""),
-            (x, cov),
-            textcoords="offset points",
-            xytext=(0, 8),
-            fontsize=7,
-            ha="center",
-        )
+        if n >= MIN_BUCKET_N:
+            ax.annotate(
+                f"n={n:,.0f}",
+                (x, cov),
+                textcoords="offset points",
+                xytext=(0, 8),
+                fontsize=7,
+                ha="center",
+            )
 
-    right.bar(labels, grid.width_mw, color="#5b8e7d", width=0.6)
-    right.set_ylabel("mean p5-p95 width (MW)")
-    right.set_xlabel("actual capacity factor")
-    right.set_title("Intervals widen with output, but not enough", fontsize=10)
-    right.grid(axis="y", alpha=0.3)
+
+def plot_coverage_by_output(zone: str = "SE3", fuel: str = "wind_onshore") -> str:
+    """Where the intervals fail, conditioned only on what was known at issue time.
+
+    Left: by forecast level. Right: by NWP disagreement, the stronger of the two.
+    """
+    by_level = coverage_by_output(zone, fuel)
+    by_spread = coverage_by_spread(zone, fuel)
+    fig, (left, right) = plt.subplots(1, 2, figsize=(10, 3.4), constrained_layout=True)
+    _coverage_panel(
+        left, by_level, "forecast capacity factor (median)", "By forecast level"
+    )
+    _coverage_panel(
+        right,
+        by_spread,
+        "NWP model disagreement quartile",
+        "By weather-model disagreement",
+    )
+    pooled = (by_level.coverage_80 * by_level.n).sum() / by_level.n.sum()
     fig.suptitle(
-        "Conditional coverage — the pooled 0.852 at nominal 0.90 hides a monotone decline",
+        f"Conditional coverage — pooled {pooled:.3f} at nominal 0.80; "
+        "the shortfall grows with forecast level and with model disagreement",
         fontsize=9.5,
     )
     return _save(fig, "coverage_by_output")

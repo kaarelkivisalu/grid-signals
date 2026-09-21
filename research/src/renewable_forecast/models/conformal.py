@@ -84,6 +84,133 @@ class StratifiedCQR:
         return np.sort(np.clip(adjusted, 0.0, 1.0), axis=1)
 
 
+#: The NWP disagreement signal used to stratify. Among hours whose raw p10-p90 width is
+#: the same, the quartile where the three models disagree most has roughly twice the
+#: absolute error of the quartile where they agree, and 80% coverage falls from 0.81 to
+#: 0.67 across those quartiles (`reports/calibration.md`). The booster sees this column
+#: but does not widen its quantiles enough for it; a post-hoc layer can.
+SPREAD_COLUMN = "power_curve_model_std"
+
+#: Scores are divided by the raw interval width, floored so that near-zero widths at a
+#: calm-night zero output cannot blow a residual up into an enormous normalised score.
+MIN_SCALE = 0.02
+
+
+class SpreadCQR:
+    """Conformal quantile regression stratified by predicted level and NWP spread.
+
+    Two changes from `StratifiedCQR`, each answering a measured defect:
+
+    * **Strata that carry signal and stay populated.** Lead hour x level bin gives 96
+      strata, and a 45-day calibration block puts ~11 rows in each, so most fall back
+      to the global correction. Level bin x spread tercile gives 12, which stay above
+      the fallback threshold in every fold, and spread is the stratifier the
+      diagnostics say matters.
+    * **Optionally multiplicative.** With `normalise=True` scores are `(y - q) / width`,
+      so the correction stretches each forecast's own interval (the normalised-score
+      variant of CQR). Measured on SE3 it scored slightly *worse* CRPS than additive
+      scores within the same strata, so the shipping model uses `normalise=False`: the
+      spread strata already carry the heteroscedasticity.
+
+    Spread bin edges come from the calibration block's own terciles, so they adapt to
+    each fold without looking at test data.
+    """
+
+    name = "conformal_spread"
+
+    def __init__(
+        self,
+        levels: np.ndarray,
+        spread_column: str = SPREAD_COLUMN,
+        n_level_bins: int = N_PREDICTION_BINS,
+        n_spread_bins: int = 3,
+        *,
+        normalise: bool = True,
+        min_rows: int = 30,
+    ) -> None:
+        self.levels = levels
+        self.spread_column = spread_column
+        self.n_level_bins = n_level_bins
+        self.n_spread_bins = n_spread_bins
+        self.normalise = normalise
+        self.min_rows = min_rows
+        self._level_edges = np.linspace(0.0, 1.0, n_level_bins + 1)[1:-1]
+        self._spread_edges = np.array([])
+        self._corrections: dict[tuple[int, int], np.ndarray] = {}
+        self._by_level: dict[int, np.ndarray] = {}
+        self._global = np.zeros(len(levels))
+
+    def _median(self, quantiles: np.ndarray) -> np.ndarray:
+        return quantiles[:, int(np.argmin(np.abs(self.levels - 0.5)))]
+
+    def _scale(self, quantiles: np.ndarray) -> np.ndarray:
+        if not self.normalise:
+            return np.ones(len(quantiles))
+        return np.maximum(quantiles[:, -1] - quantiles[:, 0], MIN_SCALE)
+
+    def _spread(self, frame: pd.DataFrame) -> np.ndarray:
+        if self.spread_column not in frame.columns:
+            return np.zeros(len(frame))
+        return frame[self.spread_column].to_numpy(dtype=float)
+
+    def _bins(
+        self, frame: pd.DataFrame, quantiles: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        level = np.digitize(self._median(quantiles), self._level_edges)
+        spread = self._spread(frame)
+        # A missing spread (one model absent) goes to the middle bin rather than the
+        # calmest one, which would tighten the interval exactly when information is thin.
+        spread = np.where(np.isnan(spread), np.nanmedian(spread), spread)
+        return level, np.digitize(spread, self._spread_edges)
+
+    def _correction(self, scores: np.ndarray) -> np.ndarray:
+        return np.quantile(scores, self.levels, axis=0).diagonal().copy()
+
+    def fit(self, calibration: pd.DataFrame, quantiles: np.ndarray) -> "SpreadCQR":
+        """Learn per-stratum corrections from held-out residuals."""
+        actual = calibration.cf.to_numpy(dtype=float)
+        spread = self._spread(calibration)
+        finite = spread[np.isfinite(spread)]
+        self._spread_edges = (
+            np.quantile(finite, np.linspace(0, 1, self.n_spread_bins + 1)[1:-1])
+            if len(finite)
+            else np.array([])
+        )
+        scores = (actual[:, None] - quantiles) / self._scale(quantiles)[:, None]
+        level, spread_bin = self._bins(calibration, quantiles)
+
+        self._global = self._correction(scores)
+        self._by_level, self._corrections = {}, {}
+        for lb in np.unique(level):
+            rows = level == lb
+            if rows.sum() >= self.min_rows:
+                self._by_level[int(lb)] = self._correction(scores[rows])
+            for sb in np.unique(spread_bin[rows]):
+                cell = rows & (spread_bin == sb)
+                if cell.sum() >= self.min_rows:
+                    self._corrections[(int(lb), int(sb))] = self._correction(
+                        scores[cell]
+                    )
+        return self
+
+    def apply(self, frame: pd.DataFrame, quantiles: np.ndarray) -> np.ndarray:
+        """Stretch each interval by its stratum's correction, then repair crossings.
+
+        Falls back from the (level, spread) cell to the level bin to the global
+        correction, so a sparse stratum borrows from its nearest populated parent
+        rather than from the whole calibration set at once.
+        """
+        level, spread_bin = self._bins(frame, quantiles)
+        offsets = np.empty_like(quantiles)
+        for position, (lb, sb) in enumerate(zip(level, spread_bin, strict=True)):
+            key = (int(lb), int(sb))
+            offsets[position] = self._corrections.get(
+                key, self._by_level.get(key[0], self._global)
+            )
+        adjusted = quantiles + offsets * self._scale(quantiles)[:, None]
+        return np.sort(np.clip(adjusted, 0.0, 1.0), axis=1)
+
+
 def adaptive_levels(
     realised_coverage: np.ndarray, nominal: np.ndarray, step: float = DEFAULT_STEP
 ) -> np.ndarray:

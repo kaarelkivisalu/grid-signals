@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 
 from renewable_forecast.evaluation import metrics, splits
-from renewable_forecast.models.conformal import StratifiedCQR
+from renewable_forecast.models.conformal import SpreadCQR, StratifiedCQR
 
 LEVELS = np.round(np.arange(0.05, 1.0, 0.05), 2)
 
@@ -89,5 +89,58 @@ def test_conformal_output_never_crosses_or_leaves_the_unit_interval() -> None:
     quantiles = np.sort(rng.uniform(0, 1, (len(calib), len(LEVELS))), axis=1)
     out = StratifiedCQR(LEVELS).fit(calib, quantiles).apply(calib, quantiles)
     assert (np.diff(out, axis=1) >= 0).all(), "quantiles must not cross"
+    assert out.min() >= 0.0
+    assert out.max() <= 1.0
+
+
+def _heteroscedastic(n_days: int, seed: int) -> tuple[pd.DataFrame, np.ndarray]:
+    """Rows whose error scale is set by a spread column, with identical raw intervals.
+
+    The raw quantiles know nothing about the spread, which is the situation measured on
+    SE3: the booster's intervals barely respond to model disagreement.
+    """
+    rng = np.random.default_rng(seed)
+    frame = _train(n_days).reset_index(drop=True)
+    spread = rng.uniform(0.0, 1.0, len(frame))
+    frame["power_curve_model_std"] = spread
+    frame["cf"] = (0.4 + rng.normal(0, 0.03 + 0.12 * spread)).clip(0, 1)
+    raw = 0.4 + np.quantile(rng.normal(0, 0.05, 10_000), LEVELS)
+    return frame, np.repeat(raw[None, :], len(frame), axis=0)
+
+
+def test_spread_conformal_restores_coverage_where_the_models_disagree() -> None:
+    calib, raw = _heteroscedastic(60, seed=4)
+    test, raw_test = _heteroscedastic(60, seed=5)
+    corrected = SpreadCQR(LEVELS).fit(calib, raw).apply(test, raw_test)
+
+    disagree = test.power_curve_model_std.to_numpy() > 2 / 3
+    agree = test.power_curve_model_std.to_numpy() < 1 / 3
+    actual = test.cf.to_numpy()
+    for rows in (disagree, agree):
+        assert metrics.coverage(
+            actual[rows], corrected[rows], LEVELS, 0.80
+        ) == pytest.approx(0.80, abs=0.06)
+    width = corrected[:, -1] - corrected[:, 0]
+    assert width[disagree].mean() > 2 * width[agree].mean(), (
+        "intervals must be wider where the NWP models disagree"
+    )
+
+
+def test_stratified_conformal_cannot_see_spread() -> None:
+    """The defect SpreadCQR fixes: lead-and-level strata miss the spread signal."""
+    calib, raw = _heteroscedastic(60, seed=4)
+    test, raw_test = _heteroscedastic(60, seed=5)
+    corrected = StratifiedCQR(LEVELS).fit(calib, raw).apply(test, raw_test)
+    disagree = test.power_curve_model_std.to_numpy() > 2 / 3
+    assert metrics.coverage(
+        test.cf.to_numpy()[disagree], corrected[disagree], LEVELS, 0.80
+    ) < 0.72
+
+
+def test_spread_conformal_survives_a_missing_spread_column() -> None:
+    calib, raw = _heteroscedastic(30, seed=6)
+    calib = calib.drop(columns="power_curve_model_std")
+    out = SpreadCQR(LEVELS).fit(calib, raw).apply(calib, raw)
+    assert (np.diff(out, axis=1) >= 0).all()
     assert out.min() >= 0.0
     assert out.max() <= 1.0
