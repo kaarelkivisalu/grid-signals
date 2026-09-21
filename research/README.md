@@ -161,9 +161,14 @@ yet in the units the market actually trades.
 ## What comes next, in order
 
 1. **Get weather data addressed by model run** rather than by whole days, removing
-   problem 2. MET Norway publishes an archive in exactly that form, and it would also
-   supply the 30-member forecast spread that would help with problem 1.
-2. **Fix the over-confidence** in problem 1.
+   problem 2. MET Norway publishes an archive in exactly that form. The code for this
+   is written and tested; it is waiting on a two-year download of the archive.
+2. **Fix the over-confidence** in problem 1 — which now needs a different source than
+   planned. The MET Norway archive was expected to supply a 30-member forecast spread
+   as well, and it does not: those files stop on 10 December 2024, covering only 100 of
+   the 546 days measured here. A feature that exists for the first sixth of the period
+   and then vanishes teaches a model the publication schedule, not the weather. The
+   spread has to come from somewhere else.
 3. **Explain the capacity drift** in problem 3.
 4. **Move to 15-minute resolution** to match the market.
 5. **Start solar**, on Germany rather than Sweden — Swedish rooftop solar is largely
@@ -206,7 +211,8 @@ exactly which rows each statistic covers and what it measures.
 | 3 — targets, frozen scoring rules, baselines | done |
 | 4 — weather feature pipeline | done |
 | 5 — modelling | done |
-| 6 — ensemble spike | done — worth doing, not free |
+| 6 — ensemble spike | done — run addressing yes, ensemble no |
+| 6 — MEPS integration | code done, archive downloading |
 | 6 — German solar | not started |
 | 7 — integration contract | drafted |
 | 7 — live trial run | not started |
@@ -256,6 +262,8 @@ uv sync --group research
 export PYTHONPATH=research/src
 
 uv run python -m renewable_forecast.pipelines.data_audit   # data quality gate
+uv run python -m renewable_forecast.pipelines.pull_meps    # MEPS archive backfill
+uv run python -m renewable_forecast.pipelines.compare_meps # run-addressed A/B
 uv run python -m renewable_forecast.pipelines.train        # backtest + results
 uv run python -m renewable_forecast.pipelines.predict      # forecast tomorrow
 uv run python -m renewable_forecast.reporting.figures      # regenerate every figure
