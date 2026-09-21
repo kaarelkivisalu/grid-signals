@@ -18,13 +18,21 @@ EXCLUDED = frozenset(
         "issue_day",
         "season",
         "nwp_offset_days",
+        # The MEPS run instant is bookkeeping, not weather: it tells the leakage guard
+        # how old a __meps column is and must never become a feature itself.
+        "meps_run_time",
     }
 )
 
 #: Features the fleet response is physically monotone in. Constraining them is cheap
 #: insurance against nonsense in the sparse high-wind tail, where a short archive gives
 #: a tree almost nothing to learn from.
-MONOTONE_INCREASING = ("power_curve_model_mean", "wind_speed_100m_model_mean")
+MONOTONE_INCREASING = (
+    "power_curve_model_mean",
+    "wind_speed_100m_model_mean",
+    "power_curve__meps",
+    "wind_speed_hub__meps",
+)
 
 
 def feature_columns(frame: pd.DataFrame) -> list[str]:

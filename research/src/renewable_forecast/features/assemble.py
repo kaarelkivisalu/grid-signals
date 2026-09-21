@@ -242,8 +242,16 @@ def attach_meps(frame: pd.DataFrame, points: pd.DataFrame) -> pd.DataFrame:
     return merged
 
 
-def build(zone: str = "SE3", fuel: str = "wind_onshore") -> pd.DataFrame:
-    """Join NWP features to the target, picking the smallest safe offset per hour."""
+def build(
+    zone: str = "SE3", fuel: str = "wind_onshore", *, with_meps: bool = False
+) -> pd.DataFrame:
+    """Join NWP features to the target, picking the smallest safe offset per hour.
+
+    `with_meps` appends the run-addressed MEPS block. It is additive by design: the row
+    set is untouched, so a matrix built with it supports an exact A/B -- the same rows,
+    scored with and without the `__meps` columns -- rather than a comparison confounded
+    by differing coverage.
+    """
     raw = openmeteo.load()
     if raw.empty:
         msg = "no NWP data parsed; run openmeteo.pull first"
@@ -282,7 +290,10 @@ def build(zone: str = "SE3", fuel: str = "wind_onshore") -> pd.DataFrame:
     merged = targets[keep].merge(
         stacked, on=["valid_time", "nwp_offset_days"], how="inner"
     )
-    return pd.concat([merged, calendar(merged)], axis=1)
+    merged = pd.concat([merged, calendar(merged)], axis=1)
+    if with_meps:
+        merged = attach_meps(merged, points)
+    return merged
 
 
 def _annotate(frame: pd.DataFrame) -> pd.DataFrame:
@@ -377,11 +388,21 @@ def max_source_time(frame: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def write(zone: str = "SE3", fuel: str = "wind_onshore") -> pd.DataFrame:
+def design_matrix_path(
+    zone: str = "SE3", fuel: str = "wind_onshore", *, with_meps: bool = False
+):
+    """Where a design matrix of the given flavour lives."""
+    suffix = "_meps" if with_meps else ""
+    return paths.FEATURES / f"design_matrix_{zone.lower()}_{fuel}{suffix}.parquet"
+
+
+def write(
+    zone: str = "SE3", fuel: str = "wind_onshore", *, with_meps: bool = False
+) -> pd.DataFrame:
     """Build the design matrix and persist it."""
-    frame = build(zone, fuel)
+    frame = build(zone, fuel, with_meps=with_meps)
     paths.FEATURES.mkdir(parents=True, exist_ok=True)
-    out = paths.FEATURES / f"design_matrix_{zone.lower()}_{fuel}.parquet"
+    out = design_matrix_path(zone, fuel, with_meps=with_meps)
     frame.to_parquet(out, index=False)
     logger.info("wrote %s (%s rows, %s columns)", out, len(frame), frame.shape[1])
     return frame

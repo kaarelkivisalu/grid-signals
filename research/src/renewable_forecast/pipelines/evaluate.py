@@ -14,6 +14,7 @@ import pandas as pd
 
 from renewable_forecast import config, experiment, paths
 from renewable_forecast.evaluation import metrics, splits
+from renewable_forecast.features import assemble
 
 logger = logging.getLogger(__name__)
 
@@ -21,9 +22,11 @@ logger = logging.getLogger(__name__)
 Forecaster = Callable[[], object]
 
 
-def load_design_matrix(zone: str = "SE3", fuel: str = "wind_onshore") -> pd.DataFrame:
+def load_design_matrix(
+    zone: str = "SE3", fuel: str = "wind_onshore", *, with_meps: bool = False
+) -> pd.DataFrame:
     """Read the design matrix built in Phase 4."""
-    path = paths.FEATURES / f"design_matrix_{zone.lower()}_{fuel}.parquet"
+    path = assemble.design_matrix_path(zone, fuel, with_meps=with_meps)
     if not path.exists():
         msg = f"{path} missing; run renewable_forecast.features.assemble first"
         raise FileNotFoundError(msg)
