@@ -41,6 +41,18 @@ SCORED = QuantileGBM.name
 
 ARMS = ("openmeteo", "meps", "both")
 
+#: Arms that need the IFS single-run block as well (`--ifs`).
+#:
+#: * `runs` -- only run-addressed weather: MEPS, IFS HRES and their cross-source spread.
+#:   No column in it changes vintage mid-day.
+#: * `runs_om_spread` -- `runs` plus the Open-Meteo *disagreement* columns only. Keeps
+#:   the three-model spread signal (`reports/calibration.md`) without its stale levels.
+#: * `all` -- everything.
+IFS_ARMS = ("runs", "runs_om_spread", "all")
+
+#: Open-Meteo columns that describe disagreement between its models, not their level.
+OM_SPREAD_SUFFIXES = ("_model_std", "_model_range")
+
 #: The lead hour where the whole-day vintage forces a change of forecast age.
 STEP_LEAD = 34
 
@@ -59,6 +71,7 @@ SHARED_COLUMNS = frozenset(
         "lead_hour",
         "nwp_offset_days",
         "meps_run_time",
+        "ifs_run_time",
     }
 )
 
@@ -72,24 +85,25 @@ def arm_columns(frame: pd.DataFrame, arm: str) -> list[str]:
     # `meps_run_time` is MEPS-marked but is bookkeeping every arm needs, so it counts
     # as shared; without this the `both` arm would list it twice.
     shared = [c for c in frame.columns if _is_shared(c)]
-    meps = [
-        c
-        for c in frame.columns
-        if assemble.is_meps_column(c) and not _is_shared(c)
-    ]
-    weather = [
-        c
-        for c in frame.columns
-        if not _is_shared(c) and not assemble.is_meps_column(c)
-    ]
-    if arm == "openmeteo":
-        return shared + weather
-    if arm == "meps":
-        return shared + meps
-    if arm == "both":
-        return shared + weather + meps
-    msg = f"unknown arm {arm}"
-    raise ValueError(msg)
+    rest = [c for c in frame.columns if not _is_shared(c)]
+    # A column built from IFS belongs to the IFS side even if it also carries the MEPS
+    # marker (the cross-source spread), or the MEPS arm would see IFS information.
+    ifs = [c for c in rest if assemble.is_ifs_column(c)]
+    meps = [c for c in rest if assemble.is_meps_column(c) and c not in ifs]
+    weather = [c for c in rest if c not in ifs and c not in meps]
+    om_spread = [c for c in weather if c.endswith(OM_SPREAD_SUFFIXES)]
+    arms = {
+        "openmeteo": shared + weather,
+        "meps": shared + meps,
+        "both": shared + weather + meps,
+        "runs": shared + meps + ifs,
+        "runs_om_spread": shared + meps + ifs + om_spread,
+        "all": shared + weather + meps + ifs,
+    }
+    if arm not in arms:
+        msg = f"unknown arm {arm}"
+        raise ValueError(msg)
+    return arms[arm]
 
 
 def covered(frame: pd.DataFrame) -> pd.DataFrame:
@@ -107,8 +121,24 @@ def covered(frame: pd.DataFrame) -> pd.DataFrame:
     return complete.reset_index(drop=True)
 
 
+def development_days(frame: pd.DataFrame, cfg: config.Config) -> pd.DatetimeIndex:
+    """Development days of the *full* calendar that the MEPS frame covers.
+
+    The holdout is sealed relative to the full design matrix, which runs to the present.
+    Sealing relative to the MEPS frame instead would treat its last six months as
+    holdout -- but MEPS is deliberately pulled only up to the real holdout, so that
+    would silently discard half a year of development data and score the arms on a
+    different window from `modelling.md`.
+    """
+    development, _ = evaluate.development_split(evaluate.load_design_matrix(), cfg)
+    return development[development.isin(frame.delivery_day.unique())]
+
+
 def score_arm(
-    frame: pd.DataFrame, arm: str, cfg: config.Config
+    frame: pd.DataFrame,
+    arm: str,
+    cfg: config.Config,
+    development: pd.DatetimeIndex,
 ) -> tuple[pd.DataFrame, dict[str, float]]:
     """Backtest one arm on the frozen protocol.
 
@@ -116,7 +146,6 @@ def score_arm(
     """
     levels = np.array(cfg.task.quantiles)
     subset = frame[arm_columns(frame, arm)].copy()
-    development, _ = evaluate.development_split(subset, cfg)
 
     history = subset.set_index("valid_time").cf
     tso_mw = baselines.TsoForecast.load("SE3", "wind_onshore")
@@ -162,19 +191,34 @@ def step_at(by_lead: pd.DataFrame, lead: int = STEP_LEAD) -> float:
     return float(after / before - 1.0)
 
 
-def run() -> tuple[pd.DataFrame, pd.DataFrame]:
+def run(*, with_ifs: bool = False) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Score every arm and summarise by lead hour."""
     cfg = config.load()
-    frame = covered(evaluate.load_design_matrix(with_meps=True))
+    frame = covered(evaluate.load_design_matrix(with_meps=True, with_ifs=with_ifs))
+    arms = ARMS + IFS_ARMS if with_ifs else ARMS
+    if with_ifs:
+        # Same-rows discipline: a day without an IFS run would otherwise be scored by
+        # some arms and not others.
+        have = frame.groupby("delivery_day")["power_curve__ifsrun"].transform(
+            lambda s: s.notna().all()
+        )
+        frame = frame[have].reset_index(drop=True)
     logger.info(
         "comparing on %s delivery days, %s rows",
         frame.delivery_day.nunique(),
         len(frame),
     )
 
+    development = development_days(frame, cfg)
+    logger.info(
+        "scoring on %s development days, %s..%s",
+        len(development),
+        development.min().date(),
+        development.max().date(),
+    )
     curves, bundles = [], []
-    for arm in ARMS:
-        by_lead, bundle = score_arm(frame, arm, cfg)
+    for arm in arms:
+        by_lead, bundle = score_arm(frame, arm, cfg, development)
         bundle["step_at_34"] = step_at(by_lead)
         curves.append(by_lead)
         bundles.append(bundle)
@@ -182,18 +226,26 @@ def run() -> tuple[pd.DataFrame, pd.DataFrame]:
     by_lead = pd.concat(curves, ignore_index=True)
     overall = pd.DataFrame(bundles)
 
+    stem = "compare_nwp_runs" if with_ifs else "compare_meps"
     paths.INTERIM.mkdir(parents=True, exist_ok=True)
-    by_lead.to_parquet(paths.INTERIM / "compare_meps.parquet", index=False)
-    overall.to_parquet(paths.INTERIM / "compare_meps_overall.parquet", index=False)
+    by_lead.to_parquet(paths.INTERIM / f"{stem}.parquet", index=False)
+    overall.to_parquet(paths.INTERIM / f"{stem}_overall.parquet", index=False)
     logger.info("\n%s", overall.round(4).to_string(index=False))
     return by_lead, overall
 
 
 def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--ifs", action="store_true", help="add the IFS single-run arms"
+    )
+    args = parser.parse_args()
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
-    run()
+    run(with_ifs=args.ifs)
 
 
 if __name__ == "__main__":

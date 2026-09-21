@@ -21,6 +21,7 @@ EXCLUDED = frozenset(
         # The MEPS run instant is bookkeeping, not weather: it tells the leakage guard
         # how old a __meps column is and must never become a feature itself.
         "meps_run_time",
+        "ifs_run_time",
     }
 )
 
@@ -32,6 +33,8 @@ MONOTONE_INCREASING = (
     "wind_speed_100m_model_mean",
     "power_curve__meps",
     "wind_speed_hub__meps",
+    "power_curve__ifsrun",
+    "wind_speed_100m__ifsrun",
 )
 
 

@@ -65,14 +65,21 @@ def extrapolate(speed_10m: np.ndarray, hub_height_m: float) -> np.ndarray:
     return speed_10m * (hub_height_m / 10.0) ** SHEAR_EXPONENT
 
 
-def per_point(frame: pd.DataFrame, offset: int = 1) -> pd.DataFrame:
+def per_point(
+    frame: pd.DataFrame, offset: int = 1, suffix: str | None = None
+) -> pd.DataFrame:
     """Derive point-level physical features at one information-age offset.
 
     The error-growth feature compares this offset against the next *staler* one, never
     a fresher one -- a fresher offset would be information the forecast did not have.
+
+    `suffix=""` reads plain variable names instead, which is how a run-addressed source
+    (`sources.ifs_runs`) supplies the same variables without an offset; its rows are
+    keyed by `run_time` rather than `model`.
     """
-    suffix = f"_previous_day{offset}"
-    out = frame[["valid_time", "point_id", "model"]].copy()
+    suffix = f"_previous_day{offset}" if suffix is None else suffix
+    keys = [c for c in ("run_time", "valid_time", "point_id", "model") if c in frame]
+    out = frame[keys].copy()
 
     speed = frame[f"wind_speed_100m{suffix}"].to_numpy()
     speed_10m = frame[f"wind_speed_10m{suffix}"].to_numpy()
@@ -106,7 +113,7 @@ def per_point(frame: pd.DataFrame, offset: int = 1) -> pd.DataFrame:
     out["icing_now"] = icing.astype(float)
 
     staler = f"wind_speed_100m_previous_day{offset + 1}"
-    if staler in frame.columns:
+    if suffix.startswith("_previous_day") and staler in frame.columns:
         out["lead_spread"] = np.abs(speed - frame[staler].to_numpy())
     return out
 

@@ -13,6 +13,7 @@ import pytest
 
 from renewable_forecast import windows
 from renewable_forecast.features import assemble
+from renewable_forecast.sources import ifs_runs
 
 
 def _frame(*, fixed_offset: int | None = None) -> pd.DataFrame:
@@ -217,3 +218,58 @@ def test_one_run_serves_the_whole_delivery_day() -> None:
 def test_meps_run_precedes_the_issue_time_for_every_hour() -> None:
     frame = _meps_frame()
     assert (frame[assemble.MEPS_RUN_COLUMN] < assemble.issue_time_of(frame)).all()
+
+
+def _ifs_frame() -> pd.DataFrame:
+    """MEPS skeleton plus IFS single-run columns and the cross-source spread."""
+    frame = _meps_frame()
+    frame[assemble.IFS_RUN_COLUMN] = frame.issue_day.dt.tz_localize("UTC")
+    frame["power_curve__ifsrun"] = 0.45
+    frame["power_curve__ifsrun_ramp1"] = 0.02
+    return pd.concat([frame, assemble.run_spread(frame)], axis=1)
+
+
+def test_ifs_columns_are_dated_to_availability_not_initialisation() -> None:
+    """A run cannot be used before it has been published."""
+    frame = _ifs_frame()
+    sources = assemble.max_source_time(frame)
+    available = frame[assemble.IFS_RUN_COLUMN] + ifs_runs.AVAILABILITY_LAG
+    assert (sources["power_curve__ifsrun"] == available).all()
+    assert (sources["power_curve__ifsrun_ramp1"] == available).all()
+    assert not _violations(frame), "IFS run columns carry future information"
+
+
+def test_cross_source_spread_inherits_the_later_source() -> None:
+    frame = _ifs_frame()
+    column = next(c for c in frame if c.startswith(assemble.RUN_SPREAD_PREFIX))
+    sources = assemble.max_source_time(frame)
+    assert (
+        sources[column] == frame[assemble.IFS_RUN_COLUMN] + ifs_runs.AVAILABILITY_LAG
+    ).all(), "a column built from two runs is only as old as the younger run"
+
+
+def test_a_late_ifs_run_would_be_caught() -> None:
+    """If a run became available after the issue time, the guard must fire."""
+    frame = _ifs_frame()
+    frame[assemble.IFS_RUN_COLUMN] += pd.Timedelta(hours=1)
+    assert _violations(frame)
+
+
+def test_price_columns_are_dated_before_the_issue_time() -> None:
+    """Issue-day prices cover hours after 09:00 but were published the day before."""
+    frame = _frame()
+    frame[f"{assemble.PRICE_PREFIX}same_hour"] = 10.0
+    frame[f"{assemble.PRICE_PREFIX}negative_hours"] = 3.0
+    sources = assemble.max_source_time(frame)
+    column = f"{assemble.PRICE_PREFIX}same_hour"
+    assert (sources[column] < assemble.issue_time_of(frame)).all()
+    assert not _violations(frame)
+
+
+def test_price_same_hour_refers_to_the_issue_day() -> None:
+    """The lag is exactly one day, so the price hour sits on the issue day."""
+    frame = _frame()
+    looked_up = frame.valid_time - pd.Timedelta(hours=24)
+    local = looked_up.dt.tz_convert(windows.MARKET_TZ).dt.normalize().dt.tz_localize(None)
+    # DST days shift one hour across midnight; every other hour must land on D.
+    assert (local == frame.issue_day).mean() > 0.9

@@ -157,3 +157,42 @@ MEPS gives 80 m and 120 m, so the exponent can be **measured** per cluster-hour 
 wind interpolated to each cluster's actual mean hub height. Measured shear averages
 **0.34** over the sampled runs, well above the assumed **0.143** -- so the old
 assumption was not a neutral simplification but a systematic one.
+
+---
+
+## A/B result, 2026-09-22
+
+`pipelines/compare_meps.py`, same 18 folds and 12,842 rows for every arm (the 546
+scored days less the few without a MEPS run). Before the run, a bug was fixed: the A/B
+sealed its holdout relative to the *MEPS* frame. MEPS is deliberately pulled only up
+to 2026-03-01, so the rule threw away Sept 2025 – Mar 2026 of development data and
+scored a different window from `modelling.md`. It now takes the development days from
+the full calendar.
+
+| arm | nMAE | CRPS | cov@80 | step at lead 34 |
+|---|---|---|---|---|
+| openmeteo (ships) | 0.0307 | 0.0231 | 0.738 | +46% |
+| meps only | 0.0416 | 0.0316 | 0.740 | **+5%** |
+| **both** | **0.0279** | **0.0213** | 0.735 | +43% |
+
+**Three findings.**
+
+1. **MEPS adds real skill: −9% nMAE, −8% CRPS** when it is added to the Open-Meteo
+   block. That is the largest single improvement since the model was built.
+2. **Run addressing does remove the step, by construction.** The MEPS-only arm's error
+   curve is flat across lead 34. But the `both` model still leans on the Open-Meteo
+   columns, so the step survives in it.
+3. **MEPS alone is the weaker signal.** Its zonal power curve correlates 0.936 with
+   output, against 0.959 for ECMWF 0.25° alone and 0.966 for the three-model mean. This
+   holds even in the back half of the day, where Open-Meteo is a day staler (0.940 vs
+   0.961). It is not a timing fault: correlation peaks between lag 0 and −1 h, the
+   expected half-hour offset between an instantaneous value and an hourly mean. The
+   likely cause is representativeness: each cluster reads **one 2.5 km cell**, and a
+   single convection-permitting cell is noisier than a smoother global field. The
+   bounding box the puller already downloads (then discards) holds every neighbouring
+   cell. Averaging a neighbourhood is the obvious next step, and its spread is the
+   deterministic pseudo-ensemble of Molinder et al. (2018).
+
+Next: a second run-addressed model (ECMWF IFS HRES single runs, `sources/ifs_runs.py`),
+to see whether run-addressed sources can *replace* the whole-day block rather than
+supplement it. See `docs/roadmap.md` B2/B3.

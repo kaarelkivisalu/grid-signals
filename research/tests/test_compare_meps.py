@@ -88,3 +88,41 @@ def test_step_statistic_detects_a_jump() -> None:
     stepped = flat.copy()
     stepped.loc[stepped.lead_hour >= 34, "nmae"] = 0.027
     assert compare_meps.step_at(stepped) == pytest.approx(0.35, abs=1e-9)
+
+
+def _ifs_frame() -> pd.DataFrame:
+    frame = _frame()
+    frame["ifs_run_time"] = pd.Timestamp("2025-01-01", tz="UTC")
+    frame["power_curve__ifsrun"] = 0.41
+    frame["power_curve_runs_std__meps__ifsrun"] = 0.01
+    frame["power_curve_model_std"] = 0.02
+    return frame
+
+
+def test_meps_arm_never_sees_ifs_information() -> None:
+    """The cross-source spread carries the MEPS marker but is built from IFS too."""
+    columns = compare_meps.arm_columns(_ifs_frame(), "meps")
+    assert "power_curve__ifsrun" not in columns
+    assert "power_curve_runs_std__meps__ifsrun" not in columns
+
+
+def test_runs_arm_has_no_whole_day_vintaged_column() -> None:
+    columns = compare_meps.arm_columns(_ifs_frame(), "runs")
+    assert "power_curve_model_mean" not in columns
+    assert "power_curve_model_std" not in columns
+    assert {"power_curve__meps", "power_curve__ifsrun"} <= set(columns)
+
+
+def test_runs_om_spread_arm_adds_only_disagreement_columns() -> None:
+    frame = _ifs_frame()
+    extra = set(compare_meps.arm_columns(frame, "runs_om_spread")) - set(
+        compare_meps.arm_columns(frame, "runs")
+    )
+    assert extra == {"power_curve_model_std"}
+
+
+def test_all_arm_sees_every_column_once() -> None:
+    frame = _ifs_frame()
+    columns = compare_meps.arm_columns(frame, "all")
+    assert len(columns) == len(set(columns))
+    assert set(columns) == set(frame.columns)

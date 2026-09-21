@@ -13,7 +13,7 @@ import pandas as pd
 
 from renewable_forecast import paths, windows
 from renewable_forecast.features import sites, wind
-from renewable_forecast.sources import fleet, meps, openmeteo
+from renewable_forecast.sources import entsoe, fleet, ifs_runs, meps, openmeteo
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,24 @@ MEPS_RUN_COLUMN = "meps_run_time"
 def is_meps_column(column: str) -> bool:
     """Whether a design-matrix column's information comes from a MEPS run."""
     return MEPS_MARKER in column or column == MEPS_RUN_COLUMN
+
+
+#: Marks a column from a named ECMWF IFS HRES run (`sources.ifs_runs`). Dated to the
+#: run's *availability*, not its initialisation, so the leakage guard also checks that
+#: the run existed before the issue time.
+IFS_MARKER = "__ifsrun"
+IFS_RUN_COLUMN = "ifs_run_time"
+
+
+def is_ifs_column(column: str) -> bool:
+    """Whether a design-matrix column's information comes from an IFS single run."""
+    return IFS_MARKER in column or column == IFS_RUN_COLUMN
+
+
+#: Cross-source spread over the run-addressed sources. The Open-Meteo `*_model_std`
+#: columns measure disagreement between whole-day-vintaged models, which goes away if
+#: that block is dropped; this is its run-addressed replacement.
+RUN_SPREAD_PREFIX = "power_curve_runs_"
 
 
 #: Offsets available in the archive. The smallest *safe* one is chosen per target hour:
@@ -218,6 +236,128 @@ def meps_block(points: pd.DataFrame) -> pd.DataFrame:
     return pd.concat([zonal, trajectory], axis=1)
 
 
+#: Trajectory features for the IFS run block, mirroring the other two sources.
+IFS_TRAJECTORY = ("power_curve__ifsrun", "wind_speed_100m__ifsrun")
+
+
+def ifs_block(points: pd.DataFrame) -> pd.DataFrame:
+    """Zonal IFS HRES features keyed by the run that produced them.
+
+    The physics is the Open-Meteo path's (`wind.per_point`), since the variables are
+    the same; only the addressing differs, which is the point of the source.
+    """
+    raw = ifs_runs.load()
+    if raw.empty:
+        msg = "no IFS runs parsed; run pipelines.pull_ifs_runs first"
+        raise RuntimeError(msg)
+
+    per_point = wind.add_icing_memory(
+        wind.per_point(raw, suffix=""), keys=("run_time", "point_id")
+    )
+    per_point = per_point.drop(columns=["lead_spread"], errors="ignore")
+    zonal = wind.aggregate(per_point, points, keys=("run_time", "valid_time"))
+    zonal = zonal.rename(
+        columns={
+            c: f"{c}{IFS_MARKER}"
+            for c in zonal.columns
+            if c not in {"run_time", "valid_time"}
+        }
+    )
+    zonal = zonal.sort_values(["run_time", "valid_time"]).reset_index(drop=True)
+    trajectory = (
+        zonal.groupby("run_time", group_keys=False)
+        .apply(lambda g: temporal(g, IFS_TRAJECTORY), include_groups=False)
+        .reindex(zonal.index)
+    )
+    return pd.concat([zonal, trajectory], axis=1)
+
+
+def attach_ifs(frame: pd.DataFrame, points: pd.DataFrame) -> pd.DataFrame:
+    """Join the IFS run block on the issue day's 00z run, exactly as for MEPS."""
+    block = ifs_block(points)
+    frame = frame.copy()
+    frame[IFS_RUN_COLUMN] = frame.issue_day.dt.tz_localize("UTC") + pd.Timedelta(
+        hours=ifs_runs.RUN_HOUR_UTC
+    )
+    merged = frame.merge(
+        block,
+        left_on=[IFS_RUN_COLUMN, "valid_time"],
+        right_on=["run_time", "valid_time"],
+        how="left",
+    ).drop(columns=["run_time"])
+    missing = merged[f"power_curve{IFS_MARKER}"].isna().sum()
+    if missing:
+        logger.warning("%s of %s rows have no IFS run coverage", missing, len(merged))
+    return merged
+
+
+def run_spread(frame: pd.DataFrame) -> pd.DataFrame:
+    """Mean and disagreement of power-curve output across the run-addressed sources.
+
+    Carries the same information age as its inputs, so it is marked as both a MEPS and
+    an IFS column and the leakage guard dates it to the later of the two.
+    """
+    members = [c for c in ("power_curve__meps", f"power_curve{IFS_MARKER}") if c in frame]
+    out = pd.DataFrame(index=frame.index)
+    if len(members) < 2:
+        return out
+    values = frame[members].to_numpy(dtype=float)
+    stem = f"{RUN_SPREAD_PREFIX}{{}}{MEPS_MARKER}{IFS_MARKER}"
+    out[stem.format("mean")] = values.mean(axis=1)
+    out[stem.format("std")] = values.std(axis=1)
+    return out
+
+
+#: Columns derived from the issue day's day-ahead auction. That auction cleared about
+#: 12:45 CET the day *before* the issue day, so every one of its hours is known well
+#: before 09:00 UTC on the issue day -- even hours that are still in the future then.
+#: They are dated to 00:00 UTC on the issue day: later than the true publication (so
+#: conservative) and earlier than the issue time.
+PRICE_PREFIX = "price_issue_day_"
+
+
+def is_price_column(column: str) -> bool:
+    """Whether a column comes from the issue day's day-ahead auction."""
+    return column.startswith(PRICE_PREFIX)
+
+
+def price_features(frame: pd.DataFrame, zone: str = "SE3") -> pd.DataFrame:
+    """Curtailment-risk features from the issue day's already-published prices.
+
+    Negative prices make operators curtail, and the ERA5 study measured a +184 MW
+    over-prediction on those hours (`reports/era5_ceiling.md` section 4). The delivery
+    day's prices are not known at 09:00 on the issue day; the issue day's are, and
+    negative-price regimes persist across adjacent days.
+    """
+    prices = entsoe.load("day_ahead_prices", zone)
+    series = (
+        prices.assign(period_start=pd.to_datetime(prices.period_start, utc=True))
+        .set_index("period_start")
+        .value_mw.sort_index()
+    )
+    # 15-minute auction results from October 2025 are averaged to the hour, matching
+    # the target's resolution.
+    hourly = series.resample("h").mean()
+
+    out = pd.DataFrame(index=frame.index)
+    out[f"{PRICE_PREFIX}same_hour"] = (
+        frame.valid_time - pd.Timedelta(hours=24)
+    ).map(hourly).to_numpy()
+
+    local_day = hourly.index.tz_convert(windows.MARKET_TZ).normalize().tz_localize(None)
+    daily = hourly.groupby(local_day).agg(
+        min="min", mean="mean", negative_hours=lambda v: float((v < 0).sum())
+    )
+    for name in daily.columns:
+        out[f"{PRICE_PREFIX}{name}"] = frame.issue_day.map(daily[name]).to_numpy()
+    return out
+
+
+def attach_prices(frame: pd.DataFrame, zone: str = "SE3") -> pd.DataFrame:
+    """Append the price block to an existing design matrix."""
+    return pd.concat([frame, price_features(frame, zone)], axis=1)
+
+
 def attach_meps(frame: pd.DataFrame, points: pd.DataFrame) -> pd.DataFrame:
     """Join the MEPS block onto a design matrix that already carries `issue_day`.
 
@@ -243,7 +383,11 @@ def attach_meps(frame: pd.DataFrame, points: pd.DataFrame) -> pd.DataFrame:
 
 
 def build(
-    zone: str = "SE3", fuel: str = "wind_onshore", *, with_meps: bool = False
+    zone: str = "SE3",
+    fuel: str = "wind_onshore",
+    *,
+    with_meps: bool = False,
+    with_ifs: bool = False,
 ) -> pd.DataFrame:
     """Join NWP features to the target, picking the smallest safe offset per hour.
 
@@ -293,6 +437,10 @@ def build(
     merged = pd.concat([merged, calendar(merged)], axis=1)
     if with_meps:
         merged = attach_meps(merged, points)
+    if with_ifs:
+        merged = attach_ifs(merged, points)
+    if with_meps and with_ifs:
+        merged = pd.concat([merged, run_spread(merged)], axis=1)
     return merged
 
 
@@ -373,6 +521,11 @@ def max_source_time(frame: pd.DataFrame) -> pd.DataFrame:
         nwp_age = pd.Series([OFFSET_STEP] * len(frame), index=frame.index)
 
     run_time = frame[MEPS_RUN_COLUMN] if MEPS_RUN_COLUMN in frame.columns else None
+    ifs_available = (
+        frame[IFS_RUN_COLUMN] + ifs_runs.AVAILABILITY_LAG
+        if IFS_RUN_COLUMN in frame.columns
+        else None
+    )
 
     out = pd.DataFrame(index=frame.index)
     for column, age in ages.items():
@@ -380,6 +533,12 @@ def max_source_time(frame: pd.DataFrame) -> pd.DataFrame:
             out[column] = pd.Timestamp.min.tz_localize("UTC")
         elif column.startswith("cf_lag_"):
             out[column] = frame.valid_time - age
+        elif is_price_column(column):
+            out[column] = frame.issue_day.dt.tz_localize("UTC")
+        elif is_ifs_column(column) and ifs_available is not None:
+            # Checked before MEPS so a column derived from both sources is dated to
+            # the later one: IFS availability is always after the MEPS run instant.
+            out[column] = ifs_available
         elif is_meps_column(column) and run_time is not None:
             # A MEPS column depends on nothing later than the run that produced it.
             out[column] = run_time
@@ -389,20 +548,28 @@ def max_source_time(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def design_matrix_path(
-    zone: str = "SE3", fuel: str = "wind_onshore", *, with_meps: bool = False
+    zone: str = "SE3",
+    fuel: str = "wind_onshore",
+    *,
+    with_meps: bool = False,
+    with_ifs: bool = False,
 ):
     """Where a design matrix of the given flavour lives."""
-    suffix = "_meps" if with_meps else ""
+    suffix = ("_meps" if with_meps else "") + ("_ifs" if with_ifs else "")
     return paths.FEATURES / f"design_matrix_{zone.lower()}_{fuel}{suffix}.parquet"
 
 
 def write(
-    zone: str = "SE3", fuel: str = "wind_onshore", *, with_meps: bool = False
+    zone: str = "SE3",
+    fuel: str = "wind_onshore",
+    *,
+    with_meps: bool = False,
+    with_ifs: bool = False,
 ) -> pd.DataFrame:
     """Build the design matrix and persist it."""
-    frame = build(zone, fuel, with_meps=with_meps)
+    frame = build(zone, fuel, with_meps=with_meps, with_ifs=with_ifs)
     paths.FEATURES.mkdir(parents=True, exist_ok=True)
-    out = design_matrix_path(zone, fuel, with_meps=with_meps)
+    out = design_matrix_path(zone, fuel, with_meps=with_meps, with_ifs=with_ifs)
     frame.to_parquet(out, index=False)
     logger.info("wrote %s (%s rows, %s columns)", out, len(frame), frame.shape[1])
     return frame

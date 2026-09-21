@@ -23,10 +23,14 @@ Forecaster = Callable[[], object]
 
 
 def load_design_matrix(
-    zone: str = "SE3", fuel: str = "wind_onshore", *, with_meps: bool = False
+    zone: str = "SE3",
+    fuel: str = "wind_onshore",
+    *,
+    with_meps: bool = False,
+    with_ifs: bool = False,
 ) -> pd.DataFrame:
     """Read the design matrix built in Phase 4."""
-    path = assemble.design_matrix_path(zone, fuel, with_meps=with_meps)
+    path = assemble.design_matrix_path(zone, fuel, with_meps=with_meps, with_ifs=with_ifs)
     if not path.exists():
         msg = f"{path} missing; run renewable_forecast.features.assemble first"
         raise FileNotFoundError(msg)
