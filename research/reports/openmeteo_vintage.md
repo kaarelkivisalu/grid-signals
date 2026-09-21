@@ -100,11 +100,24 @@ leads 34–46, and steps **+35% between them** — exactly where `nwp_offset_day
 from 1 to 2, with no overlap. Pooled lead blocks hid this; the per-lead breakdown this
 report argued for is what exposed it.
 
-Part of that step is genuine: lead 34 is 10:00 UTC on the delivery day, so the boundary
-is also night→day, and daytime wind is harder to forecast. The two are perfectly
-collinear under a fixed issue time. **A69 is the natural control** — a TSO product with
-no Open-Meteo vintage switch — and it crosses lead 34 with no step at all. That points at
-the vintage carrying most of the +35%.
+Lead 34 is also 10:00 UTC on the delivery day, so the boundary is night→day as well, and
+the two are perfectly collinear under a fixed issue time. `pipelines/ablate_vintage.py`
+settles it by forcing offset 2 onto every lead hour:
+
+![](figures/vintage_ablation.png)
+
+| leads | as built | offset 2 forced | change |
+|---|---|---|---|
+| 22–33 | 0.0259 | **0.0376** | **+45%** |
+| 34–46 | 0.0351 | 0.0354 | +0.8% (control) |
+
+The control does not move, and the front half degrades *past* the back half's as-built
+level. At equal vintage the night hours are slightly harder than the daylight ones, so
+the diurnal explanation has the wrong sign. **The step is the vintage.**
+
+Sizing the bill: applying the measured offset-1/offset-2 ratio (0.69) to the back half
+puts overall nMAE near **0.025 against today's 0.0307** — an ~18% gain, more than machine
+learning earned over the physical baseline.
 
 **There is no cheaper fix inside this API.** `previous_dayN` is addressable only in whole
 days; a `*_previous_run1` parameter was probed and is rejected outright:

@@ -39,18 +39,35 @@ gap, but not all of it. Untried: a larger calibration fraction, the adaptive-con
 update that `models/conformal.py` already implements but the pipeline does not drive, and
 stratifying by season as well as lead hour.
 
-**2. Half the delivery day is forecast from a day-old weather run.**
+**2. Half the delivery day is forecast from a day-old weather run.** This is the
+largest fixable error in the model, and it is bigger than everything machine learning
+bought.
 
 ![](reports/figures/nmae_by_lead.png)
 
 Error against lead time is not the smooth gradient the phase report described — it is a
-**step of roughly 35% at lead hour 34**, and the earlier report missed it by averaging
-over three coarse lead blocks. Two things change at that boundary at once: the delivery
-day crosses into daylight, and Open-Meteo's Previous Runs API — which is addressable only
-in whole days — is forced from `previous_day1` to `previous_day2`. The back half of every
-delivery day is therefore served by a forecast a full 24 h older than the physics
-requires. A69 crosses the same boundary with no step, which points at the vintage rather
-than the diurnal cycle. Details and the proposed fix: `reports/openmeteo_vintage.md`.
+**step of 35% at lead hour 34**, and the earlier report missed it by averaging over three
+coarse lead blocks. Two things change at that boundary at once: the delivery day crosses
+into daylight, and Open-Meteo's Previous Runs API — addressable only in whole days — is
+forced from `previous_day1` to `previous_day2`, so the back half of every delivery day is
+served by a forecast 24 h older than the physics requires.
+
+Lead hour and clock hour are perfectly collinear under a fixed issue time, so an ablation
+was needed to separate them: force offset 2 onto *every* lead hour, and the front half
+carries the stale vintage at unchanged clock hours.
+
+![](reports/figures/vintage_ablation.png)
+
+The answer is unambiguous. Forcing the stale vintage onto leads 22–33 raises their nMAE
+from 0.0259 to 0.0376 (+45%) — *above* the back half's as-built 0.0351 — while leads
+34–46, which already used offset 2, do not move (0.0351 → 0.0354, the control). At equal
+vintage the night hours are slightly harder than the daylight ones, so the diurnal
+explanation is not merely secondary, it has the wrong sign.
+
+Extrapolating the front half's offset-1/offset-2 ratio to the back half puts overall nMAE
+at roughly **0.025 against today's 0.0307** if the whole delivery day could be served from
+one 00z run — an ~18% gain, larger than the 15% machine learning earned over physics.
+Details and the fix: `reports/openmeteo_vintage.md`.
 
 **3. The capacity denominator drifts, in every zone at once.**
 

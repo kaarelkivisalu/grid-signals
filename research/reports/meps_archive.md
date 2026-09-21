@@ -64,9 +64,11 @@ retroactively? Phase 5 gave it a second, larger job.
 
 Open-Meteo's Previous Runs API is addressable only in whole days, so the back half of
 every delivery day is served by a forecast 24 h older than the physics requires. The cost
-is measured and large — a **+35% step in nMAE at lead hour 34**, on 13 of 24 delivery
-hours (`openmeteo_vintage.md`, `modelling.md`). There is no fix inside that API; a
-`*_previous_run1` parameter was probed and does not exist.
+is measured, attributed and large: a **+35% step in nMAE at lead hour 34** on 13 of 24
+delivery hours, confirmed by ablation to be the vintage rather than the day/night
+boundary, and worth an estimated **~18% of overall nMAE** — more than machine learning
+earned over the physical baseline (`openmeteo_vintage.md`, `modelling.md`). There is no
+fix inside that API; a `*_previous_run1` parameter was probed and does not exist.
 
 MEPS files on thredds are addressed **by run initialisation**. A single 00z run covers
 the whole +22…+47 h window, which removes the step by construction. So the two

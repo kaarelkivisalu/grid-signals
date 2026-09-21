@@ -182,6 +182,62 @@ def plot_lead_curve(runs: pd.DataFrame) -> str:
     return _save(fig, "nmae_by_lead")
 
 
+ABLATION = paths.INTERIM / "ablation_vintage.parquet"
+
+
+def plot_vintage_ablation() -> str:
+    """Separate the vintage switch from the day/night boundary at lead 34.
+
+    Lead hour and clock hour are perfectly collinear under a fixed issue time, so the
+    leaderboard alone cannot say which of the two causes the step. Forcing
+    `nwp_offset_days = 2` onto *every* lead hour breaks the collinearity: leads 22-33
+    then carry the stale vintage without moving in the day. Produced by
+    `pipelines.ablate_vintage`.
+    """
+    grid = pd.read_parquet(ABLATION)
+    grid = grid[grid.forecaster == "lightgbm_quantile"]
+    fig, ax = plt.subplots(figsize=(9, 3.6), constrained_layout=True)
+    styles = {
+        "as_built": ("#bc4b51", "-", "as built: offset 1 where legal, 2 after"),
+        "offset2_everywhere": ("#4f6d7a", "--", "ablation: offset 2 forced everywhere"),
+    }
+    for variant, (colour, dash, label) in styles.items():
+        series = grid[grid.variant == variant].sort_values("lead_hour")
+        ax.plot(
+            series.lead_hour, series.nmae, color=colour, ls=dash, lw=1.8, label=label
+        )
+    ax.axvline(VINTAGE_BOUNDARY - 0.5, color="black", lw=1.1, ls=":")
+    ax.annotate(
+        "the two lines meet here, and stay met:\nthe back half already used offset 2",
+        xy=(40, 0.0341),
+        xytext=(34.2, 0.0280),
+        fontsize=8,
+        arrowprops={"arrowstyle": "->", "lw": 0.9},
+    )
+    ax.annotate(
+        "forcing the stale vintage onto the front half\nraises its error ABOVE the back half's",
+        xy=(27, 0.0386),
+        xytext=(22.2, 0.0300),
+        fontsize=8,
+        arrowprops={"arrowstyle": "->", "lw": 0.9},
+    )
+    ax.set_xlabel("lead hour from the 00z run")
+    ax.set_ylabel("nMAE")
+    ax.set_title(
+        "The step at lead 34 is the NWP vintage, not the day/night boundary",
+        fontsize=10,
+    )
+    ax.grid(alpha=0.3)
+    ax.legend(
+        fontsize=8,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.22),
+        ncol=2,
+        frameon=False,
+    )
+    return _save(fig, "vintage_ablation")
+
+
 def plot_calibration(runs: pd.DataFrame) -> str:
     """PIT histograms and the coverage-vs-nominal curve -- where underdispersion shows."""
     named = runs.set_index("name")
@@ -414,6 +470,7 @@ def build() -> list[str]:
         plot_horizon(),
         plot_leaderboard(runs),
         plot_lead_curve(runs),
+        plot_vintage_ablation(),
         plot_calibration(runs),
         plot_seasonal(runs),
         plot_pinball(runs),

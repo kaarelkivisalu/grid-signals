@@ -58,14 +58,29 @@ Two things change at lead 34 simultaneously:
   harder to forecast.
 
 The two are perfectly collinear under a fixed issue time, so the leaderboard alone cannot
-separate them. **A69 is the natural control** — it is a TSO product with no Open-Meteo
-vintage switch, and it crosses lead 34 with no step at all, rising smoothly across the
-whole window. That points at the vintage.
+separate them. `pipelines/ablate_vintage.py` breaks the collinearity by forcing offset 2
+onto *every* lead hour: leads 22–33 then carry the stale vintage at unchanged clock
+hours, and leads 34–46 act as a control that should not move.
+
+![](figures/vintage_ablation.png)
+
+| forecaster | leads | as built | offset 2 forced | change |
+|---|---|---|---|---|
+| lightgbm_quantile | 22–33 | 0.0259 | **0.0376** | **+45%** |
+| lightgbm_quantile | 34–46 | 0.0351 | 0.0354 | +0.8% (control) |
+| physical_power_curve | 22–33 | 0.0315 | **0.0428** | **+36%** |
+| physical_power_curve | 34–46 | 0.0396 | 0.0398 | +0.5% (control) |
+
+The control behaves exactly as it must, and the front half degrades past the back half's
+as-built level. **At equal vintage the night hours are slightly *harder* than the daylight
+ones** (0.0376 against 0.0351), so the diurnal explanation is not merely secondary — it
+has the wrong sign. The step is the vintage.
 
 This is not leakage; the offset switch is the conservative choice and the leakage test
-passes. It is *cost*: the back half of every delivery day is forecast from a run a full
-day older than the physics requires. A genuine 00z run covers +22…+47 h in one
-initialisation.
+passes. It is *cost*, and the ablation sizes it. Applying the front half's
+offset-1/offset-2 ratio (0.69) to the back half puts overall nMAE at roughly **0.025
+against today's 0.0307** if the whole delivery day were served from one 00z run. That
+extrapolation is worth more than the 15% machine learning earned over physics.
 
 **Consequence.** Fixing it needs an NWP archive addressable by run initialisation rather
 than by whole days. Probed and confirmed: Open-Meteo offers no such parameter
