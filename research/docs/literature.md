@@ -25,14 +25,15 @@ documentation and grey literature say about the problems the README lists.
 
 | lead | bears on | where | caveat |
 |---|---|---|---|
-| Run-addressed archives now identified for ECMWF (Open-Meteo Single Runs, from 2024-03-14; dynamical.org ENS, from 2024-04-01) and **GFS** (dynamical.org, from 2021-05-01, 100 m wind, every 6 h) | P2 | §4 | **ICON-EU cannot be run-addressed for the backtest** (archive starts 2026-02-10); ENS holds the 00 UTC run only |
+| Run-addressed archives now identified for ECMWF (Open-Meteo Single Runs, from 2024-03-14; dynamical.org ENS, from 2024-04-01) and **GFS** (dynamical.org, from 2021-05-01, 100 m wind, every 6 h) | P2 | §4 | **ICON-EU cannot be run-addressed for the backtest** (archive starts 2026-02-10); dynamical.org's ENS holds the 00 UTC run only, which arrived after the summer cutoff until 2025-10-01 (§4) |
 | Fix the capacity denominator empirically: the winning EEM20 entry divided by the mean of registered capacity and the running maximum of observed output; the runner-up corrected capacity by hand from the rolling maximum, and a 5% correction in SE1 cut pinball loss by 10% | P3 | §5, Bellinguer 2020; Browell 2020 | competition data (dates anonymised, 2020 fleet) |
 | Ceilings near 0.8 of capacity are normal for Sweden; downtime and low wind-speed diversity, not wakes, cap the fleet maximum | P3 | §6, Olauson 2018 | reanalysis-based, 2010s data |
-| ECMWF IFS ENS archive as Zarr, 51 members, 100 m wind, init times from 2024-04-01 | P1 | §4, dynamical.org | **only the 00 UTC run; open data lands about 07:40–08:04 UTC, marginal against a 10:00 summer cutoff (08:00 UTC)**; 3-hourly steps; ~20 km grid. Expect limited day-ahead gain (next row) |
+| ECMWF IFS ENS archive as Zarr, 51 members, 100 m wind, init times from 2024-04-01 | P1 | §4, dynamical.org | **only the 00 UTC run, which reached the source bucket at 08:41 UTC before 2025-10-02 (after the 08:00 UTC summer cutoff) and at 07:41 UTC since**; the 12 and 18 UTC runs are in the bucket but not on dynamical.org; 3-hourly steps; ~20 km grid. Expect limited day-ahead gain (next row) |
 | Ensemble spread may help less at day-ahead than hoped: the EEM20 runner-up found the ensemble mean sufficient, and weather-to-power uncertainty dominates up to about 2–3 days ahead (1.4–2.4 days on GB data) | P1 | §4 Dantas & Browell 2025, Cannon 2017; §5 Browell 2020 | gains concentrate in high-uncertainty situations (frontal passages), so test on the worst days rather than on average; Cannon's authors say operational systems could cross over earlier |
 | Quantile-specific weights when combining two model families (boosted trees strong in the middle, GAM in the tails); peaks-over-threshold (GPD) tails; per-lead-hour recalibration | P1, P2 | §5 Browell 2020; §4 Dantas & Browell 2025 | tested on the four Swedish zones (Browell) and 73 GB farms (Dantas) |
 | Open-Meteo **Single Runs API** — `run=` parameter, IFS HRES runs at 00/06/12/18 from 2024-03-14 | P2 | §4, Open-Meteo docs | fixes the vintage step for ECMWF only |
 | Second-stage quantile regression on the first-stage quantiles, fitted on a separate block | P1 | §3 Lindberg 2024; §5 Lindberg 2023 | shown on one 6 MW park with a forest model, not on a zone with boosting |
+| Beta-transformed pool as a two-parameter recalibration of a single predictive distribution, fitted on a held-out block | P1 | §3, Gneiting & Ranjan 2013; §4 Dantas & Browell 2025 | needs a distribution function (interpolate the quantiles); acts on the whole distribution, so a shortfall only at high output needs a per-regime fit; not shown on wind power in the source |
 | Context-weighted or group-conditional conformal layer on the existing quantiles | P1 | §3, Moradi 2025; Gibbs 2024; Romano 2019 | exchangeability is violated by drift; Moradi tested solar only |
 | More conservative hyperparameters for the outer quantiles; parametric tails | P1 | §2 Landry; §1 Sweeney | not tested on SE3 |
 | Condition interval width on predicted level and a cut-out-risk indicator | P1 | §2, Pinson & Kariniotakis 2010 | single-farm, hand-built fuzzy rules |
@@ -40,7 +41,7 @@ documentation and grey literature say about the problems the README lists.
 | Flag or drop curtailed and non-reporting hours; normalise aggregates for units that report | P3, EVAL | §1, IEA guide 13.2.1–13.2.2 | needs a source of curtailment/reporting flags |
 | German TSO "actual" PV is an upscaled estimate. A physical model using only register locations and capacities plus one fitted derating factor reached RMSE 4.2–4.9% of installed capacity against it (2015, April–October) and came within 0.4 points of two TSO day-ahead forecasts | SOL, EVAL | §10, Saint-Drenan 2017 | winter excluded; provenance of the TSO forecasts unclear; register currency differed by control area |
 | Neighbourhood pseudo-ensemble from a deterministic 2.5 km run | P1 | §3, Molinder 2018 | icing study, two weeks of data; still under-dispersive. Analog ensembles are biased low in the right tail when the archive is short (Alessandrini 2019) |
-| ENTSO-E `A03` step-curve encoding under-reports if parsed naively | P3 | §6, Nicolaysen 2026 | new single-author preprint, unreviewed |
+| ENTSO-E `A03` step-curve encoding under-reports if parsed naively | P3 | §6, Nicolaysen 2026 | entsoe-py 0.7.11 already forward-fills it, so probably handled (not tested on SE3 data); single-author preprint |
 
 **Two headline results to treat with care.** Kean & O'Sullivan (2026) report beating the ENTSO-E
 day-ahead forecasts by about 26%, but their weather inputs are historical values "used as a
@@ -287,8 +288,24 @@ Shows that averaging probability forecasts (the linear opinion pool) yields some
 - The beta-transformed linear pool (BLP) fits the weights and the beta shape parameters (α, β) by maximum likelihood; it adds at most two, typically one, parameters to the linear pool. In their second, asymmetric simulation the symmetric version (α = β) stayed miscalibrated and the general one was calibrated.
 - Case study: probability-of-precipitation forecasts for 29 US cities from statistical and National Weather Service sources; the BLP forecast was calibrated and outscored both sources and the linear pools.
 - More complex aggregation (copulas, for example) risks overfitting for likely small gains.
-- → The paper treats binary events. Dantas & Browell (§4) apply the beta transform to combined predictive distributions, which is an extension I did not read (Gneiting & Ranjan 2013, §11).
-- → The direction matters: pooling makes forecasts under-confident, while yours are over-confident, so it does not explain P1. It becomes relevant only if you combine model families (ECMWF- and GFS-driven models, say) by averaging probabilities. Averaging quantiles is a different operation, which the paper does not treat.
+- → The paper treats binary events; the extension to predictive distributions is Gneiting & Ranjan (2013), next entry, and Dantas & Browell (§4) use it for wind.
+- → Pooling widens forecasts, so on its own it would ease rather than cause over-confidence when the pooled models are over-confident. It becomes relevant if you combine model families (ECMWF- and GFS-driven models, say) by averaging probabilities. Averaging quantiles is a different operation, which neither paper treats.
+
+### Combining predictive distributions
+Gneiting, Ranjan · Electron. J. Stat. 7, 2013 ·
+[10.1214/13-ejs823](https://doi.org/10.1214/13-ejs823) · *read: full text (abstract, theory and discussion; simulation and data examples skimmed)*
+PDF: `research/data/papers/gneiting2013_combining-predictive-distributions.pdf`
+
+Extends Ranjan & Gneiting (2010) from binary events to predictive distributions of a real-valued quantity, judging aggregation methods by calibration and dispersion through the probability integral transform (PIT).
+- Theorem 3.1: a linear pool of two or more distinct forecasts is at least as dispersed as its least dispersed component, and if the components are calibrated the pool is over-dispersed. Pooling therefore helps when the components are under-dispersed (over-confident), which the authors say explains the success of linear pooling, and hurts when they are already calibrated.
+- Spread-adjusted linear pool (SLP): shift each component to its median, scale its spread by one common factor c (below 1 for calibrated or over-dispersed components, 1 or more for under-dispersed ones), then pool. It is not flexibly dispersive: when component means are far apart the combined forecast stays too narrow whatever the weights and c.
+- Beta-transformed linear pool (BLP): apply a beta distribution function (parameters α, β) to the pooled distribution function. It is flexibly dispersive, since the variance of the PIT can take any value between 0 and 1/4. Weights and (α, β) are fitted by maximising the log score on training data.
+- SLP and BLP can also be used to correct the calibration and dispersion of a single predictive distribution.
+- Parsimony matters: with scarce training data the plain linear pool can be the better choice despite its flaws; with plenty of data, nonlinear pools gain.
+- Case studies are S&P 500 returns and daily maximum temperature at Seattle-Tacoma airport.
+- → The single-model use is the direct P1 tool: fit a BLP to your model's predictive distribution on a held-out block. Two parameters can widen or narrow it, but it acts on the whole distribution, so a shortfall confined to high output needs a separate fit per output regime or the group-conditional conformal methods above.
+- → It needs a distribution function, so a set of quantiles has to be interpolated into one first. The PIT histogram is the diagnostic that says which way to go.
+- Not tested on wind power here; Dantas & Browell (§4) is the wind use.
 
 ### Evaluating ensemble post-processing for wind power forecasts
 Phipps, Lerch, Andersson, Mikut, Hagenmeyer, Ludwig · Wind Energy 25(8), 2022 ·
@@ -363,7 +380,7 @@ Compiled from the entries below; backtest window 2024-09-02 to 2026-03-01.
 | model | run-addressed source | covers the window? |
 |---|---|---|
 | ECMWF IFS (HRES, 9 km) | Open-Meteo Single Runs: 00/06/12/18 UTC runs from 2024-03-14 | yes |
-| ECMWF IFS ENS (0.25°, 51 members) | dynamical.org: **00 UTC only**, from 2024-04-01, 3-hourly to 144 h | yes, with the latency caveat below |
+| ECMWF IFS ENS (0.25°, 51 members) | dynamical.org: **00 UTC only**, from 2024-04-01, 3-hourly to 144 h. The source bucket `s3://ecmwf-forecasts` also holds the 12 UTC and 18 UTC runs | yes, but the 00 UTC run reached the bucket at about 08:41 UTC before 2025-10-02 and 07:41 UTC after, so it misses the summer cutoff in the first period (arrival-times entry below) |
 | NOAA GFS (0.25°) | dynamical.org: every 6 h from 2021-05-01, hourly to 120 h, 10/80/100 m wind | yes |
 | DWD ICON-EU (7 km) | dynamical.org: from 2026-02-10 only, because DWD keeps a short rolling window and archiving began in March 2026; Open-Meteo Single Runs: from 2026-04-02 | **no** |
 | MEPS (2.5 km) | MET Norway THREDDS (see `reports/meps_archive.md`) | deterministic yes; the 30-member ensemble ends 2024-12-10 |
@@ -395,12 +412,25 @@ dynamical.org · [catalog page](https://dynamical.org/catalog/ecmwf-ifs-ens-fore
 - Steps: 85 in total, 3-hourly to 144 h then 6-hourly to 360 h.
 - Variables include `wind_u_100m` and `wind_v_100m`. Documented gaps: `wind_gust_10m` and the precipitation-type field are NaN before 2024-11-13, and total cloud cover is NaN before 2025-11-21. All 51 members are present throughout. 100 m wind is not listed as gapped.
 - Datasets are versioned (this one is v0.1.0) and the `prompt.md` and `llms.txt` guidance says to resolve the asset location from the STAC catalog each time and not hard-code buckets or versions, because they change when a dataset is reprocessed. Access is via `dynamical_catalog.open(...)` (Python 3.12+, Icechunk 2.0); the legacy `data.dynamical.org` service is being retired from 2026-09-30.
-- No latency figure is documented. The pipeline status page needs a browser (it is rendered client-side), so I could not read it.
-- ECMWF's real-time schedule puts 00 UTC ENS steps to 144 h at 06:40–07:04 UTC and steps to 360 h by 07:40 UTC. ECMWF says its open data are released at the end of that schedule; a search excerpt put availability at 07:40–08:04 UTC, which I could not confirm on the source page.
+- No latency figure is documented on the catalog page; measured arrival times of the source files are in the next entry.
+- ECMWF's real-time schedule puts 00 UTC ENS steps to 144 h at 06:40–07:04 UTC and steps to 360 h by 07:40 UTC. ECMWF says its open data are released at the end of that schedule; measured arrival in the bucket is in the next entry.
 - → This is the instrument `meps_archive.md` guessed at, and it spans the whole window with no member gaps.
-- → Timing: your cutoff of 10:00 market time is 08:00 UTC in summer (CEST) and 09:00 UTC in winter (CET). Open data at about 07:40–08:04 UTC leaves little or no margin in summer, before dynamical.org's own processing delay. Measure the delay by logging when each new `init_time` appears.
+- → Timing: your cutoff of 10:00 market time is 08:00 UTC in summer (CEST) and 09:00 UTC in winter (CET). The measured arrival of the 00 UTC run (next entry) misses the summer cutoff before 2025-10-02 and leaves about 19 minutes after it, before dynamical.org's own processing delay. Measure that delay by logging when each new `init_time` appears.
 - → Steps are 3-hourly, so hourly values need interpolation. Thorarinsdottir et al. (2019) used a spline constrained to be non-negative for wind, and interpolation over the clear-sky index for solar irradiance.
 - → Given Dantas & Browell (2025) and Browell et al. (2020), do not expect the spread to fix over-confidence on average; test it on the worst days.
+
+### Arrival times of ECMWF open data: dynamical.org status page and bucket timestamps
+Pipeline status page text pasted by you on 2026-09-21 (times shown UTC+2) · public bucket `s3://ecmwf-forecasts` · *read: the pasted status page; bucket listings and `Last-Modified` headers, sampled by me on 2026-09-21*
+
+Two independent views of when ECMWF's open-data files appear. The status page is dynamical.org's monitor of the same bucket (259 samples for the 12-hourly IFS ENS product, about four months; 1,411 for AIFS). For history I sent HEAD requests for the step-48 h (00 UTC run), step-60 h (12 UTC) and step-54 h (18 UTC) ensemble files on 61 dates, one every nine days from 2024-09-02 to 2026-03-01; an object's timestamp is when it appeared. I did not cover every day.
+- **Status page, 00 UTC IFS ENS 0.25° (recent runs), hours after init at median / 95th / 99th percentile:** steps to 1 d 7h40 / 7h42 / 7h45; to 3 d 7h43 / 7h47 / 7h55; to 6 d 7h46 / 7h54 / 8h17; to 15 d 7h50 / 8h08 / 9h05. Its "delayed past" alarm sits at 8h02 for the 3-day group. In UTC the 00 UTC run's 3-day group is therefore complete at about 07:43, and at 07:55 in the worst 1%.
+- **Bucket timestamps agree, and add history:** for the 00 UTC run the step-48 h file appeared **8.68–8.73 h after init (about 08:41 UTC) on every date sampled from 2024-09-02 to 2025-10-01, and 7.68 h (07:41 UTC) on every date from 2025-10-02 to at least 2026-09-01.** The one-hour step falls exactly between 2025-10-01 and 2025-10-02 (checked day by day); I did not identify the cause. Spread within each period was under 0.1 h.
+- **12 UTC run** (step 60 h): median 8.69 h after init in the sampled dates, minimum 7.68 h (about 20:41 UTC the same evening before the change). **18 UTC run** (step 54 h): median 8.09 h, minimum 7.08 h (about 02:05 UTC the next morning before the change).
+- The bucket holds 12 UTC and 18 UTC ensemble runs at 0.25° as GRIB2 throughout the window (a 2024 12 UTC step-0 file was about 4 GB, with `.index` files for byte-range access), though dynamical.org republishes only the 00 UTC run. Whether the ensemble carries 100 m wind here should follow from dynamical.org's dataset having it, but I did not open a GRIB file.
+- For the deterministic model, the open-data HRES step-48 h file arrived 8.57 h after init before the change and 7.57 h after it (19 sampled dates); the 06/18 UTC short-cutoff runs 7.45 h and 6.45 h. Open-Meteo may receive HRES by another route, so this does not tell you when its Single Runs appear.
+- → Against your cutoff (10:00 local, 08:00 UTC in summer, 09:00 UTC in winter): before 2025-10-02 the 00 UTC ensemble was **not in the bucket in time in summer** (08:41 UTC) and had about 19 minutes' margin in winter. Since then it has about 19 minutes' margin in summer at the median (5 at the 99th percentile for the 3-day group) and more than an hour in winter. All of this is before dynamical.org's own processing delay, which is still unmeasured.
+- → A backtest that respects the cutoff cannot use the same-day 00 UTC ensemble in summer before 2025-10-02. The available vintages for the next delivery day are the previous day's 12 UTC run (leads about 34–58 h), 18 UTC run (28–52 h) or 00 UTC run (46–70 h), against 22–46 h for the same-day 00 UTC run. Only the 00 UTC runs are on dynamical.org; the 12 and 18 UTC runs would have to come from the bucket.
+- → Use the status page's `1d` and `3d` groups as the relevant ones only if they mean "steps up to that lead"; I assumed so.
 
 ### NOAA GFS forecast and DWD ICON-EU forecast on dynamical.org
 dynamical.org · [GFS STAC collection](https://stac.dynamical.org/noaa-gfs-forecast/collection.json) · [ICON-EU STAC collection](https://stac.dynamical.org/dwd-icon-eu-forecast-5-day/collection.json) · [ICON grib archive](https://source.coop/dynamical/dwd-icon-grib) · *read: STAC metadata and catalog text*
@@ -452,7 +482,7 @@ One model for 6–162 h ahead on 73 GB wind farms (2019–2023, ECMWF HRES and E
 - Ensemble information matters most in high-uncertainty situations such as frontal passages, where methods based on a deterministic forecast fail to capture the extra spread. The deterministic HRES-based quantile model beat the ENS-based one at short horizons, which the authors attribute to HRES's higher temporal resolution and extra variables and levels (their ENS came from TIGGE).
 - The data and scripts are on Zenodo (over 200 GB).
 - → At your 14–38 h leads the ensemble should add little on average, so judge spread features on the worst days, not on the overall score.
-- → Per-lead-hour recalibration coefficients are a direct tool for the lead-hour-34 step, and GPD tails and a beta-transformed pool (Ranjan & Gneiting 2010, §3) are concrete tools for the under-coverage.
+- → Per-lead-hour recalibration coefficients are a direct tool for the lead-hour-34 step, and GPD tails and a beta-transformed pool (Ranjan & Gneiting 2010 and Gneiting & Ranjan 2013, §3) are concrete tools for the under-coverage.
 - GB farms with ECMWF inputs; onshore results may differ in the Nordics.
 
 ### Determining the bounds of skilful forecast range for probabilistic prediction of system-wide wind power generation
@@ -629,11 +659,17 @@ Compares platform data with Eurostat and other sources for 2015–2016; finds sh
 
 ### Two preregistered datasets on production-type labelling in the ENTSO-E Transparency Platform: multi-fuel reporting, register vintages, persistent misclassification, and cross-product consistency
 Nicolaysen · arXiv 2609.16152, submitted 2026-09-14 ·
-[10.48550/arXiv.2609.16152](https://doi.org/10.48550/arXiv.2609.16152) · *read: abstract; unreviewed preprint*
+[10.48550/arXiv.2609.16152](https://doi.org/10.48550/arXiv.2609.16152) · *read: full text (11 pages); unreviewed preprint*
+PDF: `research/data/papers/nicolaysen2026_entsoe-production-type-labelling.pdf`
 
-Reports that hourly series use step curves (`A03`) in which missing positions imply the previous value holds, so a parser that sums only the listed points under-reports, by 22.6% for one Finnish unit in 2021.
-- Also studies register vintages and production-type labels.
-- → Check that the ingest fills `A03` gaps, and whether the share of elided points changed over 2018–2025. It is a cheap rule-out for P3, not a known cause. Single author, three days old: weigh accordingly.
+Two preregistered checks of how ENTSO-E labels production types (simultaneous multi-fuel reporting, type changes between register vintages, persistent misclassification, per-unit against aggregated consistency), mostly on thermal plants.
+- Every ENTSO-E series in the material has curve type `A03`, in which a missing position means the previous value holds. Summing only the listed points under-reported three Finnish units in 2021 by 4.9%, 7.2% and 22.6%. Periods with position gaps were 3,265 of 12,417 (FI 2021), 14,278 of 23,403 (GB 2021) and 171 of 240 (NL 2023). The author's own early parser made this error and three published versions carried it before two independent implementations disagreed.
+- No per-unit generation series (A73) is published for SE3 (probed for 2019, 2021 and 2023; the API returns acknowledgement code 999), nor for DE-LU. A73 covers only units of 100 MW or more, so A73 below A75 is normal.
+- Control checks: wind aggregates came out at 0.94–0.98× of national sources in France and Finland, nuclear at 0.99–1.00×. ENTSO-E reports net generation and Eurostat gross, so establish which one a national figure is before comparing.
+- Converted plants keep stale fuel labels in the register; this concerns thermal plants, not wind capacity.
+- → entsoe-py 0.7.11 (pinned in this repo) reindexes each Period and forward-fills `A03` gaps in its generic time-series parser, and `grid_signals` ingestion goes through `EntsoePandasClient.query_generation`, so this failure mode is probably already handled. I have not tested it on an SE3 response, and it is no evidence about the 0.91 → 0.79 ceiling drift.
+- → A wind aggregate can sit a few percent below national sources in some zones, but a fixed ratio would not explain a drift.
+- Single author, days old, and about thermal labelling rather than wind.
 
 ### Modelling regional solar photovoltaic capacity in Europe: A data-driven approach for disaggregation, benchmarking, and forecasting
 Alghanem, Buckley · Energy Rep. 14, 2025 · [10.1016/j.egyr.2025.07.010](https://doi.org/10.1016/j.egyr.2025.07.010) · *read: metadata only*
@@ -834,9 +870,20 @@ A physical PV model that needs only plant locations and capacities from the Germ
 - RMSE in % of installed capacity: 4.16 (TenneT), 4.76 (Amprion), 4.87 (50Hertz) and 6.13 (TransNetBW). The TransNetBW figure is set aside because that area's register was last updated in July 2014, against April–May 2016 for the others, so the plant set did not match.
 - Against the TSOs' published day-ahead forecasts, the model was 0.43 (TenneT) and 0.36 (50Hertz) points of RMSE worse. Amprion's forecast was much worse (5.99) and was set aside as under-average. The authors could not tell which forecast products the TSOs publish or whether they are the ones used operationally.
 - Maximum output in the TSO estimates was about 0.6–0.75 of installed capacity, against about 0.8 from the model, which the authors attribute to spatial smoothing that the model underestimates.
-- → For the German solar track: the target is itself noisy, so an error floor exists that no forecast can beat; and register currency (last entry date) varies by control area, which is P3 again for solar.
+- → For the German solar track: the target is itself noisy, so an error floor exists that no forecast can beat (its size for control areas is not established; see the 2016 paper above). Register currency (last entry date) varies by control area, which is P3 again for solar.
 - → The 15-minute TSO series is the natural P4 target for solar.
 - Register data and 2014–2015 fleet, before roughly a doubling of German PV capacity.
+
+### Analysis of the uncertainty in the estimates of regional PV power generation evaluated with the upscaling method
+Saint-Drenan, Good, Braun, Freisinger · Sol. Energy 135, 2016 ·
+[10.1016/j.solener.2016.05.052](https://doi.org/10.1016/j.solener.2016.05.052) · *read: full text (abstract, data and conclusion; error analysis skimmed)*
+PDF: `research/data/papers/saintdrenan2016_upscaling-uncertainty.pdf`
+
+Measures the error of the upscaling method that underlies the TSOs' PV "actuals", using 15-minute measurements from 366 plants (out of 1,122 with 511 MWp) in one distribution-grid area (LEW Verteilnetz), July 2013 – August 2014. Reference plants are drawn from the same set and the rest are treated as unmetered.
+- The error falls steeply up to about 20 reference plants and saturates beyond about 70. With more than 70 the RMSE ranges from 0.009 to 0.022 kW/kWp, mostly 0.010–0.015, and it depends on which plants are chosen: 0.010–0.025 kW/kWp even for a large set.
+- The average distance between reference and unmetered plants predicts the error better than the number of reference plants. Mismatched plant characteristics (tilt, azimuth) also raise it, which the dataset could not quantify.
+- The sample is medium and large plants; rooftop-heavy fleets probably spread more.
+- → This does not give the noise floor of a whole control area, which I had hoped it would. It is one small area, and the paper's own aggregation analysis (its section 5) says the error falls as more plants are aggregated; I did not extract by how much.
 
 ### Review on probabilistic forecasting of photovoltaic power production and electricity consumption
 van der Meer, Widén, Munkhammar · Renew. Sustain. Energy Rev. 81, 2018 ·
@@ -876,17 +923,12 @@ Bayesian-optimised MLPs for German national wind and solar, trained on ERA5 for 
 
 ## 11. PDFs still missing
 
-Everything in the earlier lists has been obtained and read except the items below. Still missing,
-most valuable first:
+Everything else in the earlier lists has been obtained and read. Two items remain:
 
-| # | source | where | why |
-|---|---|---|---|
-| 1 | Saint-Drenan, Good, Braun, Freisinger (2016), *Analysis of the uncertainty in the estimates of regional PV power generation evaluated with the upscaling method*, Sol. Energy 135 | [10.1016/j.solener.2016.05.052](https://doi.org/10.1016/j.solener.2016.05.052) | Cited by Saint-Drenan 2017 for how uncertain the German TSO's "actual" PV figure is, which sets the noise floor for scoring German solar |
-| 2 | Nikodinoska et al. (2022), *Solar and wind power generation forecasts using elastic net in time-varying forecast combinations*, Appl. Energy | [10.1016/j.apenergy.2021.117983](https://doi.org/10.1016/j.apenergy.2021.117983) | German wind and solar combination of several forecasts; cited by Wanek as a benchmark. For the solar track |
-| 3 | Gneiting & Ranjan (2013), *Combining predictive distributions*, Electron. J. Stat. 7 | [10.1214/13-ejs823](https://doi.org/10.1214/13-ejs823) | Extends the beta-transformed pool of Ranjan & Gneiting (2010) from binary events to predictive distributions, the form Dantas & Browell use. Only if that route is pursued |
-| 4 | Nicolaysen (2026), ENTSO-E production-type labelling | arXiv 2609.16152 (open access) | Only if the `A03` parsing check goes ahead |
-| 5 | Svenska kraftnät / Energimyndigheten statistics on wind down-regulation and curtailment in SE3 | not found | Would test the redispatch and curtailment explanation for problem 3 and high-wind misses |
-| 6 | Measured latency of the dynamical.org ENS and GFS archives | dynamical.org pipeline status page (renders in a browser only) | Decides whether the 00 UTC ENS run is usable before the 10:00 cutoff, especially in summer |
+| # | source | where | why | status |
+|---|---|---|---|---|
+| 1 | Nikodinoska et al. (2022), *Solar and wind power generation forecasts using elastic net in time-varying forecast combinations*, Appl. Energy | [10.1016/j.apenergy.2021.117983](https://doi.org/10.1016/j.apenergy.2021.117983) | German wind and solar combination of several forecasts; cited by Wanek as a benchmark. For the solar track | cannot be sourced at the moment |
+| 2 | Statistics on wind down-regulation and curtailment in SE3 (Svenska kraftnät, Energimyndigheten) | not found; Svenska kraftnät's balancing-data site [mimer.svk.se](https://mimer.svk.se/) responds but I did not check it for wind-specific figures | Would test the redispatch and curtailment explanation for problem 3 and high-wind misses | source unknown |
 
 Not a paper, but on the list: the EEM20 competition data and code (28 GB, open access, CC BY 4.0,
 [10.15129/02db89e9-64d1-4ded-9324-6d952ce35099](https://doi.org/10.15129/02db89e9-64d1-4ded-9324-6d952ce35099))
@@ -897,9 +939,10 @@ and only 10 m wind is provided, so it cannot be joined to your real archives.
 
 - **P3 (capacity drift):** no paper reports the specific symptom. Olauson 2018 explains why ceilings near 0.8 are normal, and the EEM20 papers show empirical fixes for an unreliable register, but none explains a ceiling that moves from 0.91 to 0.79.
 - **P4 (15-minute):** thin peer-reviewed coverage; expect to design this from first principles, using IEA 13.2.2's averaging/instantaneous distinction and the metrics vocabulary in §8.
-- **German solar capacity and target:** no study found on register vintage or on the noise in the TSO "actual" beyond Saint-Drenan 2017 and its 2016 predecessor (§11).
+- **German solar capacity and target:** no study found on register vintage, and on the noise in the TSO "actual" only Saint-Drenan 2017 and its 2016 predecessor, which measures one small area (§10).
 - **Swedish curtailment and redispatch magnitudes:** no citable source found.
 - **Machine-learning weather models** (AIFS, GenCast, Google WeatherNext) appear as ensembles in Open-Meteo's and dynamical.org's listings. The constraint is archive depth, not quality, so I did not review them further.
+- **dynamical.org's own processing delay:** the source-file arrival times are measured (§4); the delay before a run appears in the Zarr store is not.
 - **Run-addressing for ICON-EU:** no retroactive source found; see §4.
 
 ---
