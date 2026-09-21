@@ -202,7 +202,8 @@ def test_one_run_serves_the_whole_delivery_day() -> None:
     assert frame.nwp_offset_days.nunique() == 2, (
         "the Open-Meteo path is expected to change vintage mid-day"
     )
-    assert frame[assemble.MEPS_RUN_COLUMN].nunique() == 1, (
+    runs = frame[assemble.MEPS_RUN_COLUMN]
+    assert (runs == runs.iloc[0]).all(), (
         "every delivery hour must be served by the same MEPS run"
     )
 
