@@ -13,14 +13,18 @@ import sqlite3
 import matplotlib as mpl
 
 mpl.use("Agg")
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from renewable_forecast import paths
+from renewable_forecast import paths, windows
 
 logger = logging.getLogger(__name__)
 
 FIGURES = paths.REPORTS / "figures"
+
+#: Delivery days are defined in market local time, so that is what the charts show.
+MARKET_TZ = windows.MARKET_TZ
 TRACKING_DB = paths.MLRUNS / "mlflow.db"
 ARTIFACTS = paths.MLRUNS / "artifacts"
 
@@ -204,57 +208,65 @@ def plot_evaluation_window() -> str:
     return _save(fig, "evaluation_window")
 
 
-def plot_leaderboard(runs: pd.DataFrame) -> str:
-    """CRPS per forecaster.
+#: Plain-language names for the chart axis. The code keys stay as they are.
+DISPLAY_NAME = {
+    "persistence": "Repeat what happened 48 h ago",
+    "climatology": "Long-run average for this hour and season",
+    "ridge_sanity_floor": "Straight line through 8 physics numbers",
+    "physical_power_curve": "Turbine power curve, nothing learned",
+    "lightgbm_point_monotone": "Boosted trees, single guess + error spread",
+    "lightgbm_quantile": "Boosted trees, full range of outcomes",
+    "A69_latest_vintage": "Grid operator's published forecast*",
+}
 
-    Two panels because one axis cannot show both facts: the learned models beat the
-    naive baselines by an order of magnitude, and they beat the physical baseline by
-    15%. The left panel is the gap that matters for "does this work at all"; the right
-    is the gap that matters for "was the machine learning worth it".
+
+def plot_leaderboard(runs: pd.DataFrame, capacity_mw: float = 4656.0) -> str:
+    """How far each method is from the truth, in megawatts.
+
+    One panel, in MW rather than capacity-factor units, because the question a reader
+    asks first is "how wrong is it" and 0.0307 does not answer that. The bar lengths
+    carry the magnitude and the printed values carry the precision, so no zoomed inset
+    is needed.
     """
-    frame = runs.iloc[::-1]
-    fig, (wide, zoom) = plt.subplots(
-        1, 2, figsize=(12.5, 3.4), width_ratios=[1.25, 1], constrained_layout=True
-    )
-    bars = wide.barh(
-        frame.name, frame.crps, color=[COLOURS[n] for n in frame.name], height=0.68
+    frame = runs.iloc[::-1].copy()
+    frame["miss_mw"] = frame.nmae * capacity_mw
+    fig, ax = plt.subplots(figsize=(10, 3.6), constrained_layout=True)
+    bars = ax.barh(
+        [DISPLAY_NAME.get(n, n) for n in frame.name],
+        frame.miss_mw,
+        color=[COLOURS[n] for n in frame.name],
+        height=0.68,
     )
     for bar, (_, row) in zip(bars, frame.iterrows(), strict=True):
-        wide.text(
-            row.crps + 0.004,
+        ax.text(
+            row.miss_mw + 12,
             bar.get_y() + bar.get_height() / 2,
-            f"{row.crps:.4f}",
+            f"{row.miss_mw:,.0f} MW",
             va="center",
-            fontsize=8.5,
+            fontsize=9,
+            fontweight="bold" if row["name"] == "lightgbm_quantile" else "normal",
         )
         if row["name"] == REFERENCE:
             bar.set_hatch("///")
             bar.set_edgecolor("white")
-    wide.set_xlim(0, 0.175)
-    wide.set_xlabel("CRPS (capacity-normalised) — lower is better")
-    wide.set_title("All forecasters", fontsize=10)
-    wide.grid(axis="x", alpha=0.3)
-
-    close = frame[~frame.name.isin({"persistence", "climatology", REFERENCE})]
-    bars = zoom.barh(
-        close.name, close.crps, color=[COLOURS[n] for n in close.name], height=0.6
+    ax.set_xlim(0, frame.miss_mw.max() * 1.18)
+    ax.set_xlabel(
+        "average miss, megawatts  —  against average output of 1,228 MW "
+        f"and {capacity_mw:,.0f} MW installed"
     )
-    for bar, (_, row) in zip(bars, close.iterrows(), strict=True):
-        zoom.text(
-            row.crps + 0.0004,
-            bar.get_y() + bar.get_height() / 2,
-            f"{row.crps:.4f}",
-            va="center",
-            fontsize=8.5,
-        )
-    zoom.set_xlim(0, 0.033)
-    zoom.set_xlabel("CRPS")
-    zoom.set_title("The models that are actually close", fontsize=10)
-    zoom.grid(axis="x", alpha=0.3)
-    fig.suptitle(
-        "SE3 wind, development set — A69 (hatched) is served at its latest revision "
-        "and is a reference, not a bar",
-        fontsize=9.5,
+    ax.set_title(
+        "SE3 onshore wind: how far each method lands from what actually happened",
+        fontsize=10.5,
+    )
+    ax.grid(axis="x", alpha=0.3)
+    ax.text(
+        frame.miss_mw.max() * 0.30,
+        0.15,
+        "* published after the fact with later corrections folded in,\n"
+        "  so it is a yardstick rather than a competitor",
+        fontsize=8,
+        style="italic",
+        color="#333",
     )
     return _save(fig, "leaderboard_crps")
 
@@ -363,20 +375,53 @@ FAN_ALPHA = (0.18, 0.28, 0.40)
 BACKTEST = "backtest_{zone}_{fuel}.parquet"
 
 
+def _market_hours(frame: pd.DataFrame) -> pd.Series:
+    """Interval start times in market local time, plus the close of the last interval.
+
+    Forecast rows are *intervals*, not instants. Plotting them as a line at their start
+    times makes a 00:00-24:00 delivery day look like it stops at 23:00, so the series is
+    extended by one step and drawn as stairs.
+    """
+    local = frame.valid_time.dt.tz_convert(MARKET_TZ)
+    step = local.diff().dropna().min()
+    return pd.concat([local, pd.Series([local.iloc[-1] + step])], ignore_index=True)
+
+
+def _stairs(values: pd.Series) -> pd.Series:
+    """Repeat the last value so a stairs plot closes its final interval."""
+    return pd.concat([values, values.iloc[[-1]]], ignore_index=True)
+
+
 def _fan(ax, frame: pd.DataFrame, prefix: str = "mw", colour: str = "#bc4b51") -> None:
-    """Draw nested prediction intervals plus the median onto one axis."""
-    hours = frame.valid_time
+    """Draw nested prediction intervals plus the median, as stairs in market time."""
+    hours = _market_hours(frame)
     for (low, high), alpha in zip(FAN_BANDS, FAN_ALPHA, strict=True):
         ax.fill_between(
             hours,
-            frame[f"{prefix}_q{low:.2f}"],
-            frame[f"{prefix}_q{high:.2f}"],
+            _stairs(frame[f"{prefix}_q{low:.2f}"]),
+            _stairs(frame[f"{prefix}_q{high:.2f}"]),
             color=colour,
             alpha=alpha,
             linewidth=0,
-            label=f"p{low * 100:.0f}-p{high * 100:.0f}",
+            step="post",
+            label=f"{low * 100:.0f}-{high * 100:.0f}% of outcomes",
         )
-    ax.plot(hours, frame[f"{prefix}_q0.50"], color=colour, lw=1.8, label="median")
+    ax.plot(
+        hours,
+        _stairs(frame[f"{prefix}_q0.50"]),
+        color=colour,
+        lw=1.8,
+        drawstyle="steps-post",
+        label="most likely",
+    )
+
+
+def _market_axis(ax, frame: pd.DataFrame) -> None:
+    """Label the x axis by hour of the delivery day, not by timestamp."""
+    hours = _market_hours(frame)
+    ax.set_xlim(hours.iloc[0], hours.iloc[-1])
+    ax.xaxis.set_major_locator(mdates.HourLocator(byhour=range(0, 24, 3), tz=MARKET_TZ))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M", tz=MARKET_TZ))
 
 
 def load_backtest(zone: str = "SE3", fuel: str = "wind_onshore") -> pd.DataFrame:
@@ -408,9 +453,9 @@ def pick_example_days(frame: pd.DataFrame, n: int = 4) -> list:
         (daily.mae.sub(daily.mae.median()).abs().idxmin(), "a typical day"),
         (
             daily.mae.sub(daily.mae.quantile(0.90)).abs().idxmin(),
-            "a bad day (p90 error)",
+            "a bad day — worse than 9 days in 10",
         ),
-        (daily.mae.idxmax(), "the worst day in the window"),
+        (daily.mae.idxmax(), "the worst day in the whole period"),
         (daily.mean_cf.idxmax(), "the windiest day"),
     ]
     return chosen[:n]
@@ -433,26 +478,29 @@ def plot_backtest_examples(zone: str = "SE3", fuel: str = "wind_onshore") -> str
         panel = frame[frame.delivery_day == day]
         _fan(ax, panel)
         ax.plot(
-            panel.valid_time,
-            panel.cf * panel.capacity_mw,
+            _market_hours(panel),
+            _stairs(panel.cf * panel.capacity_mw),
             color="black",
             lw=1.8,
             ls="--",
-            label="actual",
+            drawstyle="steps-post",
+            label="what actually happened",
         )
-        error = (panel.cf - panel["cf_q0.50"]).abs().mean()
+        error = (panel.cf - panel["cf_q0.50"]).abs().mean() * panel.capacity_mw.mean()
         ax.set_title(
-            f"{pd.Timestamp(day).date()} — {label}\nnMAE {error:.4f}",
+            f"{pd.Timestamp(day).date()} — {label}\naverage miss {error:,.0f} MW",
             fontsize=9,
         )
         ax.set_ylabel("MW")
         ax.grid(alpha=0.3)
-        ax.tick_params(axis="x", labelsize=7, rotation=20)
+        _market_axis(ax, panel)
+        ax.tick_params(axis="x", labelsize=8)
+    for ax in axes[1]:
+        ax.set_xlabel("hour of the delivery day, market time (CET/CEST)")
     axes[0][0].legend(fontsize=7, ncol=2, loc="upper left")
     fig.suptitle(
-        f"{zone} {fuel.replace('_', ' ')} — backtest forecasts against outturn, "
-        "lightgbm_quantile",
-        fontsize=10,
+        f"{zone} onshore wind — past forecasts against what actually happened",
+        fontsize=10.5,
     )
     return _save(fig, "backtest_examples")
 
@@ -472,31 +520,35 @@ def plot_latest_forecast(zone: str = "SE3", fuel: str = "wind_onshore") -> str: 
 
     fig, ax = plt.subplots(figsize=(10, 3.8), constrained_layout=True)
     _fan(ax, frame, colour="#2a6f97")
-    ax.axvline(
-        frame[frame.lead_hour >= VINTAGE_BOUNDARY].valid_time.min(),
-        color="black",
-        lw=1.0,
-        ls=":",
+    boundary = (
+        frame[frame.lead_hour >= VINTAGE_BOUNDARY]
+        .valid_time.min()
+        .tz_convert(MARKET_TZ)
     )
+    ax.axvline(boundary, color="black", lw=1.0, ls=":")
     ax.text(
-        frame[frame.lead_hour >= VINTAGE_BOUNDARY].valid_time.min(),
+        boundary,
         capacity * 0.02,
-        "  NWP vintage steps to 2 days old",
-        fontsize=7.5,
+        "  from here on, the weather data is a day older",
+        fontsize=8,
     )
     secondary = ax.secondary_yaxis(
-        "right", functions=(lambda mw: mw / capacity, lambda cf: cf * capacity)
+        "right",
+        functions=(lambda mw: 100 * mw / capacity, lambda pct: pct * capacity / 100),
     )
-    secondary.set_ylabel("capacity factor")
+    secondary.set_ylabel("% of installed capacity")
     ax.set_ylim(0, max(frame["mw_q0.95"].max() * 1.15, capacity * 0.1))
     ax.set_ylabel("MW")
-    ax.set_xlabel(f"delivery day {day}, hours UTC")
+    ax.set_xlabel(f"{day}, market time (CET/CEST) — the traded day runs 00:00 to 24:00")
     ax.grid(alpha=0.3)
+    _market_axis(ax, frame)
     ax.legend(fontsize=8, ncol=4, loc="upper right")
+    issued_local = frame.issue_time.iloc[0].tz_convert(MARKET_TZ)
     ax.set_title(
-        f"{zone} wind forecast for {day} — no actuals exist yet\n"
-        f"issued {frame.issue_time.iloc[0]:%Y-%m-%d %H:%M UTC} · "
-        f"model {frame.model_version.iloc[0]} · capacity {capacity:,.0f} MW",
+        f"{zone} onshore wind, forecast for {day} — it has not happened yet\n"
+        f"made {issued_local:%d %b %H:%M} market time, "
+        f"{capacity:,.0f} MW installed · hourly, while the market now trades "
+        "15-minute blocks",
         fontsize=9.5,
     )
     return _save(fig, "latest_forecast")
@@ -769,102 +821,95 @@ def plot_ceiling_drift() -> str:
 
 
 def plot_horizon() -> str:
-    """The task in time, on the same clock `lead_hour` uses.
+    """The task in time, in market local time, with no jargon.
 
-    Three reference points are easy to confuse, and all three appear in the literature:
-    the market quotes the horizon from **gate closure** (12-36 h), this project's
-    features are aged against the **09:00 UTC issue time** (13-37 h), and `lead_hour`
-    -- the column every other figure plots against -- counts from the **00z run**
-    (22-47 h). The axis here is the 00z run, and the other two are marked on it.
+    Drawn on the market clock rather than on forecast lead hours, because this is the
+    first figure a reader meets. The lead-hour framing every other chart uses is set out
+    in `docs/metrics.md`; the mapping is that market midnight on the delivery day is
+    +23 h from the overnight weather run under CET.
     """
-    fig, ax = plt.subplots(figsize=(10, 2.9), constrained_layout=True)
+    fig, ax = plt.subplots(figsize=(10.5, 3.0), constrained_layout=True)
+
+    ax.axvspan(-2, 10, color="#e8eef4", label="what we already know when we forecast")
+    ax.axvspan(24, 48, color="#bc4b51", alpha=0.28, label="the day we are forecasting")
     ax.axvspan(
-        -11, ISSUE_HOUR_UTC, color="#dfe7ef", label="known at issue: actuals, NWP"
-    )
-    ax.axvspan(ISSUE_HOUR_UTC, DELIVERY_START_CET, color="#f4f4f4")
-    ax.axvspan(
-        DELIVERY_START_CET,
-        DELIVERY_END_CET,
-        color="#bc4b51",
-        alpha=0.30,
-        label="delivery day D+1, 00:00-24:00 CET",
-    )
-    ax.axvspan(
-        NWP_FIRST_AVAILABLE,
-        NWP_LAST_AVAILABLE,
+        6.75,
+        8.6,
         color="#5b8e7d",
-        alpha=0.40,
-        label="00z runs disseminate (GFS ~03:30, ECMWF 05:45-07:34 UTC)",
+        alpha=0.55,
+        label="when the weather results actually land",
     )
-    ax.axvline(0, color="#444", lw=1.2, ls="--")
-    ax.axvline(ISSUE_HOUR_UTC, color="black", lw=1.8)
-    ax.axvline(GATE_CLOSURE_CET, color="#2a6f97", lw=1.4, ls="-.")
+
+    ax.axvline(1, color="#555", lw=1.1, ls="--")
+    ax.axvline(10, color="black", lw=2.0)
+    ax.axvline(12, color="#1d4e6b", lw=1.6, ls="-.")
+
+    for x, y, text in (
+        (1, 0.80, "overnight weather\nmodel starts running"),
+        (7.7, 0.52, "results\nland here"),
+        (10, 0.66, "we make\nour forecast"),
+        (12, 0.36, "bidding closes\nfor tomorrow"),
+    ):
+        ax.annotate(
+            text,
+            xy=(x, y - 0.12),
+            xytext=(x, y),
+            fontsize=8.5,
+            ha="center",
+            va="bottom",
+            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.85, "pad": 1.5},
+            arrowprops={"arrowstyle": "-", "lw": 0.8, "color": "#555"},
+        )
 
     ax.annotate(
-        "00z run\ninitialised",
-        xy=(0, 0.74),
-        xytext=(-10.5, 0.82),
-        fontsize=8,
-        arrowprops={"arrowstyle": "->", "lw": 0.8},
-    )
-    ax.annotate(
-        "ISSUE 09:00 UTC",
-        xy=(ISSUE_HOUR_UTC, 0.52),
-        xytext=(-10.5, 0.56),
-        fontsize=8,
-        arrowprops={"arrowstyle": "->", "lw": 0.8},
+        "",
+        xy=(24, 0.18),
+        xytext=(12, 0.18),
+        arrowprops={"arrowstyle": "<->", "lw": 1.2, "color": "#1d4e6b"},
     )
     ax.annotate(
         "",
-        xy=(ISSUE_HOUR_UTC, 0.42),
-        xytext=(NWP_LAST_AVAILABLE, 0.42),
-        arrowprops={"arrowstyle": "<->", "lw": 1.2, "color": "#2a6f97"},
+        xy=(48, 0.08),
+        xytext=(12, 0.08),
+        arrowprops={"arrowstyle": "<->", "lw": 1.2, "color": "#1d4e6b"},
     )
-    ax.text(
-        -10.5,
-        0.14,
-        "the 00z run is not usable at 00z:\n"
-        "ECMWF finishes ~07:34 UTC, leaving\n"
-        "~1.4 h of margin before issue",
-        fontsize=7.5,
-        color="#2a6f97",
-    )
-    ax.annotate(
-        "gate closure 12:00 CET = 11:00 UTC\n(10:00 UTC under CEST)",
-        xy=(GATE_CLOSURE_CET, 0.72),
-        xytext=(13.5, 0.80),
-        fontsize=8,
-        arrowprops={"arrowstyle": "->", "lw": 0.8},
-    )
+    ax.text(17.5, 0.205, "12 hours ahead", fontsize=8, color="#1d4e6b", ha="center")
+    ax.text(30, 0.105, "36 hours ahead", fontsize=8, color="#1d4e6b", ha="center")
 
-    # The horizon the market quotes, drawn from gate closure rather than the run.
-    ax.annotate(
-        "",
-        xy=(DELIVERY_START_CET, 0.14),
-        xytext=(GATE_CLOSURE_CET, 0.14),
-        arrowprops={"arrowstyle": "<->", "lw": 1.1, "color": "#2a6f97"},
-    )
-    ax.annotate(
-        "",
-        xy=(DELIVERY_END_CET, 0.08),
-        xytext=(GATE_CLOSURE_CET, 0.08),
-        arrowprops={"arrowstyle": "<->", "lw": 1.1, "color": "#2a6f97"},
-    )
-    ax.text(12.5, 0.165, "12 h from gate closure", fontsize=7.5, color="#2a6f97")
-    ax.text(26, 0.105, "36 h from gate closure", fontsize=7.5, color="#2a6f97")
-
-    ax.set_xlim(-11, 50)
+    ax.set_xlim(-2, 50)
     ax.set_ylim(0, 1)
     ax.set_yticks([])
-    ax.set_xlabel(
-        "lead hour from the 00z run of day D  —  the clock `lead_hour` uses. "
-        "Under CEST the delivery band shifts one hour earlier, to +22…+46."
+    ax.set_xticks([0, 6, 12, 18, 24, 30, 36, 42, 48])
+    ax.set_xticklabels(
+        [
+            "00:00",
+            "06:00",
+            "12:00",
+            "18:00",
+            "00:00",
+            "06:00",
+            "12:00",
+            "18:00",
+            "24:00",
+        ]
     )
-    ax.set_xticks(
-        [0, ISSUE_HOUR_UTC, GATE_CLOSURE_CET, DELIVERY_START_CET, 36, DELIVERY_END_CET]
+    ax.set_xlabel("market time (CET/CEST)", fontsize=9)
+    ax.text(
+        11, -0.19, "today", fontsize=9, ha="center", transform=ax.get_xaxis_transform()
     )
-    ax.legend(fontsize=8, loc="upper right", framealpha=0.95)
-    ax.set_title("The forecasting task in time", fontsize=10)
+    ax.text(
+        36,
+        -0.19,
+        "tomorrow — the traded day",
+        fontsize=9,
+        ha="center",
+        transform=ax.get_xaxis_transform(),
+    )
+    ax.legend(fontsize=8.5, loc="upper right", framealpha=0.95, ncol=1)
+    ax.set_title(
+        "Every morning we forecast tomorrow, before bidding closes at midday",
+        fontsize=10.5,
+    )
     return _save(fig, "task_horizon")
 
 
