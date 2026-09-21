@@ -25,16 +25,20 @@ documentation and grey literature say about the problems the README lists.
 
 | lead | bears on | where | caveat |
 |---|---|---|---|
-| ECMWF IFS ENS archive as Zarr, 51 members, 100 m wind, init times from 2024-04-01 | P1 | §4, dynamical.org | covers the whole backtest window, unlike MEPS; check init hour vs the 10:00 cutoff, 3-hourly steps, ~20 km grid |
-| Open-Meteo **Single Runs API** — `run=` parameter, IFS HRES runs at 00/06/12/18 from 2024-03-14 | P2 | §4, Open-Meteo docs | fixes the vintage step for ECMWF only; other models only from 2026-04-02 |
+| Run-addressed archives now identified for ECMWF (Open-Meteo Single Runs, from 2024-03-14; dynamical.org ENS, from 2024-04-01) and **GFS** (dynamical.org, from 2021-05-01, 100 m wind, every 6 h) | P2 | §4 | **ICON-EU cannot be run-addressed for the backtest** (archive starts 2026-02-10); ENS holds the 00 UTC run only |
+| Fix the capacity denominator empirically: the winning EEM20 entry divided by the mean of registered capacity and the running maximum of observed output; the runner-up corrected capacity by hand from the rolling maximum, and a 5% correction in SE1 cut pinball loss by 10% | P3 | §5, Bellinguer 2020; Browell 2020 | competition data (dates anonymised, 2020 fleet) |
+| Ceilings near 0.8 of capacity are normal for Sweden; downtime and low wind-speed diversity, not wakes, cap the fleet maximum | P3 | §6, Olauson 2018 | reanalysis-based, 2010s data |
+| ECMWF IFS ENS archive as Zarr, 51 members, 100 m wind, init times from 2024-04-01 | P1 | §4, dynamical.org | **only the 00 UTC run; open data lands about 07:40–08:04 UTC, marginal against a 10:00 summer cutoff (08:00 UTC)**; 3-hourly steps; ~20 km grid. Expect limited day-ahead gain (next row) |
+| Ensemble spread may help less at day-ahead than hoped: the EEM20 runner-up found the ensemble mean sufficient, and weather-to-power uncertainty dominates up to about 2–3 days ahead | P1 | §4 Dantas & Browell 2025; §5 Browell 2020 | gains concentrate in high-uncertainty situations (frontal passages), so test on the worst days rather than on average |
+| Quantile-specific weights when combining two model families (boosted trees strong in the middle, GAM in the tails); peaks-over-threshold (GPD) tails; per-lead-hour recalibration | P1, P2 | §5 Browell 2020; §4 Dantas & Browell 2025 | tested on the four Swedish zones (Browell) and 73 GB farms (Dantas) |
+| Open-Meteo **Single Runs API** — `run=` parameter, IFS HRES runs at 00/06/12/18 from 2024-03-14 | P2 | §4, Open-Meteo docs | fixes the vintage step for ECMWF only |
 | Second-stage quantile regression on the first-stage quantiles, fitted on a separate block | P1 | §3 Lindberg 2024; §5 Lindberg 2023 | shown on one 6 MW park with a forest model, not on a zone with boosting |
 | Context-weighted or group-conditional conformal layer on the existing quantiles | P1 | §3, Moradi 2025; Gibbs 2024; Romano 2019 | exchangeability is violated by drift; Moradi tested solar only |
 | More conservative hyperparameters for the outer quantiles; parametric tails | P1 | §2 Landry; §1 Sweeney | not tested on SE3 |
 | Condition interval width on predicted level and a cut-out-risk indicator | P1 | §2, Pinson & Kariniotakis 2010 | single-farm, hand-built fuzzy rules |
 | Coverage-by-output charts can mislead if binned by *realised* output | P1, EVAL | §9, Lerch 2017 | check how `coverage_by_output.png` bins |
 | Flag or drop curtailed and non-reporting hours; normalise aggregates for units that report | P3, EVAL | §1, IEA guide 13.2.1–13.2.2 | needs a source of curtailment/reporting flags |
-| Neighbourhood pseudo-ensemble from a deterministic 2.5 km run | P1 | §3, Molinder 2018 | icing study, two weeks of data; still under-dispersive |
-| Simulated fleet output from reanalysis as an independent ceiling | P3 | §6, Olauson; Staffell | needs per-period bias correction |
+| Neighbourhood pseudo-ensemble from a deterministic 2.5 km run | P1 | §3, Molinder 2018 | icing study, two weeks of data; still under-dispersive. Analog ensembles are biased low in the right tail when the archive is short (Alessandrini 2019) |
 | ENTSO-E `A03` step-curve encoding under-reports if parsed naively | P3 | §6, Nicolaysen 2026 | new single-author preprint, unreviewed |
 
 **Two headline results to treat with care.** Kean & O'Sullivan (2026) report beating the ENTSO-E
@@ -49,7 +53,8 @@ the MEPS control member because MEPS's ensemble size was inconsistent over their
 same publication-history problem `reports/meps_archive.md` hit. Meisenbacher et al. (2025) found
 plain power-curve models beat deep autoregressive models when shutdowns are irregular, and Wanek
 (2026) concludes that NWP source quality mattered as much as model complexity, in line with
-"physics gets you most of the way".
+"physics gets you most of the way". The EEM20 papers, which use the same four Swedish zones,
+found the same capacity-register unreliability you did (§5, §6).
 
 ---
 
@@ -268,6 +273,29 @@ Rasp, Lerch · Mon. Weather Rev. 146(11), 2018 ·
 Network that outputs distribution parameters, trained on CRPS, with ensemble mean and spread as inputs.
 - → Optional later step: a CRPS-trained distributional head as an alternative to per-quantile boosting.
 
+### Ensemble-based probabilistic forecasting at Horns Rev
+Pinson, Madsen · Wind Energy 12(2), 2009 · online 2008 ·
+[10.1002/we.309](https://doi.org/10.1002/we.309) · *read: abstract + introduction skim*
+PDF: `research/data/papers/pinson2009_ensemble-forecasting-horns-rev.pdf`
+
+Complete ensemble-to-predictive-distribution chain for one offshore farm over about a year.
+- Ensemble meteorological forecasts are converted to power with an adaptively estimated local-polynomial power curve; the power ensemble is then turned into a predictive distribution by adaptive kernel dressing whose shape comes from a mean–variance model with recursively estimated parameters, fitted to maximise overall skill.
+- States that ensemble forecasts of wind power are not reliable in the probabilistic sense and must be recalibrated; the result is more reliable than the raw ensemble while keeping its resolution.
+- → Same "convert members to power first, then dress and recalibrate" order as Phipps et al. (2022); recursive estimation is one way to track drift.
+- One farm, one year, 2000s NWP.
+
+### Improving the analog ensemble wind speed forecasts for rare events
+Alessandrini, Sperati, Delle Monache · Mon. Weather Rev. 147(7), 2019 ·
+[10.1175/mwr-d-19-0006.1](https://doi.org/10.1175/mwr-d-19-0006.1) · *read: abstract + introduction*
+PDF: `research/data/papers/alessandrini2019_analog-ensemble-rare-events.pdf`
+
+The analog ensemble (AnEn) forms its members from observations that coincided with the past forecasts most similar to the current one, at the same lead time.
+- The standard AnEn has a conditional negative bias for events in the right tail of the wind-speed distribution, worst when the training archive is short and the event is rare.
+- A new bias correction, tested on more than 500 US stations, reduces the underestimation and improves probabilistic skill for wind above 10 m/s.
+- → A caution for the analog-ensemble idea in §1: with about two years of archived forecasts it would under-predict high-wind hours, exactly where you are under-covered. It needs the correction, or should be used as a spread feature rather than as the predictive distribution.
+- → Like any AnEn it needs an archive of past forecasts at the same lead time, so it inherits the vintage constraint.
+- US station wind speeds, not zonal power.
+
 ### Probabilistic forecasting of wind power production losses in cold climates: a case study
 Molinder, Körnich, Olsson, Bergström, Sjöblom · Wind Energy Sci. 3, 2018 ·
 [10.5194/wes-3-667-2018](https://doi.org/10.5194/wes-3-667-2018) · *read: abstract + results*
@@ -283,6 +311,19 @@ Swedish icing losses from an 11-member 2.5 km ensemble (HarmonEPS) and a neighbo
 
 ## 4. Weather data: run addressing, vintage and ensemble archives (P1, P2)
 
+### Which models can be run-addressed for the backtest window?
+Compiled from the entries below; backtest window 2024-09-02 to 2026-03-01.
+
+| model | run-addressed source | covers the window? |
+|---|---|---|
+| ECMWF IFS (HRES, 9 km) | Open-Meteo Single Runs: 00/06/12/18 UTC runs from 2024-03-14 | yes |
+| ECMWF IFS ENS (0.25°, 51 members) | dynamical.org: **00 UTC only**, from 2024-04-01, 3-hourly to 144 h | yes, with the latency caveat below |
+| NOAA GFS (0.25°) | dynamical.org: every 6 h from 2021-05-01, hourly to 120 h, 10/80/100 m wind | yes |
+| DWD ICON-EU (7 km) | dynamical.org: from 2026-02-10 only, because DWD keeps a short rolling window and archiving began in March 2026; Open-Meteo Single Runs: from 2026-04-02 | **no** |
+| MEPS (2.5 km) | MET Norway THREDDS (see `reports/meps_archive.md`) | deterministic yes; the 30-member ensemble ends 2024-12-10 |
+
+So ICON-EU, one of your three pinned models, cannot be given run-addressing retroactively; it would have to stay on whole-day offsets or be dropped from the vintage-fixed track.
+
 ### Open-Meteo Single Runs API
 Open-Meteo documentation · [open-meteo.com/en/docs/single-runs-api](https://open-meteo.com/en/docs/single-runs-api) · *read: docs page*
 
@@ -290,7 +331,7 @@ Returns the full horizon of one archived model run, selected with a required `ru
 - ECMWF IFS HRES (9 km) individual runs at 00/06/12/18 UTC archived from 2024-03-14; most other models only from 2026-04-02.
 - The docs warn that initialisation time differs from public availability (about 4–6 h for global models).
 - → Would give a run-addressed IFS and remove the lead-hour-34 step for that model without the MEPS download. Your reports record that a `*_previous_run1` parameter was rejected, but do not mention this endpoint.
-- → GFS and ICON-EU would not be run-addressable across the backtest window, so the three-model set would become mixed. Also confirm the 9 km HRES matches the 0.25° `ecmwf_ifs025` you pinned before swapping it in.
+- → This endpoint covers only IFS over the backtest window. GFS is covered by dynamical.org and ICON-EU by nothing I found (see the table at the top of this section). Also confirm the 9 km HRES matches the 0.25° `ecmwf_ifs025` you pinned before swapping it in.
 - → Pricing and free-tier limits were not visible on the page; check before planning a two-year pull.
 
 ### Open-Meteo Previous Runs API and maintainer discussion #1023
@@ -302,13 +343,29 @@ Fixed lead-time offsets (`_previous_day1` … `_previous_day7`); most models arc
 - → Confirms your finding that this API cannot be addressed by run; supports the information-age bookkeeping you already do.
 
 ### ECMWF IFS ENS 15-day forecast (Zarr archive)
-dynamical.org · [catalog page](https://dynamical.org/catalog/ecmwf-ifs-ens-forecast-15-day-0-25-degree/) · [AWS registry](https://registry.opendata.aws/dynamical-ecmwf-ifs-ens/) · *read: docs pages*
+dynamical.org · [catalog page](https://dynamical.org/catalog/ecmwf-ifs-ens-forecast-15-day-0-25-degree/) · [STAC collection](https://stac.dynamical.org/ecmwf-ifs-ens-forecast-15-day-0-25-degree/collection.json) · [AWS registry](https://registry.opendata.aws/dynamical-ecmwf-ifs-ens/) · *read: catalog page, STAC metadata, dynamical.org `prompt.md`, `llms.txt` and migration guide, ECMWF dissemination schedule*
 
-51-member ECMWF ensemble at 0.25°, init times from 2024-04-01, updated every 24 h, CC BY 4.0, no authentication.
-- Includes 100 m wind components (`wind_u_100m`, `wind_v_100m`), 2 m temperature, cloud and radiation.
-- Lead times: 3-hourly to 144 h, 6-hourly beyond.
-- → This is the instrument `meps_archive.md` guessed at ("most plausibly the ECMWF ENS archive"): it spans the whole 546-day window, so spread would not switch on and off.
-- → Checks before committing: which UTC init hour is stored and whether its real-world availability precedes 10:00 market time; 3-hourly steps need interpolation to hourly; 0.25° is coarse next to MEPS; ECMWF model upgrades within the window could shift spread and bias, the same era risk you found in MEPS.
+51-member ECMWF ensemble (1 control + 50 perturbed) at 0.25°, built from ECMWF Open Data on the AWS registry; init times 2024-04-01 to present, **00 UTC only**, one run per day; CC BY 4.0.
+- Steps: 85 in total, 3-hourly to 144 h then 6-hourly to 360 h.
+- Variables include `wind_u_100m` and `wind_v_100m`. Documented gaps: `wind_gust_10m` and the precipitation-type field are NaN before 2024-11-13, and total cloud cover is NaN before 2025-11-21. All 51 members are present throughout. 100 m wind is not listed as gapped.
+- Datasets are versioned (this one is v0.1.0) and the `prompt.md` and `llms.txt` guidance says to resolve the asset location from the STAC catalog each time and not hard-code buckets or versions, because they change when a dataset is reprocessed. Access is via `dynamical_catalog.open(...)` (Python 3.12+, Icechunk 2.0); the legacy `data.dynamical.org` service is being retired from 2026-09-30.
+- No latency figure is documented. The pipeline status page needs a browser (it is rendered client-side), so I could not read it.
+- ECMWF's real-time schedule puts 00 UTC ENS steps to 144 h at 06:40–07:04 UTC and steps to 360 h by 07:40 UTC. ECMWF says its open data are released at the end of that schedule; a search excerpt put availability at 07:40–08:04 UTC, which I could not confirm on the source page.
+- → This is the instrument `meps_archive.md` guessed at, and it spans the whole window with no member gaps.
+- → Timing: your cutoff of 10:00 market time is 08:00 UTC in summer (CEST) and 09:00 UTC in winter (CET). Open data at about 07:40–08:04 UTC leaves little or no margin in summer, before dynamical.org's own processing delay. Measure the delay by logging when each new `init_time` appears.
+- → Steps are 3-hourly, so hourly values need interpolation. Thorarinsdottir et al. (2019) used a spline constrained to be non-negative for wind, and interpolation over the clear-sky index for solar irradiance.
+- → Given Dantas & Browell (2025) and Browell et al. (2020), do not expect the spread to fix over-confidence on average; test it on the worst days.
+
+### NOAA GFS forecast and DWD ICON-EU forecast on dynamical.org
+dynamical.org · [GFS STAC collection](https://stac.dynamical.org/noaa-gfs-forecast/collection.json) · [ICON-EU STAC collection](https://stac.dynamical.org/dwd-icon-eu-forecast-5-day/collection.json) · [ICON grib archive](https://source.coop/dynamical/dwd-icon-grib) · *read: STAC metadata and catalog text*
+
+The same catalog also hosts two more of your three pinned models.
+- **GFS (v0.2.7):** 0.25°, init times every 6 h from **2021-05-01**, lead 0–384 h with hourly steps to 120 h; wind at 10, 80 and 100 m; from NOAA's open-data feed on AWS. Latency and reprocessing status are not stated in the metadata.
+- **ICON-EU (v0.2.0):** 0.0625° (~7 km), 00/06/12/18 UTC, lead 0–120 h (hourly to 78 h), 10 m wind only; the archive starts **2026-02-10**. A dynamical.org note surfaced by search (I did not open it) says it began archiving DWD's GRIB files in March 2026 because DWD keeps only a short rolling window on its servers, which is consistent with the 2026-02-10 start.
+- Also listed: AIFS single and AIFS ensemble (0.25°), and two 46-day IFS ensembles at 1.5°, none of which I examined.
+- → GFS is run-addressable for the whole backtest with a 100 m wind field. Check that its archive is first-publication rather than reprocessed, and pin the dataset version.
+- → ICON-EU is not retroactively run-addressable anywhere I found; see the table above.
+- → GFS runs are every 6 h. Whether the 06 UTC run is available before your cutoff is not something I verified.
 
 ### Open-Meteo Ensemble API and Ensemble Mean API
 Open-Meteo documentation · [Ensemble API](https://open-meteo.com/en/docs/ensemble-api) · [Ensemble Mean API](https://open-meteo.com/en/docs/ensemble-mean-api) · *read: docs pages*
@@ -339,20 +396,33 @@ Descriptions of the 2.5 km Nordic model and its ensemble system.
 - → Read for the ensemble's perturbation design and cycle structure. The archive product is named `lagged_6_h`, which suggests members from earlier cycles are combined; check per-member initialisation times against your information-age test.
 
 ### Seamless short- to mid-term probabilistic wind power forecasting
-Dantas, Browell · arXiv 2025 · [10.48550/arXiv.2502.11960](https://doi.org/10.48550/arXiv.2502.11960) · *read: abstract*
+Dantas, Browell · arXiv 2025 · [10.48550/arXiv.2502.11960](https://doi.org/10.48550/arXiv.2502.11960) · *read: full text (introduction, method, results and conclusion skimmed)*
+PDF: `research/data/papers/dantas2025_seamless-probabilistic-wind.pdf`
 
-One model from 6 to 162 h ahead on 73 GB wind farms over five years, modelling weather uncertainty and weather-to-power uncertainty separately.
-- Weather-to-power uncertainty dominates at short lead times; weather forecast uncertainty dominates at longer ones, with the crossover earlier offshore than onshore.
-- → Supports letting the interval width depend on lead hour, which your +35% step at lead 34 suggests it should.
+One model for 6–162 h ahead on 73 GB wind farms (2019–2023, ECMWF HRES and ENS, BMRA production data), separating weather-forecast uncertainty from weather-to-power uncertainty.
+- Stage one is a quantile gradient-boosted weather-to-power model; each ensemble member is dressed with a kernel whose spread coefficients depend on lead time, and the kernels are combined by a beta-transformed linear opinion pool, with all coefficients fitted per lead time by minimum CRPS.
+- Distribution tails use a peaks-over-threshold model (generalised Pareto), because non-parametric quantile models struggle in the tails where data are sparse.
+- Weather-to-power uncertainty dominates at short lead times; weather-forecast uncertainty dominates beyond about two to three days, later for onshore than offshore farms.
+- Ensemble information matters most in high-uncertainty situations such as frontal passages, where methods based on a deterministic forecast fail to capture the extra spread. The deterministic HRES-based quantile model beat the ENS-based one at short horizons, which the authors attribute to HRES's higher temporal resolution and extra variables and levels (their ENS came from TIGGE).
+- The data and scripts are on Zenodo (over 200 GB).
+- → At your 14–38 h leads the ensemble should add little on average, so judge spread features on the worst days, not on the overall score.
+- → Per-lead-hour recalibration coefficients are a direct tool for the lead-hour-34 step, and GPD tails and a beta-transformed pool are concrete tools for the under-coverage.
+- GB farms with ECMWF inputs; onshore results may differ in the Nordics.
 
 ### Probabilistic wind power forecasting with tree-based machine learning and weather ensembles
-Bruninx, van Binsbergen, Verstraeten, Nowé, Helsen · arXiv 2026 (rev. July) ·
-[10.48550/arXiv.2602.13010](https://doi.org/10.48550/arXiv.2602.13010) · *read: abstract*
+Bruninx, van Binsbergen, Verstraeten, Nowé, Helsen · arXiv 2026 (v2, rev. July) ·
+[10.48550/arXiv.2602.13010](https://doi.org/10.48550/arXiv.2602.13010) · *read: full text (data, calibration and conclusion sections)*
+PDF: `research/data/papers/bruninx2026_tree-based-weather-ensembles.pdf`
 
-Four years of Belgian offshore wind farms; compares conformalized quantile regression, natural gradient boosting and conditional diffusion on top of tree models.
-- Using multiple NWP providers instead of one improved point accuracy by 17% on average.
-- Diffusion was best (about 5% lower MAE and 12% lower CRPS than the probabilistic baseline); all three beat a Gaussian-process baseline.
-- → Independent support for keeping several NWP providers. Offshore, single farm cluster: not directly comparable to SE3.
+Four years of Belgian offshore wind farms (ENTSO-E grid-connection data); compares conformalized quantile regression (XGBoost quantiles plus a conformal margin from a hold-out set), natural gradient boosting (Gaussian) and a conditional diffusion model (Treeffuser, LightGBM-based) against a power curve, an analytical wake model and a Gaussian process.
+- Five NWP models via a commercial provider (ICON-EU, ICON-D2, ECMWF HRES, ARPEGE-EU, Met Office Global), taking for each day the latest forecast published before day-ahead gate closure. Using the provider forecasts together improved MAE by 17% over the average single provider and up to 23% over the worst; Diebold–Mariano tests are reported.
+- Tree models cut point error by up to 33% versus the power curve and 53% versus the wake model.
+- Reliability is reported per operating region of the power curve. The Gaussian methods are worst calibrated at low and high output, where the distribution is asymmetric; the distribution-free methods (CQR, diffusion) are better. The authors also note that storm conditions cause the largest day-ahead errors.
+- Diffusion was best overall but far slower; CQR was nearly as good at a fraction of the computation.
+- Engineering baselines were rescaled by the ratio of maximum observed power to rated power, and curtailments were filtered from the training data.
+- → Per-region reliability curves are a ready-made diagnostic for your high-wind under-coverage (bin by predicted output, cf. Lerch et al. 2017).
+- → Independent support for keeping several NWP models, and for CQR as the low-cost calibration option; the max/rated rescaling is another empirical capacity correction.
+- Offshore, one zone; the multi-provider gain is over single providers, not over an ensemble.
 
 ### Machine learning forecasts of Scandinavian numerical weather prediction wind model residuals with control theory for wind energy
 Chen, Zhang, Birkelund · Energy Rep. 8, 2022 · [10.1016/j.egyr.2022.08.105](https://doi.org/10.1016/j.egyr.2022.08.105) · *read: metadata only*
@@ -363,6 +433,37 @@ Forecasts the errors (residuals) of a Scandinavian NWP wind model with ML; a com
 ---
 
 ## 5. Nordic and Swedish (SE3) studies
+
+### Probabilistic forecasting of regional wind power generation for the EEM20 competition: a physics-oriented machine learning approach
+Bellinguer, Mahler, Camal, Kariniotakis · 2020 17th Int. Conf. European Energy Market (EEM) ·
+[10.1109/eem49802.2020.9221960](https://doi.org/10.1109/eem49802.2020.9221960) · *read: full text (6 pages)*
+PDF: `research/data/papers/bellinguer2020_eem20-physics-oriented-ml.pdf`
+
+The winning entry of the EEM20 competition: day-ahead quantile forecasts (10–90%) of aggregate wind power for the four Swedish zones, beating second and third place by 6.7% and 14.7% in pinball loss.
+- Data: hourly regional production, a turbine list (coordinates, rated power, hub height, commissioning dates) and a 10-member 10 km MET Norway ensemble with 10 m wind, gust, temperature, pressure, humidity and cloud.
+- **Target:** load factor with a deliberately robust denominator, the mean of registered installed capacity and the running maximum of observed regional output up to that time, because the turbine list was unreliable. They found production above installed capacity in SE1 (November 2000) and a 4% gap between the dataset's capacity (8,640 MW) and the wind association's (8,984 MW).
+- One quantile regression forest per zone; features are an analog production level (average load factor of the 200 most similar past weather patterns, found by PCA on hub-height wind), wind-physics variables (power-law shear to 100 m, air density, wind power density, a generic power curve applied at 20–25 capacity-weighted farm clusters), values at t−1 and t+1, and hour of day and day of week as proxies for maintenance and curtailment.
+- Used only the ensemble mean, citing an earlier finding that using all members individually performs similarly.
+- The northern zone had the highest normalised error, attributed by earlier work to low capacity, complex terrain and icing.
+- → The running-maximum denominator is close to the diagnostic your README uses to detect capacity drift. It shows a way to keep using the data despite an unreliable register, while hiding any real drift in the ceiling.
+- → Time-shifted features and time-of-day proxies are cheap additions if you lack them.
+- Competition data with anonymised dates (2000–2001) and a 2020-era fleet.
+
+### Quantile combination for the EEM20 wind power forecasting competition
+Browell, Gilbert, Tawn, May · 2020 17th Int. Conf. European Energy Market (EEM) ·
+[10.1109/eem49802.2020.9221942](https://doi.org/10.1109/eem49802.2020.9221942) · *read: full text (6 pages)*
+PDF: `research/data/papers/browell2020_eem20-quantile-combination.pdf`
+
+Second-place entry (the authors' team was Team 12): quantile forecasts (0.1–0.9) of wind power for SE1–SE4 from a gradient-boosted tree model and a quantile GAM, combined with quantile-specific weights. The NWP was a 10 m ensemble issued at 06 UTC the day before; each of six two-month tasks appended new data to the training set; scores are pinball loss.
+- The GAM was better toward the tails and the trees in the middle, so a per-quantile weight, chosen by cross-validation, beat both components in all four zones.
+- Feature engineering used ensemble means (wind speed, gust, direction, temperature, power from shear plus a smoothed generic curve), ±2 h rolling means and lead/lag values, seasonal terms, and the neighbouring zones' median forecasts.
+- **The ensemble mean was sufficient:** they could not extract benefit from ensemble range, minimum or maximum. They note that only 10 m wind was available and cite Cannon et al. (2017) for weather-to-power conversion being a much larger source of day-ahead uncertainty than the NWP.
+- **Capacity:** the supplied list was imperfect because farms did not come online at their full listed capacity, so they corrected it manually using lags between installation dates and increases in the rolling maximum of recorded power. In SE1 the corrections lowered capacity by about 5% on average and reduced pinball loss by 10% against the raw capacity.
+- Final scores (average pinball loss, units as in the paper's Table II): winner 44.9, this entry 47.9, third 51.5, and a combination of the winner and this entry 44.4.
+- The authors note that pinball loss lets a forecaster trade reliability for sharpness, and that no competition design yet prevents it.
+- → Capacity error moved the score more than any modelling choice reported, and the correction method is the rolling-maximum comparison you already use.
+- → Tail-specific model choice and per-quantile combination are concrete P1 experiments.
+- Competition data: open access, 28 GB, CC BY 4.0, dates shifted to 2000–2001 ([10.15129/02db89e9-64d1-4ded-9324-6d952ce35099](https://doi.org/10.15129/02db89e9-64d1-4ded-9324-6d952ce35099)); the R package ProbCast is on [Zenodo](https://doi.org/10.5281/zenodo.3843333).
 
 ### Day-ahead probabilistic forecasting at a co-located wind and solar power park in Sweden: Trading and forecast verification
 Lindberg, Lingfors, Arnqvist, van der Meer, Munkhammar · Adv. Appl. Energy 9, 2023 ·
@@ -397,26 +498,45 @@ One recurrent network trained on 36 bidding zones (ENTSO-E onshore wind, 2020–
 
 ## 6. Capacity denominator, data quality and reanalysis (P3)
 
-No paper found addresses a falling ratio of rolling peak generation to registered capacity directly. The entries below are the closest tools for isolating cause.
+No paper reports the specific drift in the ratio of peak output to registered capacity. The closest material explains why fleet maxima sit below capacity (Olauson 2018) and shows how the EEM20 competitors handled an unreliable Swedish capacity register (§5: Bellinguer 2020; Browell 2020).
 
 ### Modelling the Swedish wind power production using MERRA reanalysis data
 Olauson, Bergkvist · Renewable Energy 76, 2015 ·
-[10.1016/j.renene.2014.11.085](https://doi.org/10.1016/j.renene.2014.11.085) · *read: metadata only*
+[10.1016/j.renene.2014.11.085](https://doi.org/10.1016/j.renene.2014.11.085) · *read: abstract + method sections skimmed*
+PDF: `research/data/papers/olauson2015_swedish-wind-merra.pdf`
+
+Hourly aggregated Swedish wind power from MERRA reanalysis plus turbine-registry data (coordinates, rated power, hub height), 2007–2012 while capacity grew from about 600 to over 3,500 MW, checked against the TSO's series.
+- Hourly energy errors of 2.9% MAE and 3.8% RMS nationally, 3.7% and 4.2% MAE in the two southern price areas, and 6.5% in the north (attributed to low capacity, complex terrain and icing losses).
+- Two factors explained the good fit: a globally optimised power-curve smoothing parameter (standing in for wake losses and multi-turbine smoothing) and correction of seasonal and diurnal bias.
+- For SE1 from 2010, hourly production was often above installed capacity; the authors contacted the TSO and the Energy Agency but did not resolve it, so no SE1 model was calibrated.
+- → A registry-versus-production inconsistency in Swedish data is documented from 2014, of the opposite sign to your drift but the same kind.
+- → A seasonal-and-hourly bias correction is a template for the ERA5 ceiling work.
 
 ### ERA5: The new champion of wind power modelling?
 Olauson · Renewable Energy 126, 2018 ·
-[10.1016/j.renene.2018.03.056](https://doi.org/10.1016/j.renene.2018.03.056) · *read: metadata only*
+[10.1016/j.renene.2018.03.056](https://doi.org/10.1016/j.renene.2018.03.056) · *read: abstract + method sections (accepted manuscript)*
+PDF: `research/data/papers/olauson2018_era5-wind-power.pdf`
 
-Simulate Swedish national and zonal wind output from reanalysis and compare it with reported generation; the second paper argues ERA5 is a better base than MERRA.
-- → Building a simulated fleet from a fixed turbine mix gives an independent meteorological ceiling. If that simulated ceiling ratio stays flat while reported output falls, the cause is non-meteorological (register, reporting or curtailment); if it also falls, look at turbine layout and wakes. This matches the untracked `era5_*` files in your working tree.
+Compares ERA5 and MERRA-2 for modelling aggregate generation in five countries and generation of 1,051 individual Swedish turbines; ERA5 performs better in all analysed aspects.
+- **Why maxima sit below capacity:** wake losses, mild icing and degraded blades shift the power curve but do not lower the maximum ("internal" losses). Downtime and some electrical losses can lower the maximum, and reanalyses understate wind-speed diversity, since all farms in a country are never above rated speed together, so generation in Germany, France and Sweden "will seldom exceed 0.8 p.u." ("external" losses).
+- The model represents these by reducing the energy in the wind by a fixed amount (internal) and multiplying the output by a factor (external), fixing the mean capacity factor and the maximum from measurements; the external factor is set to 1.01 times the measured maximum.
+- Turbine downtime is detected where measured output is zero for at least five hours while reanalysis output is high, with rules on duration and level.
+- → A ceiling of roughly 0.8 is normal for Sweden. The open question is why it was near 0.9 in 2018, and what changed: downtime, curtailment, or the diversity of where capacity sits.
+- → A model that is calibrated to the measured maximum cannot reveal a drifting ceiling; apply the calibration in a fixed window and evaluate outside it.
+- → Matches the turbine-level fleet model in your ERA5 ceiling commit (`5dd7e46`).
 
 ### Using bias-corrected reanalysis to simulate current and future wind power output
 Staffell, Pfenninger · Energy 114, 2016 ·
-[10.1016/j.energy.2016.08.068](https://doi.org/10.1016/j.energy.2016.08.068) · *read: metadata only*
+[10.1016/j.energy.2016.08.068](https://doi.org/10.1016/j.energy.2016.08.068) · *read: abstract + data and capacity sections skimmed*
+PDF: `research/data/papers/staffell2016_bias-corrected-reanalysis.pdf`
 
-The Renewables.ninja method: reanalysis wind speeds corrected against national generation before conversion to power.
-- Reanalysis has systematic bias that must be corrected per country, so a fixed correction applied across years can itself create drift.
-- → Estimate the correction on a window and test on others, so drift is not absorbed into the calibration.
+Validates MERRA and MERRA-2 for 23 European countries: large spatial bias (over 50% too high in the north-west, about 30% too low in the Mediterranean), corrected by national factors that bring hourly national output to R² above 0.95.
+- The correction factors are relatively stable over time but vary by about ±32% across space.
+- Capacity handling: annual output is combined with start-of-year capacity snapshots using the geometric mean of the start of the year and the start of the next, assuming constant growth; only farms existing at each time are simulated, not a static fleet snapshot.
+- ENTSO-E outputs were reduced by 5% to allow for transmission and distribution losses so that they agreed with other sources, and the ENTSO-E series differed most from the others in some periods.
+- Sweden and Spain could not be included in the fleet-evolution analysis for lack of farm construction dates.
+- → The 5% ENTSO-E adjustment is a reminder to check which basis (gross or net at grid) the SE series is on relative to capacity.
+- → Fleet-at-time-t simulation is the right design for the turbine-level model.
 
 ### The ERA5 global reanalysis
 Hersbach et al. · Q. J. R. Meteorol. Soc. 146, 2020 ·
@@ -452,21 +572,27 @@ Data-driven disaggregation and forecasting of PV capacity by region.
 
 ### Probabilistic forecasting of temporal trajectories of regional power production — Part 1: Wind
 Thorarinsdottir, Løland, Lenkoski · arXiv 2019 ·
-[10.48550/arXiv.1903.01186](https://doi.org/10.48550/arXiv.1903.01186) · *read: abstract*
+[10.48550/arXiv.1903.01186](https://doi.org/10.48550/arXiv.1903.01186) · *read: full text (12 pages), method and data sections*
+PDF: `research/data/papers/thorarinsdottir2019_regional-wind-trajectories.pdf`
 
-Bayesian model for hourly German regional wind: cubic transform of power, multivariate Gaussian errors with temporal correlation, NWP covariates, lead times of several days.
-- Modelling temporal error correlation was important for calibrated, skilful trajectories.
-- → Your worst day was wrong by about 520 MW for 24 hours straight: errors are strongly autocorrelated within a day, so per-hour bands understate whole-day risk. Matters if outputs feed a daily briefing or bidding curve.
+Bayesian model for hourly German aggregate wind power: cubic transform of power, multivariate Gaussian errors with a correlation structure across lead times, NWP covariates; German production from EEX, trained on 2011 and tested on 2012.
+- NWP is the 50-member ECMWF ensemble at 0.25° (about 32 km over Germany), 00 UTC, 3–6 hourly, lead up to 72 h for 100 m wind. Members are treated as exchangeable and reduced to their average.
+- Preprocessing: spline interpolation of 3-hourly values to hourly (constrained to be non-negative), and a spatial average over the northern half of the country only (371 grid cells), where the wind power is concentrated, which gave a stronger link to production.
+- Calibrated and skilful marginal forecasts (PIT histograms show minor deviations); several formulations of the correlation across lead times are compared.
+- Notes the need for an up-to-date account of installed capacity.
+- → Your worst day was wrong by about 520 MW for 24 hours straight: errors are strongly autocorrelated within a day, so per-hour bands understate whole-day risk.
+- → The northern-half averaging is a precedent for weighting NWP points by where capacity actually is, as your eight capacity-weighted points do.
 
 ### On autoregressive deep learning models for day-ahead wind power forecasts with irregular shutdowns due to redispatching
 Meisenbacher et al. · at – Automatisierungstechnik 73, 2025 ·
-[10.1515/auto-2024-0171](https://doi.org/10.1515/auto-2024-0171) · *read: abstract (arXiv version)*
+[10.1515/auto-2024-0171](https://doi.org/10.1515/auto-2024-0171) · *read: abstract + introduction (arXiv version)*
+PDF: `research/data/papers/meisenbacher2024_redispatch-shutdowns.pdf`
 
-Compares three autoregressive deep models with power-curve models on onshore data that include redispatch shutdowns.
-- Simple power-curve methods had lower error, needed less data cleaning and were cheaper to run.
-- Shutdown interventions corrupt any feature built on recent generation.
-- → Supports both your physics-first design and caution around the lagged-generation features.
-- → Swedish congestion-driven down-regulation would behave the same way. I found no citable source for its volume in SE3; Svenska kraftnät's balancing data is the place to look.
+Compares three autoregressive deep models with power-curve models at turbine level on German onshore data with regular and irregular (redispatch) shutdowns.
+- Autoregressive models are vulnerable because they learn and can reproduce shutdown behaviour; power-curve methods gave lower errors with less data cleaning and lower cost.
+- Redispatch interventions are irregular and not forecast, which corrupts any feature built on recent generation.
+- → Supports your physics-first design and caution around the lagged-generation features (generation two or more days ago).
+- → Swedish congestion-driven down-regulation would behave the same way. Turbine-level German data, so transfer to a zone aggregate is indirect; I found no citable source for its volume in SE3.
 
 ### An improved spatial upscaling method for producing day-ahead power forecasts for wind farm clusters
 Yang et al. · IET Gener. Transm. Distrib. 16, 2022 ·
@@ -584,10 +710,14 @@ Links VRE forecast errors to imbalance volumes and prices.
 
 ### Probabilistic forecasting of temporal trajectories of regional power production — Part 2: Photovoltaic solar
 Thorarinsdottir, Løland, Lenkoski · arXiv 2019 ·
-[10.48550/arXiv.1903.01188](https://doi.org/10.48550/arXiv.1903.01188) · *read: search excerpt*
+[10.48550/arXiv.1903.01188](https://doi.org/10.48550/arXiv.1903.01188) · *read: full text (11 pages), method and data sections*
+PDF: `research/data/papers/thorarinsdottir2019_regional-pv-trajectories.pdf`
 
-Fully probabilistic hourly model for spatially aggregated PV with NWP covariates and lead times up to several days; the companion of Part 1, which uses German data.
-- → Ready-made structure for the German solar track; confirm the data region in the paper.
+Fully probabilistic hourly model for German aggregated PV with the same set-up as Part 1: EEX production data, 50-member ECMWF ensemble reduced to its average, lead up to several days.
+- 3-hourly irradiance is interpolated to hourly by a non-negative spline, with a more advanced alternative interpolating the clear-sky index; forecasts are averaged over 724 grid locations across Germany, since spatial averaging improves irradiance skill.
+- Calibrated and skilful forecasts for German PV.
+- → Ready-made structure for the German solar track, including the interpolation and spatial-averaging choices.
+- 2011–2012 data, so far lower PV penetration than today.
 
 ### Regional PV power prediction for improved grid integration
 Lorenz, Scheidsteger, Hurka, Heinemann, Kurz · Prog. Photovolt. 19(7), 2011 · online 2010 ·
@@ -641,35 +771,36 @@ Bayesian-optimised MLPs for German national wind and solar, trained on ERA5 for 
 
 ---
 
-## 11. PDFs still worth getting
+## 11. PDFs still missing
 
-Obtained in the last round and now read: Lindberg 2023, Kean & O'Sullivan 2026, Wanek 2026,
-Moradi 2025, Landry 2016, Pinson & Kariniotakis 2004 and 2010, Gibbs et al. 2024, and the IEA
-guide (selectively). Still worth fetching, most valuable first:
+Everything in the previous two lists has now been obtained and read except the items below. Still
+missing, most valuable first:
 
 | # | source | where | why |
 |---|---|---|---|
-| 1 | Browell, Gilbert, Tawn, May (2020), *Quantile combination for the EEM20 wind power forecasting competition* · Bellinguer, Mahler, Camal, Kariniotakis (2020), *Probabilistic forecasting of regional wind power generation for the EEM20 competition* · Basu et al. (2020), *Day-ahead wind power predictions at regional scales* — plus the competition data and code (University of Strathclyde, 2020) | [10.1109/eem49802.2020.9221942](https://doi.org/10.1109/eem49802.2020.9221942) · [10.1109/eem49802.2020.9221960](https://doi.org/10.1109/eem49802.2020.9221960) (also on HAL, hal-02952589) · Basu: EEM 2020 proceedings, DOI not resolved | Day-ahead quantile forecasts for the four Swedish bidding zones over 2020–21, so the closest published benchmark to SE3. Kean & O'Sullivan say the winning approach was a regression forest. Compare score levels, NWP handling and calibration; the data may also give an external test set |
-| 2 | Bruninx et al. (2026), *Probabilistic wind power forecasting with tree-based machine learning and weather ensembles* | arXiv 2602.13010 (open access) | Exact settings of the conformalized-quantile-regression baseline on tree models and the multi-provider ablation behind the 17% gain |
-| 3 | Dantas & Browell (2025), *Seamless short- to mid-term probabilistic wind power forecasting* | arXiv 2502.11960 (open access) | How uncertainty is made to depend on lead time, relevant to the lead-hour-34 step |
-| 4 | Olauson & Bergkvist (2015), [10.1016/j.renene.2014.11.085](https://doi.org/10.1016/j.renene.2014.11.085) · Olauson (2018), [10.1016/j.renene.2018.03.056](https://doi.org/10.1016/j.renene.2018.03.056) · Staffell & Pfenninger (2016), [10.1016/j.energy.2016.08.068](https://doi.org/10.1016/j.energy.2016.08.068) | paywalled (Staffell & Pfenninger may be open access) | Method for simulating Swedish fleet output from reanalysis, for the problem-3 ceiling check |
-| 5 | Pinson & Madsen (2009), *Ensemble-based probabilistic forecasting at Horns Rev*, [10.1002/we.309](https://doi.org/10.1002/we.309) · Yang, Astitha, Delle Monache, Alessandrini (2018), [10.1175/mwr-d-17-0198.1](https://doi.org/10.1175/mwr-d-17-0198.1) · Alessandrini et al. (2019), [10.1175/mwr-d-19-0006.1](https://doi.org/10.1175/mwr-d-19-0006.1) | paywalled | Turning ensembles into calibrated power forecasts, and analog ensembles for storm and rare-event winds: substitutes for the missing archived ensemble, and relevant to high-wind under-coverage |
-| 6 | Thorarinsdottir, Løland, Lenkoski (2019), Parts 1 and 2 | arXiv 1903.01186 and 1903.01188 (open access) | Day-level correlated errors; Part 2 is a template for the German solar track |
-| 7 | Nikodinoska et al. (2022), *Solar and wind power generation forecasts using elastic net in time-varying forecast combinations*, [10.1016/j.apenergy.2021.117983](https://doi.org/10.1016/j.apenergy.2021.117983) | paywalled | German wind and solar combination of several forecasts; cited by Wanek as the benchmark above which it lands. For the solar track |
-| 8 | Meisenbacher et al. (2025) | arXiv 2412.00423 (open access) | Full text on shutdown handling, if curtailment/redispatch becomes a focus |
-| 9 | Lorenz et al. (2011), Saint-Drenan et al. (2017), Pierro et al. (2017) | DOIs in §10 | Regional PV upscaling; only when the solar track starts |
-| 10 | Svenska kraftnät / Energimyndigheten statistics on wind down-regulation and curtailment in SE3 | not found | Would test the redispatch and curtailment explanation for problem 3 and high-wind misses |
-| 11 | ECMWF ENS archive init hour and cycle history | dynamical.org documentation | Decide whether the stored run is available before 10:00 market time |
+| 1 | Basu, Watson, Lacoa Arends, Cheneka (2020), *Day-ahead wind power predictions at regional scales: post-processing operational weather forecasts with a hybrid neural network* | [10.1109/eem49802.2020.9221979](https://doi.org/10.1109/eem49802.2020.9221979) (IEEE, paywalled) | Third EEM20 entry on the same four Swedish zones; the only one of the three I have not seen |
+| 2 | Cannon, Brayshaw, Methven, Drew (2017), *Determining the bounds of skilful forecast range for probabilistic prediction of system-wide wind power generation*, Meteorol. Z. 26 | [10.1127/metz/2016/0751](https://doi.org/10.1127/metz/2016/0751) | Cited by Browell for weather-to-power conversion dominating day-ahead uncertainty; would test how much ensemble spread can be expected to help |
+| 3 | Ranjan & Gneiting (2010), *Combining probability forecasts*, J. R. Stat. Soc. B 72 | [10.1111/j.1467-9868.2009.00726.x](https://doi.org/10.1111/j.1467-9868.2009.00726.x) | Origin of the beta-transformed linear opinion pool that Dantas & Browell use for recalibration |
+| 4 | Nagy et al. (2016), *GEFCom2014: Probabilistic solar and wind power forecasting using a generalized additive tree ensemble approach*, IJF 32 | [10.1016/j.ijforecast.2015.11.013](https://doi.org/10.1016/j.ijforecast.2015.11.013) | Tree-plus-GAM entry to GEFCom2014 for both wind and solar; a precedent for the model combination Browell used, and relevant to the solar track |
+| 5 | Delle Monache et al. (2013), *Probabilistic weather prediction with an analog ensemble*, Mon. Weather Rev. 141 | [10.1175/mwr-d-12-00281.1](https://doi.org/10.1175/mwr-d-12-00281.1) | Original analog-ensemble method, only if that route is pursued |
+| 6 | Nikodinoska et al. (2022), *Solar and wind power generation forecasts using elastic net in time-varying forecast combinations*, Appl. Energy | [10.1016/j.apenergy.2021.117983](https://doi.org/10.1016/j.apenergy.2021.117983) | German wind and solar combination of several forecasts; cited by Wanek as a benchmark. For the solar track |
+| 7 | Lorenz et al. (2011), Saint-Drenan et al. (2017), Pierro et al. (2017) | DOIs in §10 | Regional PV upscaling; only when the solar track starts |
+| 8 | Nicolaysen (2026), ENTSO-E production-type labelling | arXiv 2609.16152 (open access) | Only if the `A03` parsing check goes ahead |
+| 9 | Svenska kraftnät / Energimyndigheten statistics on wind down-regulation and curtailment in SE3 | not found | Would test the redispatch and curtailment explanation for problem 3 and high-wind misses |
+| 10 | Measured latency of the dynamical.org ENS and GFS archives | dynamical.org pipeline status page (renders in a browser only) | Decides whether the 00 UTC ENS run is usable before the 10:00 cutoff, especially in summer |
 
-I did not fetch the open-access arXiv PDFs myself; they are quick to download into
-`research/data/papers/` if you would like me to read them.
+Not a paper, but on the list: the EEM20 competition data and code (28 GB, open access, CC BY 4.0,
+[10.15129/02db89e9-64d1-4ded-9324-6d952ce35099](https://doi.org/10.15129/02db89e9-64d1-4ded-9324-6d952ce35099))
+if you want an external benchmark for the Swedish-zone method. Its dates are shifted to 2000–2001
+and only 10 m wind is provided, so it cannot be joined to your real archives.
 
 ## 12. Gaps
 
-- **P3 (capacity drift):** no paper found on the specific symptom. §6 and IEA 13.2 narrow the search but do not explain it.
+- **P3 (capacity drift):** no paper reports the specific symptom. Olauson 2018 explains why ceilings near 0.8 are normal, and the EEM20 papers show empirical fixes for an unreliable register, but none explains a ceiling that moves from 0.91 to 0.79.
 - **P4 (15-minute):** thin peer-reviewed coverage; expect to design this from first principles, using IEA 13.2.2's averaging/instantaneous distinction and the metrics vocabulary in §8.
 - **Swedish curtailment and redispatch magnitudes:** no citable source found.
-- **Machine-learning weather models** (AIFS, GenCast, Google WeatherNext) appear as ensembles in Open-Meteo's Ensemble API listing. The constraint is archive depth, not quality, so I did not review them further.
+- **Machine-learning weather models** (AIFS, GenCast, Google WeatherNext) appear as ensembles in Open-Meteo's and dynamical.org's listings. The constraint is archive depth, not quality, so I did not review them further.
+- **Run-addressing for ICON-EU:** no retroactive source found; see §4.
 
 ---
 
@@ -684,5 +815,6 @@ reason, so we don't spend time on them again.
 | `zhang2014_probabilistic-wind-review.pdf` — Zhang, Wang, Wang, *Review on probabilistic forecasting of wind power generation*, Renew. Sustain. Energy Rev. 32, 2014 · [10.1016/j.rser.2014.01.033](https://doi.org/10.1016/j.rser.2014.01.033) | **Superseded.** A 16-page taxonomy of probabilistic methods (parametric, non-parametric, scenario) and evaluation criteria, written before the methods this project uses. The taxonomy is covered by Gneiting & Katzfuss (2014) and Sweeney et al. (2020), and the evaluation criteria by IEA chapter 14. |
 | `bremnes2004_local-quantile-regression.pdf` — Bremnes, *Probabilistic wind power forecasts using local quantile regression*, Wind Energy 7, 2004 · [10.1002/we.107](https://doi.org/10.1002/we.107) | **Superseded.** The original local quantile regression on one Norwegian farm. Boosted-tree quantile models (Landry) and the quantile-regression recalibration recipe (Lindberg) replace it; its one idea worth keeping, that quantile forecasts suit economic decisions, appears in Pinson et al. (2007) in §9. |
 | `pinson2012_logit-normal-vshort-term.pdf` — Pinson, *Very-short-term probabilistic forecasting of wind power with generalized logit-normal distributions*, J. R. Stat. Soc. C 61, 2012 · [10.1111/j.1467-9876.2011.01026.x](https://doi.org/10.1111/j.1467-9876.2011.01026.x) | **Not relevant to the horizon.** Ten-minute-ahead forecasts with recursively updated parameters at one wind farm; neither the horizon nor the estimation scheme transfers to NWP-driven day-ahead. The only transferable point, keeping bands inside [0, 1] of capacity, can be tested by clipping. |
+| `yang2018_analog-storm-wind-dual-nwp.pdf` — Yang, Astitha, Delle Monache, Alessandrini, *An analog technique to improve storm wind speed prediction using a dual NWP model approach*, Mon. Weather Rev. 146, 2018 · [10.1175/mwr-d-17-0198.1](https://doi.org/10.1175/mwr-d-17-0198.1) | **Not relevant.** Analog ensembles with bias correction for 146 storms at US surface stations, built on two regional research models (WRF and RAMS–ICLAMS) that are not among your inputs; wind speed at stations, not power. The analog-ensemble concept and its tail-bias caveat are covered by Alessandrini et al. (2019) and Sweeney et al. (2020). |
 | `molinder2021_icing-losses-qrf.pdf` — Molinder et al., *Probabilistic forecasting of wind turbine icing related production losses using quantile regression forests*, Energies 14, 2021 · [10.3390/en14010158](https://doi.org/10.3390/en14010158) | **Conditionally relevant.** Forest-based forecasts of icing-related losses at four Swedish parks over two winters, with a physical icing model as an input; pooling stations helped. Only useful if icing is confirmed as a driver. **Revisit if** temperature and humidity on the highest-error days (for example 13 February 2026) point to icing. The pooling lesson is already covered by Kean & O'Sullivan. |
 | `karlsson2026_cold-climate-wind.pdf` — Karlsson et al., *Cold Climate Wind: Challenges, Technological Solutions and Policy*, WIREs Energy Environ. 15, 2026 · [10.1002/wene.70025](https://doi.org/10.1002/wene.70025) | **Not relevant unless icing is confirmed.** A general review of cold-climate wind (loss ranges, mitigation, policy) with no zone-level forecasting content. It reports icing losses ranging from near zero to over 20% of annual production at affected sites. Same revisit condition as Molinder 2021. |
