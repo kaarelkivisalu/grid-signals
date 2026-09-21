@@ -14,6 +14,8 @@ solar on **DE-LU** second. Standalone research project under `research/` — no 
 The whole project hinges on one boundary: what is knowable at issue time. Everything else is
 plumbing.
 
+![](../reports/figures/task_horizon.png)
+
 ```
   ───── day D-1 ─────┼──────────────── day D ────────────────┼───── day D+1 ─────▶
                      │                                       │
@@ -191,6 +193,7 @@ Tracked here so the diagram stays honest about what is not yet settled:
 
 | Date | Change |
 |---|---|
+| 2026-09-21 | Reporting pass. Figures moved into `src/renewable_forecast/reporting/figures.py` so every chart is generated from the backtest's own artifacts, and a test now asserts that every embedded figure path resolves — four figures had been rendering broken. Two findings the prose had hidden: error against lead time is a **step at lead 34**, not a gradient, tracking the `previous_day1`→`previous_day2` vintage switch; and the capacity-factor ceiling **drifts down in all four Swedish zones at once**, with curtailment and fleet spread both tested and rejected as causes. `research/README.md` added as the one-page state of play. |
 | 2026-09-20 | Initial version — task definition, known/not-known boundary, pipeline, storage, evaluation. |
 | 2026-09-20 | Phases 5-7: models scored, conformal calibration added after the coverage column exposed in-sample residual estimation (0.327 coverage at nominal 0.80 for the boosted point model). MEPS spike returned conditional GO — a real 30-member archive back to 2016, but the product mix drifts across eras. Integration contract drafted. |
 | 2026-09-20 | Phase 4: NWP pipeline built. The leakage guard rejected the obvious construction — a fixed `previous_day1` offset leaks on 13 of every 24 delivery hours — so the design matrix now picks the smallest *safe* offset per hour and carries `nwp_offset_days`. Minimum safe lag for actuals raised 24 h → 48 h for the same reason. Archive depth is shorter than planned: 2024-03 onward, three usable models, ~946 delivery days. |

@@ -89,6 +89,36 @@ against 25–37 h. Every feature is therefore **at least as stale** as the real 
 would be, so the design is conservative rather than optimistic. Reported skill is a
 floor, not a ceiling.
 
+## What the conservative choice costs — measured, 2026-09-21
+
+The design above is safe. It is not free, and Phase 5 measured the bill.
+
+![](figures/nmae_by_lead.png)
+
+Error against lead hour is flat at ~0.026 through leads 22–33, flat at ~0.035 through
+leads 34–46, and steps **+35% between them** — exactly where `nwp_offset_days` flips
+from 1 to 2, with no overlap. Pooled lead blocks hid this; the per-lead breakdown this
+report argued for is what exposed it.
+
+Part of that step is genuine: lead 34 is 10:00 UTC on the delivery day, so the boundary
+is also night→day, and daytime wind is harder to forecast. The two are perfectly
+collinear under a fixed issue time. **A69 is the natural control** — a TSO product with
+no Open-Meteo vintage switch — and it crosses lead 34 with no step at all. That points at
+the vintage carrying most of the +35%.
+
+**There is no cheaper fix inside this API.** `previous_dayN` is addressable only in whole
+days; a `*_previous_run1` parameter was probed and is rejected outright:
+
+```
+Invalid value: Cannot initialize ... from invalid String value wind_speed_100m_previous_run1
+```
+
+A genuine 00z run covers +22…+47 h in a single initialisation, so none of the delivery
+day needs a 48-hour-old forecast. Recovering that needs an archive addressable by **run
+initialisation** rather than by information age. MET Norway's MEPS archive is exactly
+that (`meps_archive.md`), which is why the ensemble spike is now also the fix for the
+largest measured structural error in the model rather than a separate enhancement.
+
 ## Archive depth — shorter than planned
 
 Bisected against the API, per model, at the SE3 centroid:

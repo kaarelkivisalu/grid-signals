@@ -138,7 +138,7 @@ def _plot_monthly(hourly: pd.DataFrame, zone: str, fuels: list[str], name: str) 
     path = FIGURES / f"{name}.png"
     fig.savefig(path, dpi=110)
     plt.close(fig)
-    return path.name
+    return f"{FIGURES.name}/{path.name}"
 
 
 def _plot_diurnal(hourly: pd.DataFrame, zone: str, fuel: str, name: str) -> str:
@@ -164,7 +164,7 @@ def _plot_diurnal(hourly: pd.DataFrame, zone: str, fuel: str, name: str) -> str:
     path = FIGURES / f"{name}.png"
     fig.savefig(path, dpi=110)
     plt.close(fig)
-    return path.name
+    return f"{FIGURES.name}/{path.name}"
 
 
 def _fmt(frame: pd.DataFrame, floatfmt: str = "{:.2f}") -> str:
@@ -494,8 +494,8 @@ populated with a misleading national ratio.
 ## Check G — Fleet registry cross-check
 
 Implied capacity-factor ceiling (yearly **p99.9** of observed MW ÷ Vindbrukskollen
-capacity) per Swedish zone. A correct zone assignment and capacity series keep this
-flat and inside roughly 0.75-1.00.
+capacity) per Swedish zone. If the denominator tracks the fleet this sits flat inside
+roughly 0.90-1.00. It does not — see the open finding below the table.
 
 Note the statistic: the *maximum* implied factor exceeds 1.0 for SE1 and SE2 in 2022,
 which looks alarming and is not. A single hour is enough to break it — a metering spike,
@@ -504,10 +504,28 @@ p99.9 removes that and lands every zone-year in the plausible band. This is why 
 denominator diagnostic is specified as p99.9 rather than max.
 """,
         _fmt(check_g),
+        f"\n![]({FIGURES.name}/ceiling_drift.png)",
         """
 Nationally the registry totals 18,198 MW of operational onshore wind against ENTSO-E
 A68's 18,000 MW for SE — agreement to 1.1%, which validates the registry on *level* as
 well as timing.
+
+**Open finding: the ceiling is not flat.** Every zone drifts down together — SE3 from
+0.91 in 2018 to 0.79 in 2025, and SE1, SE2 and SE4 by a similar margin. A simultaneous
+drift in four independent zones rules out a boundary or zone-assignment error. Two
+further explanations have been tested and rejected:
+
+- **Curtailment.** Recomputing p99.9 over non-curtailed hours only moves the SE3
+  statistic by 0.001 in every year, even in 2024 when 8.6% of hours carried the flag.
+- **Fleet spread.** A geographically wider fleet has a lower zonal peak. But the SE3
+  capacity-weighted RMS spread *narrowed* from 175 km to 159 km over the period, which
+  pushes the ceiling up, not down.
+
+The registry also agrees with A68 nationally to within a few percent in every year, so
+a simple over-count is not the explanation either. What remains is A75 under-reporting a
+growing fleet, or commissioning dates that lead grid connection by a widening margin.
+Unresolved, and it matters: roughly 7% of the drift falls inside the modelling window,
+against a model error of 3%.
 """,
     ]
     return "\n".join(parts) + "\n"

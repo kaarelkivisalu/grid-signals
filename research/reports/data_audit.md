@@ -1,6 +1,6 @@
 # Phase 2 — Data audit
 
-**Generated:** 2026-09-20 · **Span:** 2017-12-31 → 2026-09-19 · **Source:** ENTSO-E
+**Generated:** 2026-09-21 · **Span:** 2017-12-31 → 2026-09-19 · **Source:** ENTSO-E
 Transparency Platform, pulled into `research/data/raw/entsoe/`.
 
 This is the hard gate: no modelling code until the verdicts below are recorded.
@@ -41,8 +41,8 @@ below 1. DE-LU is simultaneously a country and a bidding zone, so its ratio is d
 interpretable. Consequence for Phase 3: the capacity *level* anchor for SE3 must come
 from Vindbrukskollen, with A68 usable only as a national sanity check.
 
-![](se3_monthly.png)
-![](delu_monthly.png)
+![](figures/se3_monthly.png)
+![](figures/delu_monthly.png)
 
 ## Check B — Offshore materiality
 
@@ -120,15 +120,15 @@ populated with a misleading national ratio.
 | SE3 | 1671.88 | — | — | 93.06 | 0.00 |
 | SE4 | 856.54 | — | — | 46.58 | 0.00 |
 
-![](se3_solar_diurnal.png)
+![](figures/se3_solar_diurnal.png)
 
-![](delu_solar_diurnal.png)
+![](figures/delu_solar_diurnal.png)
 
 ## Check G — Fleet registry cross-check
 
 Implied capacity-factor ceiling (yearly **p99.9** of observed MW ÷ Vindbrukskollen
-capacity) per Swedish zone. A correct zone assignment and capacity series keep this
-flat and inside roughly 0.75-1.00.
+capacity) per Swedish zone. If the denominator tracks the fleet this sits flat inside
+roughly 0.90-1.00. It does not — see the open finding below the table.
 
 Note the statistic: the *maximum* implied factor exceeds 1.0 for SE1 and SE2 in 2022,
 which looks alarming and is not. A single hour is enough to break it — a metering spike,
@@ -148,7 +148,26 @@ denominator diagnostic is specified as p99.9 rather than max.
 | 2025 | 0.83 | 0.74 | 0.79 | 0.86 |
 | 2026 | 0.81 | 0.78 | 0.77 | 0.78 |
 
+![](figures/ceiling_drift.png)
+
 Nationally the registry totals 18,198 MW of operational onshore wind against ENTSO-E
 A68's 18,000 MW for SE — agreement to 1.1%, which validates the registry on *level* as
 well as timing.
+
+**Open finding: the ceiling is not flat.** Every zone drifts down together — SE3 from
+0.91 in 2018 to 0.79 in 2025, and SE1, SE2 and SE4 by a similar margin. A simultaneous
+drift in four independent zones rules out a boundary or zone-assignment error. Two
+further explanations have been tested and rejected:
+
+- **Curtailment.** Recomputing p99.9 over non-curtailed hours only moves the SE3
+  statistic by 0.001 in every year, even in 2024 when 8.6% of hours carried the flag.
+- **Fleet spread.** A geographically wider fleet has a lower zonal peak. But the SE3
+  capacity-weighted RMS spread *narrowed* from 175 km to 159 km over the period, which
+  pushes the ceiling up, not down.
+
+The registry also agrees with A68 nationally to within a few percent in every year, so
+a simple over-count is not the explanation either. What remains is A75 under-reporting a
+growing fleet, or commissioning dates that lead grid connection by a widening margin.
+Unresolved, and it matters: roughly 7% of the drift falls inside the modelling window,
+against a model error of 3%.
 

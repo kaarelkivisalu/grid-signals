@@ -57,6 +57,23 @@ adequate but not sufficient: `lightgbm_quantile` is still underdispersed at 0.73
 a nominal 0.80, and flow-dependent ensemble spread is the most likely thing to close that
 gap properly rather than by post-hoc widening.
 
+## Amendment, 2026-09-21 — MEPS is now also the vintage fix
+
+The spike was commissioned to answer one question: is a real ensemble available
+retroactively? Phase 5 gave it a second, larger job.
+
+Open-Meteo's Previous Runs API is addressable only in whole days, so the back half of
+every delivery day is served by a forecast 24 h older than the physics requires. The cost
+is measured and large — a **+35% step in nMAE at lead hour 34**, on 13 of 24 delivery
+hours (`openmeteo_vintage.md`, `modelling.md`). There is no fix inside that API; a
+`*_previous_run1` parameter was probed and does not exist.
+
+MEPS files on thredds are addressed **by run initialisation**. A single 00z run covers
+the whole +22…+47 h window, which removes the step by construction. So the two
+justifications now stack: 2.5 km resolution and 30 members for the underdispersion, and
+run addressing for the vintage step. Either alone would be worth a day or two; together
+they make this the highest-value item outstanding.
+
 **Recommended ordering.** Do the MEPS integration *before* starting DE-LU solar. It
-addresses a measured deficiency in the current model, whereas solar starts a second track
-whose scaffolding already exists and can wait.
+addresses two measured deficiencies in the current model, whereas solar starts a second
+track whose scaffolding already exists and can wait.

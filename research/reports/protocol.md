@@ -26,6 +26,16 @@ effective sample size roughly 24-fold and makes every confidence interval a fict
 - Holdout: **2026-03-20 → 2026-09-19** (184 days) — **SEALED**, opened exactly once for
   the headline table at the end of Phase 5.
 
+> **Amendment, 2026-09-21 — realised window.** The split *rule* above is unchanged and
+> still binding. The *realised* development window is shorter, because Phase 4
+> established that the matched-lead NWP archive only begins 2024-03-06
+> (`openmeteo_vintage.md`). Every model in `modelling.md` is therefore scored over
+> **2024-02-16 → 2026-03-19, 763 days, 18 folds** — not the 3000 days assumed when this
+> document was frozen. The baseline table immediately below predates the NWP features
+> and was scored over the full target history, which is why its numbers differ from the
+> leaderboard in `modelling.md`. The two are not comparable; `modelling.md` is the
+> operative board.
+
 ## Metrics
 
 Point metrics are normalised by **installed capacity, not mean generation**. Mean-
