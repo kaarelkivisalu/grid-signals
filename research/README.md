@@ -149,6 +149,14 @@ tested and ruled out: it is not turbines being switched off when prices go negat
 it is not the fleet spreading over a wider area. This matters because a drifting
 denominator quietly distorts every percentage in this document.
 
+Reconstructing the fleet turbine by turbine on ERA5 reanalysis holds the weather fixed and
+narrows this down (`reports/era5_ceiling.md`). The turbines that existed in 2018 still
+deliver what physics expects. Capacity added since then delivers only about 70% of its
+expected output, every quarter, so the ratio falls as that capacity grows to half the
+fleet. The same study shows that a model given the *actual* weather still misses by
+112 MW on the backtest's hours, against 136 MW for the forecast, so better weather
+data alone has limited headroom.
+
 ### 4. The market trades 15-minute blocks; this forecast is hourly
 
 Since 1 December 2025 the Swedish bidding zones report generation in 15-minute periods,
@@ -198,6 +206,7 @@ exactly which rows each statistic covers and what it measures.
 | `reports/data_audit.md` | which data is trustworthy enough to model |
 | `reports/protocol.md` | the scoring rules, frozen before any model was built |
 | `reports/openmeteo_vintage.md` | the weather-data timing problem in detail |
+| `reports/era5_ceiling.md` | how much the actual weather can explain, and the added-capacity shortfall |
 | `reports/modelling.md` | full results, all metrics |
 | `reports/meps_archive.md` | whether better weather data is obtainable |
 | `docs/integration_contract.md` | how this would plug into `grid-signals` |
