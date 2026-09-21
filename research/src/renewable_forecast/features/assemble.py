@@ -13,12 +13,24 @@ import pandas as pd
 
 from renewable_forecast import paths, windows
 from renewable_forecast.features import sites, wind
-from renewable_forecast.sources import fleet, openmeteo
+from renewable_forecast.sources import fleet, meps, openmeteo
 
 logger = logging.getLogger(__name__)
 
 #: Open-Meteo offsets are whole days of information age.
 OFFSET_STEP = timedelta(hours=24)
+
+#: Marks a column sourced from a named MEPS run rather than a whole-day offset. Such a
+#: column's information age is `valid_time - run_time`, which varies smoothly with lead
+#: time instead of stepping mid-delivery-day.
+MEPS_MARKER = "__meps"
+MEPS_RUN_COLUMN = "meps_run_time"
+
+
+def is_meps_column(column: str) -> bool:
+    """Whether a design-matrix column's information comes from a MEPS run."""
+    return MEPS_MARKER in column or column == MEPS_RUN_COLUMN
+
 
 #: Offsets available in the archive. The smallest *safe* one is chosen per target hour:
 #: a forecast issued 09:00 UTC on D for delivery on D+1 needs an age of 14-37 h, so
@@ -60,7 +72,9 @@ def _provenance(columns: list[str]) -> dict[str, timedelta | None]:
         elif column.startswith("cf_lag_"):
             provenance[column] = timedelta(hours=int(column.rsplit("_", 1)[1]))
         else:
-            provenance[column] = OFFSET_STEP  # refined per row by max_source_time
+            # Both remaining cases are refined per row by `max_source_time`: Open-Meteo
+            # columns by their chosen whole-day offset, MEPS columns by their run time.
+            provenance[column] = OFFSET_STEP
     return provenance
 
 
@@ -152,6 +166,80 @@ def _features_at(raw: pd.DataFrame, points: pd.DataFrame, offset: int) -> pd.Dat
     frame = pd.concat([frame, trajectory], axis=1)
     frame["nwp_offset_days"] = offset
     return frame
+
+
+#: Trajectory features are derived for these MEPS columns, mirroring the Open-Meteo
+#: pair so the two blocks stay comparable.
+MEPS_TRAJECTORY = ("power_curve__meps", "wind_speed_hub__meps")
+
+
+def meps_block(points: pd.DataFrame) -> pd.DataFrame:
+    """Zonal MEPS features, keyed by the run that produced them.
+
+    The contrast with `_features_at` is the whole point of this source. There, a row's
+    information age is a whole number of days and *changes partway through the delivery
+    day*, because the archive can only be asked for whole-day offsets. Here a row
+    belongs to a named 00z run, and one run covers the entire delivery day, so the age
+    varies smoothly with lead time exactly as the physics does.
+
+    Returns one row per `(run_time, valid_time)`, with columns suffixed `__meps` so they
+    sit unambiguously alongside the Open-Meteo blocks.
+    """
+    raw = meps.load()
+    if raw.empty:
+        msg = "no MEPS data parsed; run pipelines.pull_meps first"
+        raise RuntimeError(msg)
+
+    per_point = wind.add_icing_memory(
+        wind.per_point_meps(raw, points), keys=("run_time", "point_id")
+    )
+    zonal = wind.aggregate(
+        per_point,
+        points,
+        keys=("run_time", "valid_time"),
+        dispersion=("wind_speed_hub", "power_curve"),
+    )
+    zonal = zonal.rename(
+        columns={
+            c: f"{c}__meps"
+            for c in zonal.columns
+            if c not in {"run_time", "valid_time"}
+        }
+    )
+
+    zonal = zonal.sort_values(["run_time", "valid_time"]).reset_index(drop=True)
+    # Trajectories are computed within a run, never across the join between two, which
+    # is why this groups rather than shifting the whole frame.
+    trajectory = (
+        zonal.groupby("run_time", group_keys=False)
+        .apply(lambda g: temporal(g, MEPS_TRAJECTORY), include_groups=False)
+        .reindex(zonal.index)
+    )
+    return pd.concat([zonal, trajectory], axis=1)
+
+
+def attach_meps(frame: pd.DataFrame, points: pd.DataFrame) -> pd.DataFrame:
+    """Join the MEPS block onto a design matrix that already carries `issue_day`.
+
+    A delivery day is served by exactly one run -- 00z on its issue day -- so this is an
+    equality join on the run instant, with no offset to choose and nothing to decide per
+    hour.
+    """
+    block = meps_block(points)
+    frame = frame.copy()
+    frame["meps_run_time"] = frame.issue_day.dt.tz_localize("UTC") + pd.Timedelta(
+        hours=meps.RUN_HOUR_UTC
+    )
+    merged = frame.merge(
+        block,
+        left_on=["meps_run_time", "valid_time"],
+        right_on=["run_time", "valid_time"],
+        how="left",
+    ).drop(columns=["run_time"])
+    missing = merged["power_curve__meps"].isna().sum()
+    if missing:
+        logger.warning("%s of %s rows have no MEPS coverage", missing, len(merged))
+    return merged
 
 
 def build(zone: str = "SE3", fuel: str = "wind_onshore") -> pd.DataFrame:
@@ -273,12 +361,17 @@ def max_source_time(frame: pd.DataFrame) -> pd.DataFrame:
     else:
         nwp_age = pd.Series([OFFSET_STEP] * len(frame), index=frame.index)
 
+    run_time = frame[MEPS_RUN_COLUMN] if MEPS_RUN_COLUMN in frame.columns else None
+
     out = pd.DataFrame(index=frame.index)
     for column, age in ages.items():
         if age is None:
             out[column] = pd.Timestamp.min.tz_localize("UTC")
         elif column.startswith("cf_lag_"):
             out[column] = frame.valid_time - age
+        elif is_meps_column(column) and run_time is not None:
+            # A MEPS column depends on nothing later than the run that produced it.
+            out[column] = run_time
         else:
             out[column] = frame.valid_time - nwp_age
     return out

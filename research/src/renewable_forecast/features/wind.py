@@ -111,10 +111,139 @@ def per_point(frame: pd.DataFrame, offset: int = 1) -> pd.DataFrame:
     return out
 
 
-def add_icing_memory(frame: pd.DataFrame) -> pd.DataFrame:
-    """Rolling icing-hour counts per point. Ice persists long after conditions pass."""
-    frame = frame.sort_values(["point_id", "valid_time"]).copy()
-    grouped = frame.groupby("point_id").icing_now
+#: MEPS carries wind on two height levels, which is enough to *measure* the shear
+#: exponent per cluster-hour instead of assuming the 1/7 rule. Stable nocturnal
+#: boundary layers reach 0.5 and above; unstable ones go slightly negative. Values
+#: outside this range are numerical noise from near-calm layers, not weather.
+SHEAR_BOUNDS = (-0.2, 0.8)
+
+#: MEPS reports relative humidity as a 0-1 fraction; the icing and density helpers here
+#: take percent, as Open-Meteo supplies it.
+RH_FRACTION_TO_PCT = 100.0
+
+#: No surface pressure on the height-level product, and fetching the surface product
+#: would double the request count for a second-order correction. Density is driven by
+#: temperature (~10% seasonal swing) far more than by pressure (~3%), so the reference
+#: pressure is held fixed and the temperature and humidity terms do the work.
+REFERENCE_PRESSURE_HPA = 1013.25
+
+
+def shear_exponent(
+    lower_speed: np.ndarray,
+    upper_speed: np.ndarray,
+    lower_height: float,
+    upper_height: float,
+) -> np.ndarray:
+    """Power-law exponent implied by wind speeds at two heights."""
+    with np.errstate(divide="ignore", invalid="ignore"):
+        alpha = np.log(upper_speed / lower_speed) / np.log(upper_height / lower_height)
+    alpha = np.where(np.isfinite(alpha), alpha, SHEAR_EXPONENT)
+    # Near-calm layers produce wild ratios; clip rather than let them drive the
+    # extrapolation to hub height.
+    return np.clip(alpha, *SHEAR_BOUNDS)
+
+
+def _components(
+    speed: np.ndarray, direction_deg: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Meteorological direction back to eastward/northward components."""
+    radians = np.deg2rad(direction_deg)
+    return -speed * np.sin(radians), -speed * np.cos(radians)
+
+
+def per_point_meps(frame: pd.DataFrame, points: pd.DataFrame) -> pd.DataFrame:
+    """Point-level physical features from one MEPS run.
+
+    Two things here are better than the Open-Meteo path rather than merely equivalent.
+    The wind is interpolated to each cluster's **actual mean hub height** using the
+    shear exponent measured between 80 m and 120 m, instead of taking a fixed 100 m
+    level and assuming a 1/7 profile. And because a single run supplies the whole
+    delivery day, none of these columns changes its information age halfway through.
+    """
+    lower, upper = meps_heights(frame)
+    wide = frame.pivot(
+        index=["run_time", "valid_time", "point_id"],
+        columns="height_m",
+        values=["wind_speed", "wind_direction", "temperature_c", "relative_humidity"],
+    )
+
+    speed_lower = wide["wind_speed", lower].to_numpy()
+    speed_upper = wide["wind_speed", upper].to_numpy()
+    alpha = shear_exponent(speed_lower, speed_upper, lower, upper)
+
+    out = wide.index.to_frame(index=False)
+    hub = out.point_id.map(points.set_index("point_id").mean_hub_height_m).to_numpy()
+
+    speed_hub = speed_lower * (hub / lower) ** alpha
+    # Direction is interpolated through the components so that veer between the levels
+    # is handled as a vector, not as an angle that can wrap through 360.
+    fraction = np.clip((hub - lower) / (upper - lower), 0.0, 1.0)
+    u_lower, v_lower = _components(
+        speed_lower, wide["wind_direction", lower].to_numpy()
+    )
+    u_upper, v_upper = _components(
+        speed_upper, wide["wind_direction", upper].to_numpy()
+    )
+    u_hub = u_lower + (u_upper - u_lower) * fraction
+    v_hub = v_lower + (v_upper - v_lower) * fraction
+
+    temperature = _interpolate(wide, "temperature_c", lower, upper, fraction)
+    humidity = (
+        _interpolate(wide, "relative_humidity", lower, upper, fraction)
+        * RH_FRACTION_TO_PCT
+    )
+
+    density = air_density(
+        temperature, np.full_like(temperature, REFERENCE_PRESSURE_HPA), humidity
+    )
+    corrected = density_corrected_speed(speed_hub, density)
+
+    out["wind_speed_hub"] = speed_hub
+    out["power_curve"] = power_curve(corrected)
+    out["air_density"] = density
+    out["speed_cubed"] = corrected**3
+    out["shear_exponent"] = alpha
+    out["direction_sin"] = np.divide(
+        -u_hub, speed_hub, out=np.zeros_like(u_hub), where=speed_hub > 0.1
+    )
+    out["direction_cos"] = np.divide(
+        -v_hub, speed_hub, out=np.zeros_like(v_hub), where=speed_hub > 0.1
+    )
+    out["temperature_hub"] = temperature
+    out["icing_now"] = (
+        (temperature < ICING_TEMP_C) & (humidity > ICING_HUMIDITY_PCT)
+    ).astype(float)
+    return out
+
+
+def meps_heights(frame: pd.DataFrame) -> tuple[float, float]:
+    """The two height levels present, lowest first."""
+    heights = sorted(frame.height_m.unique())
+    if len(heights) != 2:
+        msg = f"expected two MEPS height levels, found {heights}"
+        raise ValueError(msg)
+    return float(heights[0]), float(heights[1])
+
+
+def _interpolate(
+    wide: pd.DataFrame, name: str, lower: float, upper: float, fraction: np.ndarray
+) -> np.ndarray:
+    low = wide[name, lower].to_numpy()
+    high = wide[name, upper].to_numpy()
+    return low + (high - low) * fraction
+
+
+def add_icing_memory(
+    frame: pd.DataFrame, keys: tuple[str, ...] = ("point_id",)
+) -> pd.DataFrame:
+    """Rolling icing-hour counts per point. Ice persists long after conditions pass.
+
+    MEPS runs overlap in valid time, so its rows must be grouped by run as well as by
+    point -- otherwise the rolling window runs off the end of one forecast and into a
+    different one.
+    """
+    frame = frame.sort_values([*keys, "valid_time"]).copy()
+    grouped = frame.groupby(list(keys)).icing_now
     for window in ICING_WINDOWS_H:
         frame[f"icing_{window}h"] = grouped.transform(
             lambda s, w=window: s.rolling(w, min_periods=1).sum()
@@ -122,22 +251,27 @@ def add_icing_memory(frame: pd.DataFrame) -> pd.DataFrame:
     return frame
 
 
-def aggregate(points: pd.DataFrame, weights: pd.DataFrame) -> pd.DataFrame:
+def aggregate(
+    points: pd.DataFrame,
+    weights: pd.DataFrame,
+    keys: tuple[str, ...] = ("model", "valid_time"),
+    dispersion: tuple[str, ...] = ("wind_speed_100m", "power_curve"),
+) -> pd.DataFrame:
     """Collapse point features to zonal features, capacity-weighted.
 
     Spatial dispersion is kept alongside the weighted mean: how much the clusters
     disagree is a cheap, retroactively available uncertainty signal, and it is the main
     thing a single-point representation throws away.
+
+    `keys` exists because the two NWP sources are addressed differently. Open-Meteo rows
+    are identified by `(model, valid_time)`; MEPS rows by `(run_time, valid_time)`, since
+    consecutive runs overlap and a valid time alone does not name a forecast.
     """
     weight_map = weights.set_index("point_id").weight
     frame = points.copy()
     frame["weight"] = frame.point_id.map(weight_map)
 
-    value_columns = [
-        c
-        for c in frame.columns
-        if c not in {"valid_time", "point_id", "model", "weight"}
-    ]
+    value_columns = [c for c in frame.columns if c not in {*keys, "point_id", "weight"}]
 
     def _collapse(group: pd.DataFrame) -> pd.Series:
         weight = group.weight.to_numpy(dtype=float, copy=True)
@@ -146,7 +280,7 @@ def aggregate(points: pd.DataFrame, weights: pd.DataFrame) -> pd.DataFrame:
         weighted = np.nansum(values * weight[:, None], axis=0)
         result = dict(zip(value_columns, weighted, strict=True))
         # Dispersion across clusters, for the features where it is physically meaningful.
-        for column in ("wind_speed_100m", "power_curve"):
+        for column in dispersion:
             series = group[column].to_numpy(dtype=float)
             finite = series[np.isfinite(series)]
             # A cluster-hour with no finite values happens where a model has a gap;
@@ -160,7 +294,5 @@ def aggregate(points: pd.DataFrame, weights: pd.DataFrame) -> pd.DataFrame:
         return pd.Series(result)
 
     return (
-        frame.groupby(["model", "valid_time"])
-        .apply(_collapse, include_groups=False)
-        .reset_index()
+        frame.groupby(list(keys)).apply(_collapse, include_groups=False).reset_index()
     )

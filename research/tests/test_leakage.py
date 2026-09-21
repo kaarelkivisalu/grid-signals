@@ -162,3 +162,57 @@ def test_operational_offsets_match_the_training_path() -> None:
     )
     assert len(merged) == len(training)
     assert (merged.nwp_offset_days_operational == merged.nwp_offset_days_training).all()
+
+
+def _meps_frame() -> pd.DataFrame:
+    """A design-matrix skeleton carrying MEPS columns alongside the Open-Meteo ones."""
+    frame = _frame()
+    frame[assemble.MEPS_RUN_COLUMN] = frame.issue_day.dt.tz_localize("UTC")
+    frame["power_curve__meps"] = 0.4
+    frame["wind_speed_hub__meps"] = 8.0
+    frame["power_curve__meps_ramp1"] = 0.01
+    return frame
+
+
+def test_meps_columns_are_declared_and_do_not_leak() -> None:
+    frame = _meps_frame()
+    declared = assemble.provenance(frame)
+    assert "power_curve__meps" in declared
+    assert not _violations(frame), "MEPS columns carry future information"
+
+
+def test_meps_columns_are_dated_to_the_run_not_a_whole_day_offset() -> None:
+    """The defining difference from the Open-Meteo path."""
+    frame = _meps_frame()
+    sources = assemble.max_source_time(frame)
+    assert (sources["power_curve__meps"] == frame[assemble.MEPS_RUN_COLUMN]).all()
+    assert (
+        sources["power_curve__meps_ramp1"] == frame[assemble.MEPS_RUN_COLUMN]
+    ).all(), "features derived from MEPS must inherit the run's information age"
+
+
+def test_one_run_serves_the_whole_delivery_day() -> None:
+    """This is the fix for the lead-34 step, stated as a property.
+
+    Open-Meteo must switch offset partway through the delivery day, which is what puts
+    a discontinuity in the error curve. A single MEPS run covers every hour, so its
+    information age rises smoothly with lead time and never jumps.
+    """
+    frame = _meps_frame()
+    assert frame.nwp_offset_days.nunique() == 2, (
+        "the Open-Meteo path is expected to change vintage mid-day"
+    )
+    assert frame[assemble.MEPS_RUN_COLUMN].nunique() == 1, (
+        "every delivery hour must be served by the same MEPS run"
+    )
+
+    age_h = (
+        frame.valid_time - frame[assemble.MEPS_RUN_COLUMN]
+    ).dt.total_seconds() / 3600
+    steps = age_h.sort_values().diff().dropna()
+    assert (steps == 1.0).all(), "information age must rise one hour per delivery hour"
+
+
+def test_meps_run_precedes_the_issue_time_for_every_hour() -> None:
+    frame = _meps_frame()
+    assert (frame[assemble.MEPS_RUN_COLUMN] < assemble.issue_time_of(frame)).all()
