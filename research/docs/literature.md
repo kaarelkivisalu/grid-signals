@@ -29,7 +29,7 @@ documentation and grey literature say about the problems the README lists.
 | Fix the capacity denominator empirically: the winning EEM20 entry divided by the mean of registered capacity and the running maximum of observed output; the runner-up corrected capacity by hand from the rolling maximum, and a 5% correction in SE1 cut pinball loss by 10% | P3 | §5, Bellinguer 2020; Browell 2020 | competition data (dates anonymised, 2020 fleet) |
 | Ceilings near 0.8 of capacity are normal for Sweden; downtime and low wind-speed diversity, not wakes, cap the fleet maximum | P3 | §6, Olauson 2018 | reanalysis-based, 2010s data |
 | ECMWF IFS ENS archive as Zarr, 51 members, 100 m wind, init times from 2024-04-01 | P1 | §4, dynamical.org | **only the 00 UTC run; open data lands about 07:40–08:04 UTC, marginal against a 10:00 summer cutoff (08:00 UTC)**; 3-hourly steps; ~20 km grid. Expect limited day-ahead gain (next row) |
-| Ensemble spread may help less at day-ahead than hoped: the EEM20 runner-up found the ensemble mean sufficient, and weather-to-power uncertainty dominates up to about 2–3 days ahead | P1 | §4 Dantas & Browell 2025; §5 Browell 2020 | gains concentrate in high-uncertainty situations (frontal passages), so test on the worst days rather than on average |
+| Ensemble spread may help less at day-ahead than hoped: the EEM20 runner-up found the ensemble mean sufficient, and weather-to-power uncertainty dominates up to about 2–3 days ahead (1.4–2.4 days on GB data) | P1 | §4 Dantas & Browell 2025, Cannon 2017; §5 Browell 2020 | gains concentrate in high-uncertainty situations (frontal passages), so test on the worst days rather than on average; Cannon's authors say operational systems could cross over earlier |
 | Quantile-specific weights when combining two model families (boosted trees strong in the middle, GAM in the tails); peaks-over-threshold (GPD) tails; per-lead-hour recalibration | P1, P2 | §5 Browell 2020; §4 Dantas & Browell 2025 | tested on the four Swedish zones (Browell) and 73 GB farms (Dantas) |
 | Open-Meteo **Single Runs API** — `run=` parameter, IFS HRES runs at 00/06/12/18 from 2024-03-14 | P2 | §4, Open-Meteo docs | fixes the vintage step for ECMWF only |
 | Second-stage quantile regression on the first-stage quantiles, fitted on a separate block | P1 | §3 Lindberg 2024; §5 Lindberg 2023 | shown on one 6 MW park with a forest model, not on a zone with boosting |
@@ -38,6 +38,7 @@ documentation and grey literature say about the problems the README lists.
 | Condition interval width on predicted level and a cut-out-risk indicator | P1 | §2, Pinson & Kariniotakis 2010 | single-farm, hand-built fuzzy rules |
 | Coverage-by-output charts can mislead if binned by *realised* output | P1, EVAL | §9, Lerch 2017 | check how `coverage_by_output.png` bins |
 | Flag or drop curtailed and non-reporting hours; normalise aggregates for units that report | P3, EVAL | §1, IEA guide 13.2.1–13.2.2 | needs a source of curtailment/reporting flags |
+| German TSO "actual" PV is an upscaled estimate. A physical model using only register locations and capacities plus one fitted derating factor reached RMSE 4.2–4.9% of installed capacity against it (2015, April–October) and came within 0.4 points of two TSO day-ahead forecasts | SOL, EVAL | §10, Saint-Drenan 2017 | winter excluded; provenance of the TSO forecasts unclear; register currency differed by control area |
 | Neighbourhood pseudo-ensemble from a deterministic 2.5 km run | P1 | §3, Molinder 2018 | icing study, two weeks of data; still under-dispersive. Analog ensembles are biased low in the right tail when the archive is short (Alessandrini 2019) |
 | ENTSO-E `A03` step-curve encoding under-reports if parsed naively | P3 | §6, Nicolaysen 2026 | new single-author preprint, unreviewed |
 
@@ -135,6 +136,24 @@ The winning entry of the GEFCom2014 wind track (first overall, first in 11 of 12
 - → Tail-specific regularisation is a cheap experiment for the high-wind under-coverage.
 - → Check that your feature set has time-shifted NWP features and a neighbour-zone (SE2, SE4, NO, FI) median layer.
 - 2014 competition data with provided NWP, so it says nothing about forecast vintage or calibration on held-out data beyond the score.
+
+### GEFCom 2014: Probabilistic solar and wind power forecasting using a generalized additive tree ensemble approach
+Nagy, Barta, Kazi, Borbély, Simon · Int. J. Forecasting 32(3), 2016 ·
+[10.1016/j.ijforecast.2015.11.013](https://doi.org/10.1016/j.ijforecast.2015.11.013) · *read: full text (7 pages)*
+PDF: `research/data/papers/nagy2016_gefcom-gat-ensemble.pdf`
+
+Second place overall in both the solar and the wind track of GEFCom2014: a vote of a quantile regression forest and a stacked model (a random forest's point forecast fed to quantile-loss gradient boosting), 99 quantiles per zone. The text describes voting, bagging, boosting and stacking of trees; I found no separate additive-model component despite the title.
+- Raw quantiles from boosting can cross, so isotonic regression forces them to be non-decreasing. The authors say this improved accuracy, and that nobody compared it with simply sorting the quantiles.
+- Voting was most useful for averaging quantile forecasts of different models. In the last stage the stack alone beat the vote on one zone because the forest's error distribution had a much higher mode.
+- Wind inputs: 10 and 100 m wind components, magnitudes at 10/50/100 m, angles binned to 45°, the 100 m minus 10 m difference, and copies shifted up to three hours either way. Letting the trees choose from all features beat hand-made zone groupings.
+- Solar inputs: total column liquid and ice water, cloud cover, humidity, temperature, wind, decumulated radiation and precipitation, plus hour, day of year and month.
+- Manual outlier filtering looked good for the first weeks, then gave inconclusive cross-validation and leaderboard results and was dropped.
+- Row-based cross-validation misled them: it favoured fewer features while the leaderboard did not; they later validated by day.
+- Fitting 99 separate models was slow; they suggest a boosting scheme that optimises the pinball loss over all quantiles at once.
+- → Check how quantile crossing is handled in your pipeline; sorting is the cheap alternative they never tested.
+- → Supports blocked splits for validation (also Landry above).
+- → Solar feature list is a starting point for the German track.
+- Competition data with provided NWP, so nothing on forecast vintage or drift.
 
 ### Conditional prediction intervals of wind power generation
 Pinson, Kariniotakis · IEEE Trans. Power Syst. 25(4), 2010 ·
@@ -257,6 +276,20 @@ Gneiting, Raftery, Westveld, Goldman · Mon. Weather Rev. 133(5), 2005 ·
 Introduces EMOS: a regression-based calibration of raw ensembles fitted by minimising CRPS.
 - Raw ensembles are typically under-dispersive; a small fitted correction repairs them.
 
+### Combining probability forecasts
+Ranjan, Gneiting · J. R. Stat. Soc. B 72(1), 2010 ·
+[10.1111/j.1467-9868.2009.00726.x](https://doi.org/10.1111/j.1467-9868.2009.00726.x) · *read: full text*
+PDF: `research/data/papers/ranjan2010_combining-probability-forecasts.pdf`
+
+Shows that averaging probability forecasts (the linear opinion pool) yields something uncalibrated and unsharp, and repairs it by composing the pool with a beta distribution function.
+- Theorem 1: a weighted average of two or more distinct, calibrated forecasts is not calibrated, and on average sits closer to the climatological forecast than its recalibrated version, which scores better under every strictly proper scoring rule. It is a finite-sample result that assumes nothing about how the sources depend on each other.
+- The pooled forecast is therefore under-confident, in the authors' words closer to the climatological forecast than necessary.
+- The beta-transformed linear pool (BLP) fits the weights and the beta shape parameters (α, β) by maximum likelihood; it adds at most two, typically one, parameters to the linear pool. In their second, asymmetric simulation the symmetric version (α = β) stayed miscalibrated and the general one was calibrated.
+- Case study: probability-of-precipitation forecasts for 29 US cities from statistical and National Weather Service sources; the BLP forecast was calibrated and outscored both sources and the linear pools.
+- More complex aggregation (copulas, for example) risks overfitting for likely small gains.
+- → The paper treats binary events. Dantas & Browell (§4) apply the beta transform to combined predictive distributions, which is an extension I did not read (Gneiting & Ranjan 2013, §11).
+- → The direction matters: pooling makes forecasts under-confident, while yours are over-confident, so it does not explain P1. It becomes relevant only if you combine model families (ECMWF- and GFS-driven models, say) by averaging probabilities. Averaging quantiles is a different operation, which the paper does not treat.
+
 ### Evaluating ensemble post-processing for wind power forecasts
 Phipps, Lerch, Andersson, Mikut, Hagenmeyer, Ludwig · Wind Energy 25(8), 2022 ·
 [10.1002/we.2736](https://doi.org/10.1002/we.2736) · *read: abstract*
@@ -283,6 +316,19 @@ Complete ensemble-to-predictive-distribution chain for one offshore farm over ab
 - States that ensemble forecasts of wind power are not reliable in the probabilistic sense and must be recalibrated; the result is more reliable than the raw ensemble while keeping its resolution.
 - → Same "convert members to power first, then dress and recalibrate" order as Phipps et al. (2022); recursive estimation is one way to track drift.
 - One farm, one year, 2000s NWP.
+
+### Probabilistic weather prediction with an analog ensemble
+Delle Monache, Eckel, Rife, Nagarajan, Searight · Mon. Weather Rev. 141(10), 2013 ·
+[10.1175/mwr-d-12-00281.1](https://doi.org/10.1175/mwr-d-12-00281.1) · *read: full text (abstract, data, method, verification and discussion)*
+PDF: `research/data/papers/delle-monache2013_analog-ensemble.pdf`
+
+The original analog ensemble (AnEn): the predictive distribution at a location and lead time is the set of observations that accompanied the past forecasts of the same model, at the same lead time, most similar to today's deterministic forecast. Tested on 10 m wind and 2 m temperature at 550 US stations, 0–48 h ahead, 23 April – 31 July 2011, from a 15 km deterministic model with a 12–15-month archive, against the 21-member Canadian REPS raw and post-processed with EMOS and logistic regression.
+- The raw ensemble was strongly under-dispersive for wind, with observations often above every member and a negative bias, the same over-confidence as your P1. AnEn had a near-uniform rank histogram, slight over-spread and a good spread–skill relationship, so its spread grew when errors did.
+- Skill and value were equal to or better than logistic regression and EMOS, and for wind above 10 m/s AnEn was better than both.
+- A 9-month archive did worse than the full one, and the authors expect multi-year archives to help AnEn more than the regression methods.
+- The method needs a long history of forecasts from a frozen modelling system to find analogs; the authors count this as its main cost.
+- → With roughly two years of vintage-consistent archives and periodic IFS upgrades, the archive is the constraint, and Alessandrini et al. (below) show the right-tail bias that follows. As a spread feature rather than the predictive distribution it is cheap to test.
+- US station winds and temperature, not power.
 
 ### Improving the analog ensemble wind speed forecasts for rare events
 Alessandrini, Sperati, Delle Monache · Mon. Weather Rev. 147(7), 2019 ·
@@ -406,8 +452,21 @@ One model for 6–162 h ahead on 73 GB wind farms (2019–2023, ECMWF HRES and E
 - Ensemble information matters most in high-uncertainty situations such as frontal passages, where methods based on a deterministic forecast fail to capture the extra spread. The deterministic HRES-based quantile model beat the ENS-based one at short horizons, which the authors attribute to HRES's higher temporal resolution and extra variables and levels (their ENS came from TIGGE).
 - The data and scripts are on Zenodo (over 200 GB).
 - → At your 14–38 h leads the ensemble should add little on average, so judge spread features on the worst days, not on the overall score.
-- → Per-lead-hour recalibration coefficients are a direct tool for the lead-hour-34 step, and GPD tails and a beta-transformed pool are concrete tools for the under-coverage.
+- → Per-lead-hour recalibration coefficients are a direct tool for the lead-hour-34 step, and GPD tails and a beta-transformed pool (Ranjan & Gneiting 2010, §3) are concrete tools for the under-coverage.
 - GB farms with ECMWF inputs; onshore results may differ in the Nordics.
+
+### Determining the bounds of skilful forecast range for probabilistic prediction of system-wide wind power generation
+Cannon, Brayshaw, Methven, Drew · Meteorol. Z. 26(3), 2017 · online 2016 ·
+[10.1127/metz/2016/0751](https://doi.org/10.1127/metz/2016/0751) · *read: full text*
+PDF: `research/data/papers/cannon2017_skilful-range-system-wind.pdf`
+
+Splits the error of global-ensemble wind power forecasts into a resolved part (the ensemble against its own analysis, growing with lead time) and an unresolved part (analysis-derived power against measured power, constant with lead time). Test case: Great Britain's total wind output, TIGGE forecasts from ECMWF, the Met Office and NCEP, four years of twice-daily runs, winds interpolated to farm sites and hub height and turned into power with one generic curve (correlation with measured GB output 0.96 in 2012).
+- The lead time beyond which the resolved part exceeds the unresolved one is 2.4 days (ECMWF), 1.9 (Met Office) and 1.4 (NCEP). Skill against climatology ends at 8, 7 and 6 days; for the probability of an extreme ramp, at 5.5, 5 and 4.5.
+- The ensemble-mean error was about 6% of GB capacity at short lead times, about 9% after three days and 12% after five.
+- The unresolved part contains unresolved local winds, the farms' response to wind, and system operation: curtailment instructions, unreported maintenance and metering errors.
+- Their power conversion is cruder than operational ones, so the unresolved part is probably overstated, and the authors say the resolved part could dominate below even 1.4–2.4 days in practice. Better downscaling and microscale modelling have diminishing returns beyond about two days.
+- → Your 14–38 h leads sit below the crossover for all three systems, so on average power conversion and non-weather effects drive the error, in line with Browell (§5) and Dantas & Browell above. The curtailment, unreported maintenance and metering effects it names are the same kind of cause as P3 and the high-wind misses, so fixes on the data side have more headroom than adding NWP members.
+- GB-wide aggregate (much more diversified than SE3), 2009–2012 data, 0.5° TIGGE grids, 10 m wind.
 
 ### Probabilistic wind power forecasting with tree-based machine learning and weather ensembles
 Bruninx, van Binsbergen, Verstraeten, Nowé, Helsen · arXiv 2026 (v2, rev. July) ·
@@ -457,13 +516,29 @@ PDF: `research/data/papers/browell2020_eem20-quantile-combination.pdf`
 Second-place entry (the authors' team was Team 12): quantile forecasts (0.1–0.9) of wind power for SE1–SE4 from a gradient-boosted tree model and a quantile GAM, combined with quantile-specific weights. The NWP was a 10 m ensemble issued at 06 UTC the day before; each of six two-month tasks appended new data to the training set; scores are pinball loss.
 - The GAM was better toward the tails and the trees in the middle, so a per-quantile weight, chosen by cross-validation, beat both components in all four zones.
 - Feature engineering used ensemble means (wind speed, gust, direction, temperature, power from shear plus a smoothed generic curve), ±2 h rolling means and lead/lag values, seasonal terms, and the neighbouring zones' median forecasts.
-- **The ensemble mean was sufficient:** they could not extract benefit from ensemble range, minimum or maximum. They note that only 10 m wind was available and cite Cannon et al. (2017) for weather-to-power conversion being a much larger source of day-ahead uncertainty than the NWP.
+- **The ensemble mean was sufficient:** they could not extract benefit from ensemble range, minimum or maximum. They note that only 10 m wind was available and cite Cannon et al. (2017, §4) for weather-to-power conversion being a much larger source of day-ahead uncertainty than the NWP.
 - **Capacity:** the supplied list was imperfect because farms did not come online at their full listed capacity, so they corrected it manually using lags between installation dates and increases in the rolling maximum of recorded power. In SE1 the corrections lowered capacity by about 5% on average and reduced pinball loss by 10% against the raw capacity.
 - Final scores (average pinball loss, units as in the paper's Table II): winner 44.9, this entry 47.9, third 51.5, and a combination of the winner and this entry 44.4.
 - The authors note that pinball loss lets a forecaster trade reliability for sharpness, and that no competition design yet prevents it.
 - → Capacity error moved the score more than any modelling choice reported, and the correction method is the rolling-maximum comparison you already use.
 - → Tail-specific model choice and per-quantile combination are concrete P1 experiments.
 - Competition data: open access, 28 GB, CC BY 4.0, dates shifted to 2000–2001 ([10.15129/02db89e9-64d1-4ded-9324-6d952ce35099](https://doi.org/10.15129/02db89e9-64d1-4ded-9324-6d952ce35099)); the R package ProbCast is on [Zenodo](https://doi.org/10.5281/zenodo.3843333).
+
+### Day-ahead wind power predictions at regional scales: post-processing operational weather forecasts with a hybrid neural network
+Basu, Watson, Lacoa Arends, Cheneka · 2020 17th Int. Conf. European Energy Market (EEM) ·
+[10.1109/eem49802.2020.9221979](https://doi.org/10.1109/eem49802.2020.9221979) · *read: full text (6 pages)*
+PDF: `research/data/papers/basu2020_eem20-hybrid-nn.pdf`
+
+Third-place EEM20 entry (same four Swedish zones, HARMONIE 10 km, 10-member ensemble, 4,004-turbine list, scored by pinball loss): a network with a convolutional branch on the 10 m wind field and a small perceptron branch on a physics-based first-guess power.
+- The first guess extrapolates 10 m wind to hub height with a fixed shear exponent of 0.3, applies a temperature and elevation density correction, and runs each turbine through one generic IEC class-1 power curve; the zone sums are the perceptron's four inputs, with hour of day.
+- Only wind and temperature were used; gusts, cloud cover and humidity were left out on domain-knowledge grounds. Only ensemble member 1 (and in some runs the median field) fed the convolutional branch.
+- Quantiles come from 100 separately trained networks with randomised data order (6.14 million parameters each, mean-absolute-error loss).
+- Adding the ensemble-median channel made results worse (for example 41.96 against 40.77 for the July–August 2001 task). Longer training helped clearly: training on 2000 only gave 45.84 for the same task and 77.37 against 63.43 for November–December 2001, a period in which capacity was still growing.
+- The supplied turbine list had spurious entries (1 m hub heights); the organisers' own note gives 4,004 turbines and 8,640 MW against 4,099 and 8,984 MW reported by the Swedish Wind Power Association, about 4% lower. Three days of NWP were missing.
+- The authors were coupling the model with ERA5 to separate input error from model error, the idea behind your ERA5 ceiling.
+- → A physics-based first-guess power as an input feature is the same pattern as a turbine-level fleet model feeding a learned correction.
+- → The training-window result (more, later data clearly better while the fleet grows) bears on how far back the SE3 training set should reach.
+- Conference paper with no calibration analysis; the competition data cannot be joined to your archives (dates shifted to 2000–2001).
 
 ### Day-ahead probabilistic forecasting at a co-located wind and solar power park in Sweden: Trading and forecast verification
 Lindberg, Lingfors, Arnqvist, van der Meer, Munkhammar · Adv. Appl. Energy 9, 2023 ·
@@ -721,40 +796,68 @@ Fully probabilistic hourly model for German aggregated PV with the same set-up a
 
 ### Regional PV power prediction for improved grid integration
 Lorenz, Scheidsteger, Hurka, Heinemann, Kurz · Prog. Photovolt. 19(7), 2011 · online 2010 ·
-[10.1002/pip.1033](https://doi.org/10.1002/pip.1033) · *read: abstract*
+[10.1002/pip.1033](https://doi.org/10.1002/pip.1033) · *read: full text*
+PDF: `research/data/papers/lorenz2010_regional-pv-prediction.pdf`
 
-ECMWF-based regional PV forecasts up to two days ahead, hourly, upscaled from a representative set of PV systems; evaluated on two German TSO control areas (July 2009 – April 2010).
-- Operational RMSE was 4–5% of nominal power for intra-day and day-ahead horizons; a modified upscaling that models the spatial distribution of nominal power on a 1° × 1° grid improved on it.
-- → A useful order-of-magnitude yardstick for German solar, though from 2009–10 and much lower PV penetration.
-- → The capacity-distribution idea mirrors your capacity-weighted wind locations.
+The Oldenburg/Meteocontrol operational system for the German TSO areas 50Hertz and transpower: ECMWF irradiance and temperature, site-specific post-processing, physical PV simulation of a representative set of systems (77 and 306), scaled up to the region. Evaluated 2 July 2009 – 30 April 2010; forecasts were delivered at 07:00 local time from the previous day's 12 UTC run.
+- Irradiance is interpolated in the clear-sky index. A bias correction, a polynomial in the predicted clear-sky index and solar zenith angle, removes the raw forecast's overestimate at intermediate cloud; it is trained on a sliding window of the previous 30 days of measurements from more than 200 German weather stations.
+- An additional loss factor of 9.5% covers reflection and spectral losses, mismatch, cabling, soiling and inverter efficiency.
+- Nominal power is updated monthly and errors are normalised by the time-dependent installed power. A modified upscaling that models the spatial distribution of installed power on a 1° × 1° grid did slightly better.
+- RMSE in % of installed power, intra-day / day-ahead: operational 5.1 / 4.9 (50Hertz) and 4.2 / 4.3 (transpower); modified upscaling 4.3 / 4.3 and 3.9 / 4.1; persistence 7.4 / 9.2 and 6.4 / 8.0. Skill against persistence was 30–40% intra-day and 40–50% day-ahead. Mean output was only 9.1–9.5% of nominal power, so the RMSE is about half the mean.
+- Snow: in January–February 2010 forecasts overestimated low output because snow covered modules across a large share of the fleet, and in January persistence beat the forecast. Single situations reached errors of up to 25% of nominal power. Zero readings in daylight were removed as outages only in months without snow.
+- The "measured" regional power is an upscaling of the same representative systems, so the upscaling error is not in the reported RMSE (the authors say so).
+- → A yardstick for German solar at far lower penetration than today. Errors as a share of installed capacity flatter solar because mean output is under 10% of it, so choose the denominator deliberately (see van der Meer below).
+- → A clear-sky-index and zenith-angle bias correction is a cheap post-processing step to test, and snow needs a flag in the way high-wind shutdowns do for wind.
+- → Monthly nominal-power updates are the solar counterpart of P3.
 
 ### Data-driven upscaling methods for regional photovoltaic power estimation and forecast using satellite and numerical weather prediction data
-Pierro et al. · Sol. Energy 158, 2017 ·
-[10.1016/j.solener.2017.09.068](https://doi.org/10.1016/j.solener.2017.09.068) · *read: search excerpt*
+Pierro, De Felice, Maggioni, Moser, Perotto, Spada, Cornaro · Sol. Energy 158, 2017 ·
+[10.1016/j.solener.2017.09.068](https://doi.org/10.1016/j.solener.2017.09.068) · *read: full text (abstract, data, results, prediction-interval section, conclusion)*
+PDF: `research/data/papers/pierro2017_regional-pv-upscaling.pdf`
 
-Upscaling from reference plants to a region using satellite and NWP inputs.
-- → Solar equivalent of the wind upscaling choices in §7.
+Estimation and forecast of the PV output of 1,985 plants in South Tyrol (800 km², about 7% PV penetration) by clustering the fleet and feeding satellite or NWP inputs at the cluster centroids into neural networks. NWP was WRF hindcasts for 2014–2015, initialised at 12 UTC with the 24 h forecast from the following 00 UTC used for day-ahead.
+- Day-ahead RMSE was 7% of installed capacity for one day ahead and 7.5% for two, with skill against smart persistence of 39% and 45%. Averaging over clusters cut the day-ahead RMSE by 12% against a single cluster, and the error fell with area size along a fitted exponential.
+- Prediction intervals: a neural network predicts the standard deviation of the error from sun geometry and a pseudo clear-sky performance index, and the Gaussian intervals built from it were too wide, since the observed frequency was almost always above the nominal level except at 95%.
+- A per-confidence-level correction coefficient, fitted on 2014 and tested on 2015, brought the reliability plot near the diagonal. The normalised error distributions of the two years were very similar, which is why the correction transferred.
+- The error spread peaked near noon in variable-irradiance conditions.
+- → Contrast with wind: these solar Gaussian intervals over-covered, so the solar fix for P1 may point the opposite way. Test reliability per nominal level instead of assuming the direction.
+- Hindcasts rather than archived operational forecasts, one small region, two years; the ensemble-averaging result concerns fleets of clusters and does not transfer directly to Germany.
 
 ### A probabilistic approach to the estimation of regional photovoltaic power production
-Saint-Drenan et al. · Sol. Energy 147, 2017 ·
-[10.1016/j.solener.2017.03.007](https://doi.org/10.1016/j.solener.2017.03.007) · *read: metadata only*
+Saint-Drenan, Good, Braun · Sol. Energy 147, 2017 ·
+[10.1016/j.solener.2017.03.007](https://doi.org/10.1016/j.solener.2017.03.007) · *read: full text*
+PDF: `research/data/papers/saintdrenan2017_probabilistic-regional-pv.pdf`
 
-Probabilistic estimate of regional PV production.
-- → Relevant because the German TSO "actual" solar figure is itself an estimate, so the target carries its own uncertainty.
+A physical PV model that needs only plant locations and capacities from the German register: it simulates the most common module orientations and weights them by their probability of occurrence, taken from a database of more than 35,000 plants, so no plant measurements are needed. Checked against the four German TSOs' published 15-minute PV estimates using IFS forecasts.
+- **The TSO "actual" is an estimate**, upscaled from a limited set of reference plants, and the authors say so: validation against it is "of limited relevance from a scientific perspective" but matches how TSOs judge forecasts.
+- One constant derating factor per control area (about 0.82) was fitted on 2014 and applied to 2015. Winter months were excluded because snow and shading are not modelled, so only April–October was used.
+- RMSE in % of installed capacity: 4.16 (TenneT), 4.76 (Amprion), 4.87 (50Hertz) and 6.13 (TransNetBW). The TransNetBW figure is set aside because that area's register was last updated in July 2014, against April–May 2016 for the others, so the plant set did not match.
+- Against the TSOs' published day-ahead forecasts, the model was 0.43 (TenneT) and 0.36 (50Hertz) points of RMSE worse. Amprion's forecast was much worse (5.99) and was set aside as under-average. The authors could not tell which forecast products the TSOs publish or whether they are the ones used operationally.
+- Maximum output in the TSO estimates was about 0.6–0.75 of installed capacity, against about 0.8 from the model, which the authors attribute to spatial smoothing that the model underestimates.
+- → For the German solar track: the target is itself noisy, so an error floor exists that no forecast can beat; and register currency (last entry date) varies by control area, which is P3 again for solar.
+- → The 15-minute TSO series is the natural P4 target for solar.
+- Register data and 2014–2015 fleet, before roughly a doubling of German PV capacity.
 
 ### Review on probabilistic forecasting of photovoltaic power production and electricity consumption
 van der Meer, Widén, Munkhammar · Renew. Sustain. Energy Rev. 81, 2018 ·
-[10.1016/j.rser.2017.05.212](https://doi.org/10.1016/j.rser.2017.05.212) · *read: metadata only*
+[10.1016/j.rser.2017.05.212](https://doi.org/10.1016/j.rser.2017.05.212) · *read: abstract, definitions and benchmark sections, table of day-ahead studies, conclusion (29 pages, not read in full)*
+PDF: `research/data/papers/vandermeer2018_pv-probabilistic-review.pdf`
 
-### Probabilistic solar forecasting using quantile regression models
-Lauret, David, Pedro · Energies 10(10), 2017 · [10.3390/en10101591](https://doi.org/10.3390/en10101591) · *read: metadata only*
+Uppsala review of probabilistic PV and load forecasting, mostly at site and building scale, with a table of studies, metrics and benchmarks.
+- No single model suits every case: one that was re-tuned across case studies performed well but did not beat models optimised for each task.
+- Probabilistic metrics are applied inconsistently for PV and no probabilistic benchmark is standard. Proposed ones are a persistence ensemble (the last observations at the same time of day, ranked into quantiles) and a probabilistic climatology.
+- CRPS is normalised sometimes by nominal capacity and sometimes by the maximum measured output; the authors suggest reporting both, since the first is transparent and the second reflects seasonal variation.
+- Night hours and low-sun hours are filtered inconsistently, and the amount of filtering changes the reported accuracy, so they recommend standardising it. Morning and evening forecasts are inherently harder.
+- Assuming a fixed error density (Gaussian) has repeatedly given inaccurate results and generalises poorly across sites.
+- Standard practice is to model a clear-sky index rather than raw output.
+- → Fix the solar evaluation choices up front (denominator, which hours count, benchmark) and apply them to every solution, in the spirit of IEA 12.1.1.
+- Literature up to 2017 and mostly not regional German data.
 
 ### A review of solar forecasting, its dependence on atmospheric sciences and implications for grid integration: Towards carbon neutrality
 Yang et al. · Renew. Sustain. Energy Rev. 161, 2022 · [10.1016/j.rser.2022.112348](https://doi.org/10.1016/j.rser.2022.112348) · *read: metadata only*
 
-Reviews and a quantile-regression study for PV.
-- Standard practice is to model a clear-sky index rather than raw output, so the daily cycle does not dominate the error.
-- The Yang review pushes for a common verification practice.
+A broad review of solar forecasting and its dependence on atmospheric science.
+- → Not read. Chase it only if the solar track needs a wider review; van der Meer above covers the probabilistic side.
 
 ### Variable renewable energy forecasting in Germany: Reassessing simplicity with Bayesian-optimised multilayer perceptrons
 Wanek · Renewable Energy 262, 2026 · [10.1016/j.renene.2026.125409](https://doi.org/10.1016/j.renene.2026.125409) · *read: full text*
@@ -773,21 +876,17 @@ Bayesian-optimised MLPs for German national wind and solar, trained on ERA5 for 
 
 ## 11. PDFs still missing
 
-Everything in the previous two lists has now been obtained and read except the items below. Still
-missing, most valuable first:
+Everything in the earlier lists has been obtained and read except the items below. Still missing,
+most valuable first:
 
 | # | source | where | why |
 |---|---|---|---|
-| 1 | Basu, Watson, Lacoa Arends, Cheneka (2020), *Day-ahead wind power predictions at regional scales: post-processing operational weather forecasts with a hybrid neural network* | [10.1109/eem49802.2020.9221979](https://doi.org/10.1109/eem49802.2020.9221979) (IEEE, paywalled) | Third EEM20 entry on the same four Swedish zones; the only one of the three I have not seen |
-| 2 | Cannon, Brayshaw, Methven, Drew (2017), *Determining the bounds of skilful forecast range for probabilistic prediction of system-wide wind power generation*, Meteorol. Z. 26 | [10.1127/metz/2016/0751](https://doi.org/10.1127/metz/2016/0751) | Cited by Browell for weather-to-power conversion dominating day-ahead uncertainty; would test how much ensemble spread can be expected to help |
-| 3 | Ranjan & Gneiting (2010), *Combining probability forecasts*, J. R. Stat. Soc. B 72 | [10.1111/j.1467-9868.2009.00726.x](https://doi.org/10.1111/j.1467-9868.2009.00726.x) | Origin of the beta-transformed linear opinion pool that Dantas & Browell use for recalibration |
-| 4 | Nagy et al. (2016), *GEFCom2014: Probabilistic solar and wind power forecasting using a generalized additive tree ensemble approach*, IJF 32 | [10.1016/j.ijforecast.2015.11.013](https://doi.org/10.1016/j.ijforecast.2015.11.013) | Tree-plus-GAM entry to GEFCom2014 for both wind and solar; a precedent for the model combination Browell used, and relevant to the solar track |
-| 5 | Delle Monache et al. (2013), *Probabilistic weather prediction with an analog ensemble*, Mon. Weather Rev. 141 | [10.1175/mwr-d-12-00281.1](https://doi.org/10.1175/mwr-d-12-00281.1) | Original analog-ensemble method, only if that route is pursued |
-| 6 | Nikodinoska et al. (2022), *Solar and wind power generation forecasts using elastic net in time-varying forecast combinations*, Appl. Energy | [10.1016/j.apenergy.2021.117983](https://doi.org/10.1016/j.apenergy.2021.117983) | German wind and solar combination of several forecasts; cited by Wanek as a benchmark. For the solar track |
-| 7 | Lorenz et al. (2011), Saint-Drenan et al. (2017), Pierro et al. (2017) | DOIs in §10 | Regional PV upscaling; only when the solar track starts |
-| 8 | Nicolaysen (2026), ENTSO-E production-type labelling | arXiv 2609.16152 (open access) | Only if the `A03` parsing check goes ahead |
-| 9 | Svenska kraftnät / Energimyndigheten statistics on wind down-regulation and curtailment in SE3 | not found | Would test the redispatch and curtailment explanation for problem 3 and high-wind misses |
-| 10 | Measured latency of the dynamical.org ENS and GFS archives | dynamical.org pipeline status page (renders in a browser only) | Decides whether the 00 UTC ENS run is usable before the 10:00 cutoff, especially in summer |
+| 1 | Saint-Drenan, Good, Braun, Freisinger (2016), *Analysis of the uncertainty in the estimates of regional PV power generation evaluated with the upscaling method*, Sol. Energy 135 | [10.1016/j.solener.2016.05.052](https://doi.org/10.1016/j.solener.2016.05.052) | Cited by Saint-Drenan 2017 for how uncertain the German TSO's "actual" PV figure is, which sets the noise floor for scoring German solar |
+| 2 | Nikodinoska et al. (2022), *Solar and wind power generation forecasts using elastic net in time-varying forecast combinations*, Appl. Energy | [10.1016/j.apenergy.2021.117983](https://doi.org/10.1016/j.apenergy.2021.117983) | German wind and solar combination of several forecasts; cited by Wanek as a benchmark. For the solar track |
+| 3 | Gneiting & Ranjan (2013), *Combining predictive distributions*, Electron. J. Stat. 7 | [10.1214/13-ejs823](https://doi.org/10.1214/13-ejs823) | Extends the beta-transformed pool of Ranjan & Gneiting (2010) from binary events to predictive distributions, the form Dantas & Browell use. Only if that route is pursued |
+| 4 | Nicolaysen (2026), ENTSO-E production-type labelling | arXiv 2609.16152 (open access) | Only if the `A03` parsing check goes ahead |
+| 5 | Svenska kraftnät / Energimyndigheten statistics on wind down-regulation and curtailment in SE3 | not found | Would test the redispatch and curtailment explanation for problem 3 and high-wind misses |
+| 6 | Measured latency of the dynamical.org ENS and GFS archives | dynamical.org pipeline status page (renders in a browser only) | Decides whether the 00 UTC ENS run is usable before the 10:00 cutoff, especially in summer |
 
 Not a paper, but on the list: the EEM20 competition data and code (28 GB, open access, CC BY 4.0,
 [10.15129/02db89e9-64d1-4ded-9324-6d952ce35099](https://doi.org/10.15129/02db89e9-64d1-4ded-9324-6d952ce35099))
@@ -798,6 +897,7 @@ and only 10 m wind is provided, so it cannot be joined to your real archives.
 
 - **P3 (capacity drift):** no paper reports the specific symptom. Olauson 2018 explains why ceilings near 0.8 are normal, and the EEM20 papers show empirical fixes for an unreliable register, but none explains a ceiling that moves from 0.91 to 0.79.
 - **P4 (15-minute):** thin peer-reviewed coverage; expect to design this from first principles, using IEA 13.2.2's averaging/instantaneous distinction and the metrics vocabulary in §8.
+- **German solar capacity and target:** no study found on register vintage or on the noise in the TSO "actual" beyond Saint-Drenan 2017 and its 2016 predecessor (§11).
 - **Swedish curtailment and redispatch magnitudes:** no citable source found.
 - **Machine-learning weather models** (AIFS, GenCast, Google WeatherNext) appear as ensembles in Open-Meteo's and dynamical.org's listings. The constraint is archive depth, not quality, so I did not review them further.
 - **Run-addressing for ICON-EU:** no retroactive source found; see §4.
@@ -818,3 +918,4 @@ reason, so we don't spend time on them again.
 | `yang2018_analog-storm-wind-dual-nwp.pdf` — Yang, Astitha, Delle Monache, Alessandrini, *An analog technique to improve storm wind speed prediction using a dual NWP model approach*, Mon. Weather Rev. 146, 2018 · [10.1175/mwr-d-17-0198.1](https://doi.org/10.1175/mwr-d-17-0198.1) | **Not relevant.** Analog ensembles with bias correction for 146 storms at US surface stations, built on two regional research models (WRF and RAMS–ICLAMS) that are not among your inputs; wind speed at stations, not power. The analog-ensemble concept and its tail-bias caveat are covered by Alessandrini et al. (2019) and Sweeney et al. (2020). |
 | `molinder2021_icing-losses-qrf.pdf` — Molinder et al., *Probabilistic forecasting of wind turbine icing related production losses using quantile regression forests*, Energies 14, 2021 · [10.3390/en14010158](https://doi.org/10.3390/en14010158) | **Conditionally relevant.** Forest-based forecasts of icing-related losses at four Swedish parks over two winters, with a physical icing model as an input; pooling stations helped. Only useful if icing is confirmed as a driver. **Revisit if** temperature and humidity on the highest-error days (for example 13 February 2026) point to icing. The pooling lesson is already covered by Kean & O'Sullivan. |
 | `karlsson2026_cold-climate-wind.pdf` — Karlsson et al., *Cold Climate Wind: Challenges, Technological Solutions and Policy*, WIREs Energy Environ. 15, 2026 · [10.1002/wene.70025](https://doi.org/10.1002/wene.70025) | **Not relevant unless icing is confirmed.** A general review of cold-climate wind (loss ranges, mitigation, policy) with no zone-level forecasting content. It reports icing losses ranging from near zero to over 20% of annual production at affected sites. Same revisit condition as Molinder 2021. |
+| `lauret2017_probabilistic-solar-qr.pdf` — Lauret, David, Pedro, *Probabilistic solar forecasting using quantile regression models*, Energies 10, 2017 · [10.3390/en10101591](https://doi.org/10.3390/en10101591) | **Not relevant to the horizon or scale.** Linear quantile regression for 1–6 h-ahead irradiance at two single sites (La Réunion and a US desert station), using ground measurements plus IFS day-ahead forecasts as inputs. Its finding that NWP inputs sharpen intra-day intervals without hurting reliability, and that site variability drives quality, does not transfer to a day-ahead regional target. |
