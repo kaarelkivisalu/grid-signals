@@ -5,6 +5,20 @@ is **sealed** and is not reported here. 18 rolling-origin folds over 763 develop
 days, 7-day embargo, resampled by delivery day, on the frozen protocol in
 `protocol.md`. All metrics normalised by installed capacity.
 
+**What the metrics mean and which rows they cover:** `docs/metrics.md`. In short, every
+number below is a mean over the same 13,082 delivery hours — 546 days between
+2024-09-02 and 2026-03-01, each appearing in exactly one test fold.
+
+## What the forecasts look like
+
+![](figures/backtest_examples.png)
+
+Four delivery days picked by rank, not by hand: the day nearest the median daily error,
+the day nearest the 90th percentile, the worst day in the scored window, and the
+windiest. The leaderboard below compresses all of this into eight numbers, and the
+compression hides whether a day is forecast as a *sensible shape* — which is what these
+panels show and no summary statistic can.
+
 ## Leaderboard
 
 ![](figures/leaderboard_crps.png)
@@ -119,6 +133,50 @@ overfit. Each training window now reserves its most recent quarter — split by 
 delivery days — for estimating spread, and the quantile model is conformalised on those
 held-out days. The point model's CRPS *improved* as a result (0.0267 → 0.0241): honest
 intervals score better, not worse.
+
+### The pooled coverage hides where the intervals fail
+
+Persisting the per-row forecasts made a breakdown possible that the metric grid could
+not express: coverage conditioned on how much the fleet is actually producing.
+
+![](figures/coverage_by_output.png)
+
+| actual CF | n | cov@90 | cov@80 | mean p5-p95 width |
+|---|---|---|---|---|
+| 0.0-0.2 | 5,684 | 0.871 | 0.756 | 368 MW |
+| 0.2-0.4 | 3,876 | 0.853 | 0.739 | 600 MW |
+| 0.4-0.6 | 2,406 | 0.828 | 0.709 | 664 MW |
+| 0.6-0.8 | 1,111 | 0.806 | 0.694 | 797 MW |
+| 0.8-1.0 | 5 | 0.000 | 0.000 | 844 MW |
+
+The decline is monotone. The intervals *do* widen with output — 368 MW to 797 MW — but
+not fast enough to keep pace, so they are least trustworthy exactly where generation,
+the MW error and the economic stake are all largest. The last row is five hours and is
+anecdote, not evidence; the trend across the four populated buckets is not.
+
+A second correction to a natural misreading: winter has the worst **accuracy**, but not
+the worst **calibration**. Truth falls outside p5-p95 on 14.8% of hours overall against
+a nominal 10%, and by season that is SON 17.4%, MAM 14.1%, DJF 13.9%, JJA 12.0%. Autumn
+is the miscalibrated season. The underdispersion is broad, not a winter artefact, which
+matters because it means an icing feature would not fix it.
+
+### What a failure actually looks like
+
+The worst day in the scored window, 2026-02-13, is the third panel of the example
+figure above, and it is worth stating numerically because it is the failure mode that
+matters:
+
+- nBIAS **−0.1122** — the model over-predicted by 11 percentage points of capacity,
+  about 520 MW, sustained all day.
+- Coverage **0.00 at 80%** and **0.04 at 90%**: the outturn was outside the interval for
+  every hour but one.
+- Mean p5-p95 width **544 MW**, against a window average of **528 MW** — the model was
+  no less certain than usual.
+
+Confidently wrong, in February, in the direction the seasonal bias predicts. The
+intervals gave no warning: the forecast was as sharp as on any other day and missed by
+520 MW for twenty-four consecutive hours. Widening intervals globally would not catch
+this; the model was not uncertain, it was mistaken.
 
 **Residual gap.** `lightgbm_quantile` is still underdispersed at 0.737 against a nominal
 0.80, and its PIT histogram is visibly U-shaped. Likely cause: a 25% calibration slice of

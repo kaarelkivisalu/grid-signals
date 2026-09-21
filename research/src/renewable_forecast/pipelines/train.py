@@ -77,6 +77,7 @@ def run(zone: str = "SE3", fuel: str = "wind_onshore") -> pd.DataFrame:
     actual, context, predictions = evaluate.run_folds(
         frame, development, forecasters(levels, history, tso_cf), cfg
     )
+    evaluate.save_predictions(context, predictions, levels, zone, fuel)
     rows = [
         evaluate.score(
             name,

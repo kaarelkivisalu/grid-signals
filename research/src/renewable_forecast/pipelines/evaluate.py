@@ -7,6 +7,7 @@ different apples.
 
 import logging
 from collections.abc import Callable
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -82,6 +83,36 @@ def run_folds(
         pd.concat(context, ignore_index=True),
         {name: np.vstack(preds) for name, preds in collected.items()},
     )
+
+
+def save_predictions(
+    context: pd.DataFrame,
+    predictions: dict[str, np.ndarray],
+    levels: np.ndarray,
+    zone: str,
+    fuel: str,
+) -> Path:
+    """Persist every backtest forecast row so the fan charts plot real output.
+
+    The leaderboard reduces each forecaster to eight numbers. This keeps the forecasts
+    themselves -- one row per forecaster and delivery hour, with all 19 quantiles in
+    both capacity-factor and MW terms -- so a reader can look at what the model actually
+    said on a given day rather than only at how wrong it was on average.
+    """
+    keep = ["valid_time", "delivery_day", "lead_hour", "season", "cf", "capacity_mw"]
+    frames = []
+    for name, quantiles in predictions.items():
+        frame = context[keep].copy()
+        frame.insert(0, "forecaster", name)
+        for level, column in zip(levels, quantiles.T, strict=True):
+            frame[f"cf_q{level:.2f}"] = column
+            frame[f"mw_q{level:.2f}"] = column * frame.capacity_mw
+        frames.append(frame)
+    out = paths.PREDICTIONS / f"backtest_{zone.lower()}_{fuel}.parquet"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    pd.concat(frames, ignore_index=True).to_parquet(out, index=False)
+    logger.info("wrote backtest forecasts to %s", out)
+    return out
 
 
 def score(

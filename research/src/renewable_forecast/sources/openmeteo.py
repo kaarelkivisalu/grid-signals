@@ -155,8 +155,15 @@ def pull(
     models: tuple[str, ...] = MODELS,
     variables: tuple[str, ...] = WIND_VARIABLES,
     offsets: tuple[int, ...] = OFFSETS,
+    *,
+    merge: bool = False,
 ) -> pd.DataFrame:
-    """Fetch every point x model x chunk, writing parsed parquet per point and model."""
+    """Fetch every point x model x chunk, writing parsed parquet per point and model.
+
+    `merge=True` folds the new rows into whatever is already parsed instead of
+    replacing it, keeping the newest row per `(valid_time, offset)`. A narrow pull --
+    refreshing tomorrow, say -- would otherwise truncate the archive to that window.
+    """
     fields = _hourly_fields(variables, offsets)
     collected: list[pd.DataFrame] = []
     with httpx.Client(timeout=120.0) as client:
@@ -187,6 +194,14 @@ def pull(
                     / "data.parquet"
                 )
                 out.parent.mkdir(parents=True, exist_ok=True)
+                if merge and out.exists():
+                    existing = pd.read_parquet(out)
+                    merged = (
+                        pd.concat([existing, merged], ignore_index=True)
+                        .drop_duplicates(subset=["valid_time"], keep="last")
+                        .sort_values("valid_time")
+                        .reset_index(drop=True)
+                    )
                 merged.to_parquet(out, index=False)
                 collected.append(merged)
                 logger.info("%s %s: %s rows", model, point.point_id, len(merged))

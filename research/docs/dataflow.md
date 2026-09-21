@@ -169,6 +169,44 @@ drivers like icing are seasonal by nature.
 Headline scalars go to MLflow; the full metric grid (metric × lead hour × season × CF quintile) goes
 as a `metrics.parquet` artifact attached to the run, queried with DuckDB.
 
+![](../reports/figures/evaluation_window.png)
+
+**The development window is not the scored window.** 217 of the 763 development days never appear in
+a test fold — 199 at the start, before the first fold has its 180 training days, and 18 at the end,
+after the last monthly origin. Every headline number is a mean over the remaining **546 days /
+13,082 delivery hours**. Exact definitions and the MW translation: `docs/metrics.md`.
+
+---
+
+## 5b. The operational path
+
+The backtest and the forecast share every feature function; they differ only in what they know.
+
+```
+  BACKTEST                                OPERATIONAL  (pipelines/predict.py)
+  ────────                                ───────────
+  assemble.build()                        assemble.build_operational(delivery_day)
+    joins NWP to the target table           builds the delivery-day grid, no target
+    cf is known                             cf does not exist yet
+    capacity from the target row            capacity frozen at the issue day
+         │                                       │
+         ▼                                       ▼
+  rolling-origin folds                    fit on ALL trainable days < delivery_day
+  fit per fold, predict its test month    predict 19 quantiles
+         │                                       │
+         ▼                                       ▼
+  data/predictions/backtest_*.parquet     data/predictions/forecast_vintages.parquet
+  scored against the outturn              APPEND-ONLY; scored later, when actuals land
+```
+
+Both paths call `_annotate` and `required_offset`, so a delivery hour gets the same NWP vintage
+either way — the leakage tests assert this, because a mismatch would be train/serve skew invisible
+to the backtest.
+
+The operational model fits on every day available at issue time, **including sealed-holdout days**.
+That is correct for production and does not contaminate the holdout evaluation, which refits from
+folds that exclude it — but it does mean the deployed model is never the model on the leaderboard.
+
 ---
 
 ## 6. Open questions this diagram will have to absorb
@@ -193,6 +231,7 @@ Tracked here so the diagram stays honest about what is not yet settled:
 
 | Date | Change |
 |---|---|
+| 2026-09-21 | Forecasts, not just scores. `pipelines/predict.py` produces an operational forecast for a delivery day with no actuals, via `assemble.build_operational`; the backtest now persists every forecast row. Four new figures: the latest forecast, backtest days against outturn, the evaluation window, and a corrected task-horizon diagram. `docs/metrics.md` states what each metric measures and over which 546 days / 13,082 hours. Corrected: the task-horizon figure had drawn run-relative leads (+22…+47) on an issue-relative axis; the market frame is 12-36 h from gate closure, and all three reference points are now marked on one clock. |
 | 2026-09-21 | Vintage ablation (`pipelines/ablate_vintage.py`). Forcing `nwp_offset_days = 2` onto every lead hour raises leads 22-33 from 0.0259 to 0.0376 nMAE while the already-offset-2 back half does not move — so the step at lead 34 is the NWP vintage, not the day/night boundary, and at equal vintage night is slightly *harder* than day. Estimated headroom from a run-addressed archive: overall nMAE ~0.025 against today's 0.0307. |
 | 2026-09-21 | Reporting pass. Figures moved into `src/renewable_forecast/reporting/figures.py` so every chart is generated from the backtest's own artifacts, and a test now asserts that every embedded figure path resolves — four figures had been rendering broken. Two findings the prose had hidden: error against lead time is a **step at lead 34**, not a gradient, tracking the `previous_day1`→`previous_day2` vintage switch; and the capacity-factor ceiling **drifts down in all four Swedish zones at once**, with curtailment and fleet spread both tested and rejected as causes. `research/README.md` added as the one-page state of play. |
 | 2026-09-20 | Initial version — task definition, known/not-known boundary, pipeline, storage, evaluation. |

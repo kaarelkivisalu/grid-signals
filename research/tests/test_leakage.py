@@ -119,3 +119,46 @@ def test_calendar_features_are_known_arbitrarily_far_ahead() -> None:
 @pytest.mark.parametrize("lag", [48, 72, 168])
 def test_lag_provenance_matches_the_column_name(lag: int) -> None:
     assert assemble.provenance(_frame())[f"cf_lag_{lag}"] == timedelta(hours=lag)
+
+
+def test_the_operational_matrix_obeys_the_same_guard() -> None:
+    """`build_operational` must not be a way around the leakage check.
+
+    The forecasting path assembles its own rows for a day with no target, so it does not
+    go through `build`. It shares `_annotate` and `required_offset` with the training
+    path precisely so the guard still bites here; this asserts that it does.
+    """
+    delivery = pd.Timestamp("2026-01-03")
+    frame = pd.DataFrame({"valid_time": windows.delivery_day_starts(delivery.date())})
+    frame["valid_time"] = pd.to_datetime(frame.valid_time, utc=True)
+    frame = assemble._annotate(frame)  # noqa: SLF001
+    for lag in assemble.ACTUAL_LAGS_H:
+        frame[f"cf_lag_{lag}"] = 0.3
+    frame["power_curve_model_mean"] = 0.4
+
+    issued = assemble.issue_time_of(frame)
+    sources = assemble.max_source_time(frame)
+    for column in sources.columns:
+        late = int((sources[column] > issued).sum())
+        assert late == 0, f"{column} postdates the issue time on {late} rows"
+
+
+def test_operational_offsets_match_the_training_path() -> None:
+    """The same delivery day must get the same vintage in both paths.
+
+    A mismatch here would be train/serve skew of exactly the kind the whole vintage
+    design exists to prevent, and it would be invisible in the backtest.
+    """
+    delivery = pd.Timestamp("2026-01-03")
+    grid = pd.DataFrame({"valid_time": windows.delivery_day_starts(delivery.date())})
+    grid["valid_time"] = pd.to_datetime(grid.valid_time, utc=True)
+    operational = assemble._annotate(grid.copy())  # noqa: SLF001
+    training = _frame()
+
+    merged = operational.merge(
+        training[["valid_time", "nwp_offset_days"]],
+        on="valid_time",
+        suffixes=("_operational", "_training"),
+    )
+    assert len(merged) == len(training)
+    assert (merged.nwp_offset_days_operational == merged.nwp_offset_days_training).all()

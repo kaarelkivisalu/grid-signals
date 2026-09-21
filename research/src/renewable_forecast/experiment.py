@@ -47,6 +47,15 @@ def _git_dirty() -> bool:
     return bool(out.strip())
 
 
+def version(config: Config) -> str:
+    """Git SHA plus config fingerprint -- the `model_version` the contract requires.
+
+    A dirty tree is marked, because a forecast produced from uncommitted code cannot be
+    reproduced from the SHA alone.
+    """
+    return f"{_git_sha()[:8]}{'-dirty' if _git_dirty() else ''}+{config.fingerprint()}"
+
+
 def configure() -> None:
     """Point MLflow at a local SQLite backend inside the project.
 

@@ -12,6 +12,23 @@ and the only planned link is a written contract (`docs/integration_contract.md`)
 
 ![](reports/figures/task_horizon.png)
 
+## What the forecast actually looks like
+
+Tomorrow's delivery day, issued this morning at 09:00 UTC, with no outturn to compare
+against yet — this is the operational product, not a backtest:
+
+![](reports/figures/latest_forecast.png)
+
+And the same model against the outturn, on four delivery days picked by rank from the
+backtest rather than by hand: a typical day, a bad one, the worst in the window, and the
+windiest.
+
+![](reports/figures/backtest_examples.png)
+
+Regenerate the first with `python -m renewable_forecast.pipelines.predict`; it appends a
+new vintage rather than overwriting, so old forecasts stay auditable once the actuals
+arrive.
+
 ## Where the wind model stands
 
 ![](reports/figures/leaderboard_crps.png)
@@ -135,6 +152,7 @@ tuning on the comparison folds would buy apparent skill at the cost of real skil
 | file | what it settles |
 |---|---|
 | `docs/dataflow.md` | the known / not-known boundary, and how sources reach the design matrix |
+| `docs/metrics.md` | **what every metric means and which 13,082 rows it is computed over** |
 | `reports/data_audit.md` | Phase 2 gate: which targets are usable, and why A69 is not a benchmark |
 | `reports/protocol.md` | the frozen evaluation protocol — splits, metrics, baselines |
 | `reports/openmeteo_vintage.md` | what `previous_dayN` actually means, established empirically |
@@ -156,6 +174,9 @@ src/renewable_forecast/
   store.py     parquet source of truth, DuckDB views over it
   sources/ targets/ features/ evaluation/ models/ pipelines/
   reporting/   every figure in reports/, generated from backtest artifacts
+data/predictions/
+  backtest_*.parquet      every backtest forecast row, all 19 quantiles
+  forecast_vintages.parquet  append-only operational forecasts
 notebooks/ exploration only -- may import from src/, never the reverse
 tests/     time-alignment, leakage and figure-integrity tests
 reports/   committed markdown + figures; every number re-derivable from src/
@@ -177,6 +198,7 @@ export PYTHONPATH=research/src
 uv run python -m renewable_forecast.cli info
 uv run python -m renewable_forecast.pipelines.data_audit   # Phase 2 gate
 uv run python -m renewable_forecast.pipelines.train        # backtest + leaderboard
+uv run python -m renewable_forecast.pipelines.predict      # forecast tomorrow
 uv run python -m renewable_forecast.reporting.figures      # regenerate every figure
 uv run mlflow ui --backend-store-uri sqlite:///research/mlruns/mlflow.db
 

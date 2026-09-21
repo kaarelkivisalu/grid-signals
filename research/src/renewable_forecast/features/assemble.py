@@ -6,14 +6,14 @@ asserts that instant never postdates the issue time.
 """
 
 import logging
-from datetime import timedelta
+from datetime import date, timedelta
 
 import numpy as np
 import pandas as pd
 
 from renewable_forecast import paths, windows
 from renewable_forecast.features import sites, wind
-from renewable_forecast.sources import openmeteo
+from renewable_forecast.sources import fleet, openmeteo
 
 logger = logging.getLogger(__name__)
 
@@ -171,20 +171,7 @@ def build(zone: str = "SE3", fuel: str = "wind_onshore") -> pd.DataFrame:
     targets["period_start"] = pd.to_datetime(targets.period_start, utc=True)
     targets = targets[targets.trainable].rename(columns={"period_start": "valid_time"})
 
-    local = targets.valid_time.dt.tz_convert(windows.MARKET_TZ)
-    targets["delivery_day"] = local.dt.normalize().dt.tz_localize(None)
-    targets["issue_day"] = targets.delivery_day - pd.Timedelta(days=1)
-    targets["season"] = local.dt.month.map(
-        lambda m: ["DJF", "MAM", "JJA", "SON"][(m % 12) // 3]
-    )
-    issued = issue_time_of(targets)
-    targets["lead_hour"] = (
-        (
-            targets.valid_time - targets.issue_day.dt.tz_localize("UTC")
-        ).dt.total_seconds()
-        // 3600
-    ).astype(int)
-    targets["nwp_offset_days"] = required_offset(targets.valid_time, issued)
+    targets = _annotate(targets)
 
     history = targets.set_index("valid_time").cf
     for lag in ACTUAL_LAGS_H:
@@ -208,6 +195,65 @@ def build(zone: str = "SE3", fuel: str = "wind_onshore") -> pd.DataFrame:
         stacked, on=["valid_time", "nwp_offset_days"], how="inner"
     )
     return pd.concat([merged, calendar(merged)], axis=1)
+
+
+def _annotate(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add the delivery-day, season, lead-hour and offset columns shared by both paths."""
+    local = frame.valid_time.dt.tz_convert(windows.MARKET_TZ)
+    frame["delivery_day"] = local.dt.normalize().dt.tz_localize(None)
+    frame["issue_day"] = frame.delivery_day - pd.Timedelta(days=1)
+    frame["season"] = local.dt.month.map(
+        lambda m: ["DJF", "MAM", "JJA", "SON"][(m % 12) // 3]
+    )
+    frame["lead_hour"] = (
+        (frame.valid_time - frame.issue_day.dt.tz_localize("UTC")).dt.total_seconds()
+        // 3600
+    ).astype(int)
+    frame["nwp_offset_days"] = required_offset(frame.valid_time, issue_time_of(frame))
+    return frame
+
+
+def build_operational(
+    delivery_day: date, zone: str = "SE3", fuel: str = "wind_onshore"
+) -> pd.DataFrame:
+    """Design matrix for one future delivery day, with no target column.
+
+    Identical in construction to `build` -- same offsets, same lags, same calendar --
+    so the operational path cannot drift away from the trained one. The only
+    differences are that `cf` is unknown and the capacity denominator is frozen at the
+    issue day rather than read from the target table.
+    """
+    raw = openmeteo.load()
+    if raw.empty:
+        msg = "no NWP data parsed; run openmeteo.pull first"
+        raise RuntimeError(msg)
+
+    points = sites.build(zone)
+    stacked = pd.concat(
+        [_features_at(raw, points, offset) for offset in AVAILABLE_OFFSETS],
+        ignore_index=True,
+    )
+
+    grid = pd.DataFrame({"valid_time": windows.delivery_day_starts(delivery_day)})
+    grid["valid_time"] = pd.to_datetime(grid.valid_time, utc=True)
+    grid = _annotate(grid)
+
+    turbines = fleet.load_turbines()
+    series = fleet.capacity_series(turbines, zone)
+    grid["capacity_mw"] = fleet.capacity_at(series, grid.issue_day.iloc[0].date())
+
+    targets = pd.read_parquet(paths.INTERIM / f"targets_{zone.lower()}_{fuel}.parquet")
+    targets["period_start"] = pd.to_datetime(targets.period_start, utc=True)
+    history = targets.set_index("period_start").cf
+    for lag in ACTUAL_LAGS_H:
+        grid[f"cf_lag_{lag}"] = (grid.valid_time - pd.Timedelta(hours=lag)).map(history)
+
+    merged = grid.merge(stacked, on=["valid_time", "nwp_offset_days"], how="left")
+    merged = pd.concat([merged, calendar(merged)], axis=1)
+    missing = merged.power_curve_model_mean.isna().sum()
+    if missing:
+        logger.warning("%s of %s hours have no NWP coverage", missing, len(merged))
+    return merged
 
 
 def provenance(frame: pd.DataFrame) -> dict[str, timedelta | None]:
