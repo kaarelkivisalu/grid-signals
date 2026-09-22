@@ -36,6 +36,12 @@ def main() -> None:
     )
     parser.add_argument("end", nargs="?", type=date.fromisoformat, default=DEFAULT_END)
     parser.add_argument("--zone", default="SE3")
+    parser.add_argument(
+        "--radius",
+        type=int,
+        default=0,
+        help="neighbourhood half-width in cells (0 = single cell)",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -50,7 +56,7 @@ def main() -> None:
     logger.info(
         "pulling MEPS %s .. %s for %s points", args.start, args.end, len(points)
     )
-    written = meps.pull(points, args.start, args.end)
+    written = meps.pull(points, args.start, args.end, args.radius)
     logger.info("done: %s runs written", written)
 
 

@@ -253,12 +253,26 @@ def _annotate_run(frame: pd.DataFrame, run: datetime) -> pd.DataFrame:
     return frame
 
 
-def fetch_run(run: datetime, points: pd.DataFrame) -> pd.DataFrame:
+#: Half-width, in grid cells, of the neighbourhood averaged around each cluster point.
+#: One 2.5 km cell is a noisy stand-in for a cluster of turbines spread over tens of
+#: kilometres: the single-cell MEPS power curve correlates 0.936 with SE3 output against
+#: 0.959 for the 0.25 degree IFS (`reports/meps_archive.md`). Radius 4 is a 9 x 9 window,
+#: ~22 km, about the extent of a cluster. The window's spread is kept as well: it is the
+#: deterministic pseudo-ensemble of Molinder et al. (2018).
+NEIGHBOURHOOD_RADIUS = 4
+
+
+def fetch_run(run: datetime, points: pd.DataFrame, radius: int = 0) -> pd.DataFrame:
     """Every point's time series from a single model run.
 
     One bounding-box request covering all points -- see the module docstring for why
     that is the polite shape as well as the fast one. Raises if the run is absent from
     the archive, so the caller records the gap rather than silently skipping it.
+
+    With `radius > 0` each point's values are the mean over a `(2r+1)^2` window of
+    cells, and `wind_speed_nbhd_std` records the spread of speed across it. Wind is
+    averaged as components, so a window straddling a direction change is not averaged
+    through an angle wrap.
     """
     import xarray as xr
 
@@ -266,10 +280,10 @@ def fetch_run(run: datetime, points: pd.DataFrame) -> pd.DataFrame:
         (point, *grid_index(float(point.latitude), float(point.longitude)))
         for point in points.itertuples()
     ]
-    j0 = min(j for _, j, _ in located)
-    j1 = max(j for _, j, _ in located)
-    i0 = min(i for _, _, i in located)
-    i1 = max(i for _, _, i in located)
+    j0 = max(min(j for _, j, _ in located) - radius, 0)
+    j1 = min(max(j for _, j, _ in located) + radius, GRID_NY - 1)
+    i0 = max(min(i for _, _, i in located) - radius, 0)
+    i1 = min(max(i for _, _, i in located) + radius, GRID_NX - 1)
 
     with xr.open_dataset(run_url(run), decode_timedelta=True) as dataset:
         box = (
@@ -292,27 +306,39 @@ def fetch_run(run: datetime, points: pd.DataFrame) -> pd.DataFrame:
 
     frames = []
     for point, j, i in located:
-        cell = box.isel(y=j - j0, x=i - i0)
-        speed, direction = wind_speed_direction(
-            cell["x_wind_z"].values,
-            cell["y_wind_z"].values,
-            float(point.longitude),
+        window = box.isel(
+            y=slice(max(j - radius, j0) - j0, min(j + radius, j1) - j0 + 1),
+            x=slice(max(i - radius, i0) - i0, min(i + radius, i1) - i0 + 1),
         )
+        # Arrays are (time, height, y, x); a radius of 0 is a 1 x 1 window, so the
+        # single-cell path is the same code with nothing to average.
+        x_wind = window["x_wind_z"].values
+        y_wind = window["y_wind_z"].values
+        cell_speed = np.hypot(x_wind, y_wind)
+        speed, direction = wind_speed_direction(
+            x_wind.mean(axis=(2, 3)), y_wind.mean(axis=(2, 3)), float(point.longitude)
+        )
+        temperature = window["air_temperature_z"].values.mean(axis=(2, 3)) - 273.15
+        humidity = window["relative_humidity_z"].values.mean(axis=(2, 3))
         for h, height in enumerate(HEIGHTS_M):
-            frames.append(
-                pd.DataFrame(
-                    {
-                        "valid_time": valid_time,
-                        "point_id": point.point_id,
-                        "height_m": height,
-                        "wind_speed": speed[:, h],
-                        "wind_direction": direction[:, h],
-                        "temperature_c": cell["air_temperature_z"].values[:, h]
-                        - 273.15,
-                        "relative_humidity": cell["relative_humidity_z"].values[:, h],
-                    }
-                )
+            frame = pd.DataFrame(
+                {
+                    "valid_time": valid_time,
+                    "point_id": point.point_id,
+                    "height_m": height,
+                    # Mean of cell speeds, not the speed of the mean vector: the power
+                    # curve responds to speed, and vector averaging would shrink it.
+                    "wind_speed": cell_speed[:, h].mean(axis=(1, 2))
+                    if radius
+                    else speed[:, h],
+                    "wind_direction": direction[:, h],
+                    "temperature_c": temperature[:, h],
+                    "relative_humidity": humidity[:, h],
+                }
             )
+            if radius:
+                frame["wind_speed_nbhd_std"] = cell_speed[:, h].std(axis=(1, 2))
+            frames.append(frame)
     return _annotate_run(pd.concat(frames, ignore_index=True), run)
 
 
@@ -332,8 +358,12 @@ def _get(client: httpx.Client, url: str) -> str:
     raise AssertionError(msg)
 
 
-def _run_path(run: datetime):
-    return paths.PARSED / "meps" / f"run={run:%Y%m%dT%H}Z" / "data.parquet"
+def _store(radius: int = 0):
+    return paths.PARSED / ("meps" if radius == 0 else f"meps_nbhd{radius}")
+
+
+def _run_path(run: datetime, radius: int = 0):
+    return _store(radius) / f"run={run:%Y%m%dT%H}Z" / "data.parquet"
 
 
 def runs(start: date, end: date) -> Iterator[datetime]:
@@ -344,7 +374,7 @@ def runs(start: date, end: date) -> Iterator[datetime]:
         cursor += timedelta(days=1)
 
 
-def pull(points: pd.DataFrame, start: date, end: date) -> int:
+def pull(points: pd.DataFrame, start: date, end: date, radius: int = 0) -> int:
     """Backfill every 00z run over a date range, one parquet per run.
 
     Resumable: a run whose parquet already exists is skipped, so an interrupted pull
@@ -353,11 +383,11 @@ def pull(points: pd.DataFrame, start: date, end: date) -> int:
     written = 0
     missing: list[str] = []
     for run in runs(start, end):
-        out = _run_path(run)
+        out = _run_path(run, radius)
         if out.exists():
             continue
         try:
-            frame = fetch_run(run, points)
+            frame = fetch_run(run, points, radius)
         except (OSError, ValueError) as error:
             # A handful of runs are absent or truncated in the archive; record and move
             # on so one gap cannot abort a multi-hour backfill.
@@ -375,9 +405,11 @@ def pull(points: pd.DataFrame, start: date, end: date) -> int:
     return written
 
 
-def load(start: date | None = None, end: date | None = None) -> pd.DataFrame:
-    """Read the parsed MEPS store back."""
-    root = paths.PARSED / "meps"
+def load(
+    start: date | None = None, end: date | None = None, radius: int = 0
+) -> pd.DataFrame:
+    """Read the parsed MEPS store back (single-cell by default)."""
+    root = _store(radius)
     files = sorted(root.glob("run=*/data.parquet"))
     if not files:
         return pd.DataFrame()
