@@ -93,13 +93,21 @@ The forecast claims a range it expects the truth to fall inside 80% of the time.
 13,082 hours the truth actually landed inside it 74% of the time. The ranges are too narrow
 — the model is more confident than it has earned.
 
-That gets worse exactly where it matters most:
+It is worse in some conditions than others:
 
 ![](reports/figures/coverage_by_output.png)
 
-On low-wind hours the ranges are roughly honest. On high-wind hours — when generation is
-large, prices swing hardest, and being wrong is most expensive — they are noticeably too
-tight. The model does widen its ranges as output rises, but not nearly enough.
+The ranges get too tight as forecast output rises (left). They also get too tight as
+the three weather models disagree more (right). The right-hand signal is the more useful
+one: among hours whose ranges were equally wide, those with the most disagreement
+missed by about twice as much. An earlier version of this chart grouped hours by
+*actual* output, which exaggerates the high-wind shortfall: hours that turned out windy
+are disproportionately the ones the forecast under-shot.
+
+*Update 2026-09-22:* a calibration layer that groups hours by that disagreement now
+ships. It lifts coverage from 74% to 77%, now about equal in calm and uncertain weather,
+without costing accuracy (`reports/calibration.md`). The chart above still shows the
+earlier model.
 
 The worst single day in the whole period, 13 February 2026, shows what this costs. The forecast
 said around 1,800 MW; actual output was near 1,200 MW and fell to 500 MW. It was wrong by
@@ -168,20 +176,28 @@ yet in the units the market actually trades.
 
 ## What comes next, in order
 
-1. **Get weather data addressed by model run** rather than by whole days, removing
-   problem 2. MET Norway publishes an archive in exactly that form. The code for this
-   is written and tested; it is waiting on a two-year download of the archive.
-2. **Fix the over-confidence** in problem 1 — which now needs a different source than
-   planned. The MET Norway archive was expected to supply a 30-member forecast spread
-   as well, and it does not: those files stop on 10 December 2024, covering only 100 of
-   the 546 days measured here. A feature that exists for the first sixth of the period
-   and then vanishes teaches a model the publication schedule, not the weather. The
-   spread has to come from somewhere else.
-3. **Explain the capacity drift** in problem 3.
-4. **Move to 15-minute resolution** to match the market.
-5. **Start solar**, on Germany rather than Sweden — Swedish rooftop solar is largely
-   invisible in the published data, while German grid operators publish a properly
-   estimated total.
+The full plan, with evidence for each item, is `docs/roadmap.md`. It was refined on
+2026-09-21 from the literature review (`docs/literature.md`) and new diagnostics. Where
+things stand:
+
+1. **Run-addressed weather: measured, and the largest gain available.** Both archives
+   are now pulled: MET Norway MEPS (2.5 km) and ECMWF IFS HRES single runs via
+   Open-Meteo. Adding them to the current inputs cuts typical error by **12%** and CRPS
+   by **11%** on the same backtest rows, and shrinks the lead-34 step from +45% to +26%
+   (`reports/meps_archive.md`). **Next: the live path** (roadmap B4), because the daily
+   forecast must fetch both runs before the research model can ship.
+2. **Over-confidence (problem 1): partly fixed, and shipped.** Hours where the weather
+   models disagree turned out to carry twice the error, and the old calibration layer
+   could not see it. A new one, stratified by that disagreement, moves 80% coverage
+   from 0.74 to 0.77, flat across calm and uncertain weather, at unchanged CRPS
+   (`reports/calibration.md`). The "worse at high wind" picture was partly an
+   artefact of binning by actual output, and the chart now bins by forecast. What is
+   left is mostly autumn drift (roadmap A3/A5).
+3. **Capacity drift (problem 3)**: an effective-capacity target (roadmap C1). It
+   matters little inside the current window, but it is the precondition for training on
+   pre-2024 history.
+4. Tried and not adopted: recent-error and negative-price features (roadmap D1/D2).
+5. **15-minute resolution**, then **German solar**, both unchanged.
 
 Two deliberate omissions: a six-month slice of recent data (March–September 2026) has
 been set aside untouched, to be used once for a final honest score, and no effort has
@@ -221,7 +237,8 @@ exactly which rows each statistic covers and what it measures.
 | 4 — weather feature pipeline | done |
 | 5 — modelling | done |
 | 6 — ensemble spike | done — run addressing yes, ensemble no |
-| 6 — MEPS integration | code done, archive downloading |
+| 6 — run-addressed NWP (MEPS + IFS runs) | backtested: −12% nMAE; live path next |
+| 6 — calibration by NWP spread | done, shipped |
 | 6 — German solar | not started |
 | 7 — integration contract | drafted |
 | 7 — live trial run | not started |

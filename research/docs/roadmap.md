@@ -102,7 +102,15 @@ how the problems rank.
   ICON-EU runs from 2024 are *not* available there. This gives a run-addressed global
   model to pair with MEPS, at ~745 requests for eight points (one multi-location request
   per run). Pinned model: `ecmwf_ifs` (9 km HRES), not the `ecmwf_ifs025` used today.
-- [ ] **B3. Decide what happens to the whole-day block.** Once B1/B2 land, GFS and
+- [x] **B2 result:** `all` (Open-Meteo + MEPS + IFS runs) **−12% nMAE, −11% CRPS**
+  against the shipping feature set. Run-addressed sources alone: −6% nMAE, lead-34 step
+  +45% → +14% (`reports/meps_archive.md`).
+- [ ] **B4. Live path.** `assemble.build_operational` and `pipelines/predict.py` must
+  fetch the day's MEPS 00z and IFS 00z runs, or the live forecast will not be the one
+  that was backtested. MEPS latest runs are on thredds' operational catalogue, not the
+  archive; the IFS run comes from the same Single Runs endpoint.
+- [x] **B3. Decide what happens to the whole-day block.** Keep it: it still adds
+  3–5% CRPS on top of the run-addressed sources. Original note: Once B1/B2 land, GFS and
   ICON-EU remain only on whole-day offsets, and ICON-EU cannot be run-addressed for the
   backtest window at all (literature §4). Options: keep them as spread-only inputs, or
   drop them. Their disagreement is the spread signal A2 uses, so replace the spread
@@ -129,8 +137,11 @@ how the problems rank.
 
 ### D — Use information the model already has at issue time
 
-- [ ] **D1. Recent-residual feature** (built: `assemble.residual_features`; A/B:
-  `pipelines/compare_blocks.py`). At 09:00 UTC, actuals are known up to about 08:00
+- [x] **D1. Recent-residual feature — tried, not adopted.** Built
+  (`assemble.residual_features`) and A/B'd on the `all` matrix
+  (`pipelines/compare_blocks.py`, 18 folds): CRPS 0.0204 → 0.0204, nMAE 0.0271 →
+  0.0269. The booster evidently gets the same information from the lagged-actual and
+  level features. Original note: At 09:00 UTC, actuals are known up to about 08:00
   on the issue day. The error of the physical power curve over the last *n* observed
   hours (*start* 24) is a legitimate feature, provided its information age is registered
   with the leakage guard. It targets diagnostic 4 and the "confidently wrong for 24
@@ -138,8 +149,11 @@ how the problems rank.
   & Kariniotakis 2010 (time-adaptive) are precedents. Risk: redispatch shutdowns corrupt
   generation-derived features (Meisenbacher 2025), so clip the feature and compare it
   with and without C2's flags.
-- [ ] **D2. Curtailment risk from prices** (built: `assemble.price_features`; A/B:
-  `pipelines/compare_blocks.py`). In the old backtest, hours whose same hour on the issue
+- [x] **D2. Curtailment risk from prices — tried, not adopted.** Built
+  (`assemble.price_features`). Pooled CRPS 0.0204 → 0.0203 (n.s.). On the 541
+  negative-price hours it does not move CRPS (0.0292 → 0.0293), and the bias there stays
+  at about −30 MW. Issue-day prices are too indirect a proxy for delivery-day
+  curtailment. Retry only with an explicit curtailment label (C2). Original note: In the old backtest, hours whose same hour on the issue
   day was negative-priced had a bias of −42 MW, against −11 MW elsewhere (552 hours). On the 551 backtest hours with negative
   day-ahead prices, the ERA5 model over-predicts by +184 MW and the day-ahead model's MAE
   is 224 MW (`reports/era5_ceiling.md` §4). The delivery day's prices are not known at

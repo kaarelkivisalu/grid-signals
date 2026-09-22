@@ -196,3 +196,33 @@ the full calendar.
 Next: a second run-addressed model (ECMWF IFS HRES single runs, `sources/ifs_runs.py`),
 to see whether run-addressed sources can *replace* the whole-day block rather than
 supplement it. See `docs/roadmap.md` B2/B3.
+
+## A/B with ECMWF IFS HRES single runs, 2026-09-22
+
+`compare_meps --ifs`. The IFS archive starts 2024-03-14, so this board has 17 folds and
+12,026 rows. It is not directly comparable with the table above, but all six arms here
+share the same rows.
+
+| arm | nMAE | CRPS | cov@80 | step at lead 34 |
+|---|---|---|---|---|
+| openmeteo (ships) | 0.0309 | 0.0231 | 0.757 | +45% |
+| meps only | 0.0419 | 0.0316 | 0.768 | +5% |
+| both (OM + MEPS) | 0.0283 | 0.0215 | 0.762 | +40% |
+| runs (MEPS + IFS runs, no whole-day column) | 0.0290 | 0.0220 | 0.766 | +14% |
+| runs + OM spread columns | 0.0277 | 0.0211 | 0.763 | +18% |
+| **all** | **0.0271** | **0.0205** | 0.764 | +26% |
+
+- **Run-addressed sources alone already beat the shipping model** (−6% nMAE, −5% CRPS),
+  and most of the lead-34 step is gone. The +14% that remains is small next to +45%. It
+  may be the MEPS/IFS error growth over 24 h plus a residual diurnal effect; that has
+  not been separated.
+- **Everything together is best: −12% nMAE, −11% CRPS** against the shipping feature
+  set. The whole-day block still adds information (two more models, and GFS/ICON-EU are
+  independent), even though it carries the step.
+- The gaps between `all`, `runs_om_spread` and `both` are 3–5% CRPS. That is at the
+  edge of what this sample can resolve (protocol: ~3%). The ordering is consistent, but
+  do not over-read it.
+
+**Decision:** the research model moves to the `all` feature set. The live path
+(`pipelines/predict.py`, `assemble.build_operational`) does not fetch MEPS or IFS runs
+yet; that is roadmap B4.
