@@ -103,3 +103,19 @@ def calibration_split(
         return train, train
     cut = days[int(len(days) * (1 - fraction))]
     return train[train[day_column] < cut], train[train[day_column] >= cut]
+
+
+def day_blocks(
+    frame: pd.DataFrame, k: int = 4, day_column: str = "delivery_day"
+) -> list[pd.Index]:
+    """Row indices of `k` contiguous blocks of whole delivery days, oldest first.
+
+    Contiguous rather than shuffled, so within-day and multi-day error correlation
+    stays inside a block and out-of-fold residuals are honestly out of sample.
+    """
+    days = pd.DatetimeIndex(sorted(frame[day_column].unique()))
+    edges = np.linspace(0, len(days), k + 1).round().astype(int)
+    return [
+        frame.index[frame[day_column].isin(days[lo:hi])]
+        for lo, hi in zip(edges[:-1], edges[1:], strict=True)
+    ]

@@ -74,3 +74,37 @@ intervals too sharp for the correction measured on the inner model, as feared.
 it is not exchangeable with the test month when the season turns. That is drift, not
 stratification, so it needs roadmap A3 (a larger, cross-fitted calibration set) or A5
 (a second-stage recalibration that can shift location as well as width).
+
+## A3 — where the calibration residuals come from (2026-09-22)
+
+`compare_calibration --schemes`. Full `QuantileGBM` fits on the configured feature set
+(Open-Meteo + MEPS + IFS runs), 17 folds, 12,026 hours.
+
+- **recent**: fit on the oldest 75% of the window, calibrate on the newest 25%.
+- **crossfit**: split the window into 4 contiguous day-blocks. Predict each block from
+  a model fitted on the other three, calibrate on all out-of-fold predictions, then
+  refit on the whole window.
+- **crossfit_season**: crossfit, with season added to the strata.
+
+| scheme | nMAE | CRPS | Δ CRPS (day-block 95% CI) | cov@80 | cov@90 | DJF | MAM | JJA | SON |
+|---|---|---|---|---|---|---|---|---|---|
+| recent | 0.0271 | 0.0205 | — | 0.765 | 0.875 | 0.762 | 0.805 | 0.792 | 0.727 |
+| **crossfit** | **0.0262** | **0.0198** | **−3.7%** [−0.0011, −0.0004] | **0.784** | **0.893** | 0.760 | 0.813 | 0.808 | **0.779** |
+| crossfit_season | 0.0272 | 0.0207 | +0.9% (n.s.) | 0.735 | 0.848 | 0.708 | 0.783 | 0.781 | 0.710 |
+
+(The season columns are 80% coverage.)
+
+**Crossfit ships** (`configs/base.yaml: model.quantile.calibration`). It is the first
+calibration change that also improves accuracy, and for two reasons at once. The
+calibration set now spans every season, so an October forecast is no longer calibrated
+only on summer residuals: SON coverage goes from 0.727 to 0.779. And the final boosters
+see the most recent quarter of the window, which `recent` withheld: nMAE −3%. The cost
+is five fits instead of one.
+
+Season as a stratum hurt. Each season × level × spread cell holds too few independent
+*days*, even though it holds enough rows, so the per-cell corrections chase noise.
+
+Remaining bias by season (median, CF): DJF −0.0065, MAM −0.0056, JJA +0.0046, SON
++0.0089. It is smaller than before, but still a level shift that calibration does not
+touch. It is tested separately as a feature question (does the model over-learn
+day-of-year?).

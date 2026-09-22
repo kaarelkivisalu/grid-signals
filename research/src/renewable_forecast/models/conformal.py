@@ -95,6 +95,8 @@ SPREAD_COLUMN = "power_curve_model_std"
 #: calm-night zero output cannot blow a residual up into an enormous normalised score.
 MIN_SCALE = 0.02
 
+SEASON_CODE = {"DJF": 0, "MAM": 1, "JJA": 2, "SON": 3}
+
 
 class SpreadCQR:
     """Conformal quantile regression stratified by predicted level and NWP spread.
@@ -127,6 +129,7 @@ class SpreadCQR:
         *,
         normalise: bool = True,
         min_rows: int = 30,
+        by_season: bool = False,
     ) -> None:
         self.levels = levels
         self.spread_column = spread_column
@@ -134,6 +137,9 @@ class SpreadCQR:
         self.n_spread_bins = n_spread_bins
         self.normalise = normalise
         self.min_rows = min_rows
+        # Season is only a usable stratum when the calibration set spans the year,
+        # i.e. with cross-fitted residuals; a recent-quarter block holds one season.
+        self.by_season = by_season
         self._level_edges = np.linspace(0.0, 1.0, n_level_bins + 1)[1:-1]
         self._spread_edges = np.array([])
         self._corrections: dict[tuple[int, int], np.ndarray] = {}
@@ -157,6 +163,9 @@ class SpreadCQR:
         self, frame: pd.DataFrame, quantiles: np.ndarray
     ) -> tuple[np.ndarray, np.ndarray]:
         level = np.digitize(self._median(quantiles), self._level_edges)
+        if self.by_season and "season" in frame.columns:
+            season = frame.season.map(SEASON_CODE).fillna(0).to_numpy(dtype=int)
+            level = level + self.n_level_bins * season
         spread = self._spread(frame)
         # A missing spread (one model absent) goes to the middle bin rather than the
         # calmest one, which would tighten the interval exactly when information is thin.

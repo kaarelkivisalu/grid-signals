@@ -85,7 +85,7 @@ def run(
         "fitting on %s rows up to %s", len(train), train.delivery_day.max().date()
     )
 
-    model = QuantileGBM(levels).fit(train)
+    model = QuantileGBM(levels, **cfg.model.get("quantile", {})).fit(train)
     future = assemble.build_operational(delivery_day, zone, fuel, **flags)
     for source in run_addressed:
         column = assemble.RUN_SOURCES[source]

@@ -20,8 +20,18 @@ logger = logging.getLogger(__name__)
 SANITY_MARGIN = 0.10
 
 
-def forecasters(levels: np.ndarray, history: pd.Series, tso_cf: pd.Series) -> dict:
-    """Every forecaster on the board, as zero-argument factories."""
+def forecasters(
+    levels: np.ndarray,
+    history: pd.Series,
+    tso_cf: pd.Series,
+    quantile_kwargs: dict | None = None,
+) -> dict:
+    """Every forecaster on the board, as zero-argument factories.
+
+    `quantile_kwargs` come from `model.quantile` in the config, so the board scores the
+    same `QuantileGBM` that `predict` ships.
+    """
+    quantile_kwargs = quantile_kwargs or {}
     return {
         "climatology": lambda: _Adapter(baselines.Climatology(levels)),
         "persistence": lambda: _Adapter(baselines.Persistence(levels), history),
@@ -33,7 +43,7 @@ def forecasters(levels: np.ndarray, history: pd.Series, tso_cf: pd.Series) -> di
         ),
         RidgeSanityFloor.name: lambda: _Adapter(RidgeSanityFloor(levels)),
         PointGBM.name: lambda: _Adapter(PointGBM(levels)),
-        QuantileGBM.name: lambda: _Adapter(QuantileGBM(levels)),
+        QuantileGBM.name: lambda: _Adapter(QuantileGBM(levels, **quantile_kwargs)),
     }
 
 
@@ -81,7 +91,10 @@ def run(zone: str = "SE3", fuel: str = "wind_onshore") -> pd.DataFrame:
     tso_cf = (tso_mw / frame.set_index("valid_time").capacity_mw).dropna()
 
     actual, context, predictions = evaluate.run_folds(
-        frame, development, forecasters(levels, history, tso_cf), cfg
+        frame,
+        development,
+        forecasters(levels, history, tso_cf, cfg.model.get("quantile", {})),
+        cfg,
     )
     evaluate.save_predictions(context, predictions, levels, zone, fuel)
     rows = [

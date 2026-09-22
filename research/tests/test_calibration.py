@@ -144,3 +144,39 @@ def test_spread_conformal_survives_a_missing_spread_column() -> None:
     assert (np.diff(out, axis=1) >= 0).all()
     assert out.min() >= 0.0
     assert out.max() <= 1.0
+
+
+def test_day_blocks_partition_whole_days_in_order() -> None:
+    train = _train(40)
+    blocks = splits.day_blocks(train, 4)
+    assert sum(len(b) for b in blocks) == len(train)
+    days = [set(train.loc[b, "delivery_day"]) for b in blocks]
+    for earlier, later in zip(days, days[1:], strict=False):
+        assert not earlier & later, "a day must not straddle two blocks"
+        assert max(earlier) < min(later), "blocks must be contiguous and ordered"
+
+
+def test_crossfit_calibration_fits_and_returns_valid_quantiles() -> None:
+    from renewable_forecast.models.quantile import QuantileGBM
+
+    rng = np.random.default_rng(7)
+    train = _train(60).reset_index(drop=True)
+    train["x"] = rng.uniform(0, 1, len(train))
+    train["power_curve_model_std"] = rng.uniform(0, 0.1, len(train))
+    train["season"] = "DJF"
+    train["cf"] = (0.2 + 0.6 * train.x + rng.normal(0, 0.05, len(train))).clip(0, 1)
+    model = QuantileGBM(
+        LEVELS, {"n_estimators": 20}, calibration="crossfit", by_season=True
+    ).fit(train)
+    out = model.predict(train.head(200))
+    assert out.shape == (200, len(LEVELS))
+    assert (np.diff(out, axis=1) >= 0).all()
+    covered = metrics.coverage(train.cf.head(200).to_numpy(), out, LEVELS, 0.80)
+    assert covered == pytest.approx(0.80, abs=0.12)
+
+
+def test_unknown_calibration_scheme_is_rejected() -> None:
+    from renewable_forecast.models.quantile import QuantileGBM
+
+    with pytest.raises(ValueError, match="unknown calibration"):
+        QuantileGBM(LEVELS, calibration="bogus")

@@ -139,14 +139,70 @@ def run(arms: tuple[str, ...] = ARMS) -> tuple[pd.DataFrame, pd.DataFrame]:
     return per_row, overall
 
 
+#: Calibration *schemes* (roadmap A3): where the calibration residuals come from. Each
+#: is a full `QuantileGBM` fit, so unlike `ARMS` they cannot share boosters.
+SCHEMES = {
+    "recent": {"calibration": "recent"},
+    "crossfit": {"calibration": "crossfit"},
+    "crossfit_season": {"calibration": "crossfit", "by_season": True},
+}
+
+
+def run_schemes() -> pd.DataFrame:
+    """Score each calibration scheme on the configured feature set, same rows and folds.
+
+    Writes per-row quantiles to `compare_calibration_schemes.parquet` for the
+    conditional breakdowns, and the metric bundle per scheme to `..._overall`.
+    """
+    from renewable_forecast.features import assemble
+    from renewable_forecast.pipelines import compare_meps
+
+    cfg = config.load()
+    levels = np.array(cfg.task.quantiles)
+    sources = tuple(cfg.features.get("run_addressed", ()))
+    frame = evaluate.load_design_matrix(**assemble.run_flags(sources))
+    frame = assemble.require_run_coverage(frame, sources)
+    development = compare_meps.development_days(frame, cfg)
+
+    forecasters = {
+        name: (lambda kw=kw: QuantileGBM(levels, **kw)) for name, kw in SCHEMES.items()
+    }
+    actual, context, predictions = evaluate.run_folds(
+        frame, development, forecasters, cfg
+    )
+    bundles, long = [], []
+    for name, quantiles in predictions.items():
+        bundles.append({"arm": name, **metrics.summarise(actual, quantiles, levels)})
+        per_row = context[[c for c in CONTEXT if c in context.columns]].copy()
+        per_row.insert(0, "arm", name)
+        for level, column in zip(levels, quantiles.T, strict=True):
+            per_row[f"q{level:.2f}"] = column
+        long.append(per_row)
+    overall = pd.DataFrame(bundles)
+    pd.concat(long, ignore_index=True).to_parquet(
+        paths.INTERIM / "compare_calibration_schemes.parquet", index=False
+    )
+    overall.to_parquet(
+        paths.INTERIM / "compare_calibration_schemes_overall.parquet", index=False
+    )
+    logger.info("\n%s", overall.round(4).to_string(index=False))
+    return overall
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--arms", nargs="*", default=list(ARMS))
+    parser.add_argument(
+        "--schemes", action="store_true", help="compare calibration schemes (A3)"
+    )
     args = parser.parse_args()
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
-    run(tuple(args.arms))
+    if args.schemes:
+        run_schemes()
+    else:
+        run(tuple(args.arms))
 
 
 if __name__ == "__main__":
