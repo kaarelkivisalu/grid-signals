@@ -281,10 +281,19 @@ def aggregate(
     value_columns = [c for c in frame.columns if c not in {*keys, "point_id", "weight"}]
 
     def _collapse(group: pd.DataFrame) -> pd.Series:
-        weight = group.weight.to_numpy(dtype=float, copy=True)
-        weight /= weight.sum()
+        weight = group.weight.to_numpy(dtype=float)
         values = group[value_columns].to_numpy(dtype=float)
-        weighted = np.nansum(values * weight[:, None], axis=0)
+        # Weighted mean over the clusters that have a value, with the weights
+        # renormalised over those clusters; NaN when none do. A plain nansum turns an
+        # all-missing hour into 0.0 -- a forecast of dead calm -- and biases a partly
+        # missing hour low. That happened: an IFS run that came back all-null
+        # (2025-08-07) was read as zero wind and halved the forecast.
+        finite = np.isfinite(values)
+        mass = (finite * weight[:, None]).sum(axis=0)
+        total = np.where(finite, values, 0.0).T @ weight
+        weighted = np.divide(
+            total, mass, out=np.full(len(value_columns), np.nan), where=mass > 0
+        )
         result = dict(zip(value_columns, weighted, strict=True))
         # Dispersion across clusters, for the features where it is physically meaningful.
         for column in dispersion:

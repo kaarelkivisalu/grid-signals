@@ -165,6 +165,11 @@ def parse(payload: list[dict], run: datetime, points: pd.DataFrame) -> pd.DataFr
         frame["point_id"] = point_id
         frames.append(frame)
     out = pd.concat(frames, ignore_index=True)
+    if out.wind_speed_100m.isna().all():
+        # Seen for three runs in 2025-08: HTTP 200 with every value null. That is a gap
+        # in the archive, and storing it would put a run of NaNs into the features.
+        msg = "run returned no wind values"
+        raise ValueError(msg)
     out["run_time"] = pd.Timestamp(run)
     lead = (out.valid_time - out.run_time).dt.total_seconds() / 3600
     return out[lead >= LEAD_FIRST].reset_index(drop=True)

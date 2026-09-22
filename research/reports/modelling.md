@@ -13,25 +13,29 @@ number below is a mean over the same 13,082 delivery hours — 546 days between
 
 The configured feature set now adds MET Norway MEPS and ECMWF IFS HRES, both addressed
 by model run (`configs/base.yaml: features.run_addressed`). The calibration layer is
-now `SpreadCQR`, fitted on cross-fitted residuals (`reports/calibration.md`). Scored on the days that have every source:
-**17 folds, 502 delivery days, 12,026 hours, 2024-10-02 → 2026-03-01**. That window is
-slightly shorter than v1's, so compare within this table.
+`SpreadCQR` fitted on cross-fitted residuals (`reports/calibration.md`). Scored on the
+days that have every source: **17 folds, 501 delivery days, 12,002 hours,
+2024-10-02 → 2026-03-01**. That window is slightly shorter than v1's, so compare within
+this table. It also includes the fix for missing weather values being averaged into
+zero wind (`features/wind.py`, `aggregate`).
 
-| forecaster | nMAE | nRMSE | nBIAS | CRPS | cov@80 | sharp@80 | CRPSS vs clim. |
-|---|---|---|---|---|---|---|---|
-| *A69_latest_vintage* | *0.0148* | *0.0245* | *0.0002* | *0.0119* | 0.765 | 0.040 | *+0.902* |
-| **lightgbm_quantile** | **0.0262** | 0.0360 | 0.0003 | **0.0198** | 0.784 | 0.083 | **+0.837** |
-| lightgbm_point_monotone | 0.0266 | 0.0365 | −0.0001 | 0.0207 | 0.766 | 0.078 | +0.829 |
-| ridge_sanity_floor | 0.0351 | 0.0466 | 0.0013 | 0.0268 | 0.767 | 0.104 | +0.779 |
-| physical_power_curve | 0.0357 | 0.0479 | 0.0036 | 0.0272 | 0.782 | 0.107 | +0.776 |
-| climatology | 0.1681 | 0.2155 | 0.0697 | 0.1210 | 0.750 | 0.465 | 0.000 |
-| persistence | 0.2013 | 0.2548 | 0.0012 | 0.1470 | 0.761 | 0.515 | −0.215 |
+| forecaster | nMAE | nRMSE | nBIAS | CRPS | cov@80 | cov@90 | sharp@80 | CRPSS vs clim. |
+|---|---|---|---|---|---|---|---|---|
+| *A69_latest_vintage* | *0.0148* | *0.0245* | *0.0002* | *0.0119* | 0.764 | 0.873 | 0.040 | *+0.902* |
+| **lightgbm_quantile** | **0.0258** | 0.0352 | 0.0000 | **0.0196** | 0.782 | 0.885 | 0.082 | **+0.839** |
+| lightgbm_point_monotone | 0.0264 | 0.0359 | −0.0003 | 0.0205 | 0.762 | 0.874 | 0.078 | +0.831 |
+| ridge_sanity_floor | 0.0352 | 0.0467 | 0.0012 | 0.0268 | 0.767 | 0.881 | 0.104 | +0.778 |
+| physical_power_curve | 0.0357 | 0.0479 | 0.0036 | 0.0272 | 0.782 | 0.885 | 0.107 | +0.776 |
+| climatology | 0.1682 | 0.2156 | 0.0697 | 0.1211 | 0.750 | 0.847 | 0.465 | 0.000 |
+| persistence | 0.2016 | 0.2551 | 0.0012 | 0.1471 | 0.761 | 0.882 | 0.514 | −0.215 |
 
-Against v1's shipping model: nMAE 0.0307 → 0.0262 (143 → 122 MW), CRPS 0.0232 →
-0.0198, 80% coverage 0.737 → 0.784. Machine learning now earns **27%** CRPS over the
-physical baseline, against 15% before. Of the gain, run-addressed weather is worth
-nMAE 0.0307 → 0.0271 and cross-fitted calibration 0.0271 → 0.0262. The physics baselines still read only the Open-Meteo block, so their lead
-curve keeps the full step at 34. The quantile model's step is about +20%.
+Against v1's shipping model: nMAE 0.0307 → 0.0258 (143 → 120 MW), CRPS 0.0232 →
+0.0196, 80% coverage 0.737 → 0.782. Machine learning now earns **28%** CRPS over the
+physical baseline, against 15% before. Of the gain, run-addressed weather accounts for
+nMAE 0.0307 → 0.0271, cross-fitted calibration for 0.0271 → 0.0262, and the
+missing-value fix for 0.0262 → 0.0258. The physics baselines still read only the
+Open-Meteo block, so their lead curve keeps the full step at 34. The quantile model's
+step is about +20%.
 
 Everything below this section describes **v1** (Open-Meteo only, 2026-09-20) and is
 kept as the record it was.

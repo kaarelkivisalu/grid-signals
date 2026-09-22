@@ -121,3 +121,27 @@ def test_icing_memory_persists_after_conditions_clear() -> None:
     assert out.icing_6h.iloc[5] == 3.0, "memory must survive the conditions clearing"
     assert out.icing_6h.iloc[11] == 0.0, "and must eventually decay"
     assert out.icing_24h.iloc[11] == 3.0
+
+
+def test_aggregate_never_turns_missing_clusters_into_calm() -> None:
+    """All-missing hours must stay missing; partly missing ones must not be biased low."""
+    import numpy as np
+    import pandas as pd
+
+    from renewable_forecast.features import wind
+
+    points = pd.DataFrame(
+        {
+            "model": "m",
+            "valid_time": pd.to_datetime(
+                ["2025-01-01 00:00"] * 2 + ["2025-01-01 01:00"] * 2, utc=True
+            ),
+            "point_id": ["a", "b", "a", "b"],
+            "wind_speed_100m": [np.nan, np.nan, 8.0, np.nan],
+            "power_curve": [np.nan, np.nan, 0.5, np.nan],
+        }
+    )
+    weights = pd.DataFrame({"point_id": ["a", "b"], "weight": [0.25, 0.75]})
+    zonal = wind.aggregate(points, weights).set_index("valid_time")
+    assert np.isnan(zonal.wind_speed_100m.iloc[0]), "no data must not read as calm"
+    assert zonal.wind_speed_100m.iloc[1] == 8.0, "weights renormalise over present clusters"
