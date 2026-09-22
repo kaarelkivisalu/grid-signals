@@ -116,6 +116,9 @@ written contract only. Renewable quantiles are the highest-value input to Direct
 - [x] Phase 4 — NWP feature pipeline (`research/reports/openmeteo_vintage.md`)
 - [x] Phase 5 — modelling (`research/reports/modelling.md`)
 - [x] Phase 6a — MEPS ensemble spike (`research/reports/meps_archive.md`) — conditional GO
+- [x] Phase 6c — improvement roadmap (`research/docs/roadmap.md`): run-addressed NWP (MEPS +
+  IFS HRES) and cross-fitted, spread-stratified calibration shipped — typical miss 143 → 122 MW,
+  80% coverage 0.74 → 0.78
 - [ ] Phase 6b — DE-LU solar
 - [x] Phase 7a — integration contract (`research/docs/integration_contract.md`)
 - [ ] Phase 7b — operational dry-run
