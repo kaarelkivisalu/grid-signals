@@ -27,5 +27,9 @@ sources:
   openmeteo:
     models: []   # pinned in Phase 4, after the lead-time semantics sub-gate
 
-features: {}
+features:
+  # Run-addressed NWP blocks joined on the issue day's 00z run, on top of the
+  # Open-Meteo whole-day block. Both together: nMAE -12%, CRPS -11% on the development
+  # folds (reports/meps_archive.md). Remove an entry to fall back without it.
+  run_addressed: [meps, ifs_runs]
 model: {}

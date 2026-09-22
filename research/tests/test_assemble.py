@@ -69,3 +69,33 @@ def test_calendar_is_cyclical_and_carries_no_raw_datetime() -> None:
     assert out.hour_sin.iloc[0] == pytest.approx(day_later.hour_sin.iloc[0])
     unit_circle = (out.hour_sin**2 + out.hour_cos**2).to_numpy()
     assert unit_circle == pytest.approx(1.0)
+
+
+def test_run_flags_map_config_names_to_build_arguments() -> None:
+    assert assemble.run_flags(["meps", "ifs_runs"]) == {
+        "with_meps": True,
+        "with_ifs": True,
+    }
+    assert assemble.run_flags([]) == {"with_meps": False, "with_ifs": False}
+    with pytest.raises(ValueError, match="unknown"):
+        assemble.run_flags(["icon_eu_runs"])
+
+
+def test_require_run_coverage_drops_whole_days_only() -> None:
+    """A day missing a source for one hour is dropped entirely, never hour by hour."""
+    days = pd.to_datetime(["2025-01-01"] * 3 + ["2025-01-02"] * 3)
+    frame = pd.DataFrame(
+        {
+            "delivery_day": days,
+            "power_curve__meps": [0.1, 0.2, 0.3, 0.1, np.nan, 0.3],
+            "power_curve__ifsrun": 0.2,
+        }
+    )
+    kept = assemble.require_run_coverage(frame, ["meps", "ifs_runs"])
+    assert set(kept.delivery_day) == {pd.Timestamp("2025-01-01")}
+    assert len(kept) == 3
+
+
+def test_require_run_coverage_is_a_no_op_without_sources() -> None:
+    frame = pd.DataFrame({"delivery_day": pd.to_datetime(["2025-01-01"]), "cf": [0.1]})
+    assert assemble.require_run_coverage(frame, []).equals(frame)

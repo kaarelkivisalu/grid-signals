@@ -22,7 +22,7 @@ import pandas as pd
 from renewable_forecast import config, experiment, paths, windows
 from renewable_forecast.features import assemble, sites
 from renewable_forecast.models.quantile import QuantileGBM
-from renewable_forecast.sources import openmeteo
+from renewable_forecast.sources import ifs_runs, meps, openmeteo
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +35,16 @@ VINTAGES = paths.PREDICTIONS / "forecast_vintages.parquet"
 CONTEXT_DAYS = 1
 
 
-def refresh_nwp(delivery_day: date, zone: str = "SE3") -> None:
-    """Pull the newest NWP covering the delivery day, merging into the archive."""
+def refresh_nwp(
+    delivery_day: date, zone: str = "SE3", run_addressed: tuple[str, ...] = ()
+) -> None:
+    """Pull the newest NWP covering the delivery day, merging into the archive.
+
+    Run-addressed sources are fetched for the issue day's 00z run only. Each call also
+    self-archives that run, which matters for MEPS: MET Norway's thredds archive now
+    serves only the current month (checked 2026-09-22), so a run not saved on its day
+    may not be recoverable later.
+    """
     points = sites.build(zone)
     openmeteo.pull(
         points,
@@ -44,6 +52,11 @@ def refresh_nwp(delivery_day: date, zone: str = "SE3") -> None:
         end=delivery_day + timedelta(days=CONTEXT_DAYS + 1),
         merge=True,
     )
+    issue_day = delivery_day - timedelta(days=1)
+    if "meps" in run_addressed:
+        meps.pull(points, issue_day, delivery_day)
+    if "ifs_runs" in run_addressed:
+        ifs_runs.pull(points, issue_day, delivery_day)
 
 
 def run(
@@ -60,17 +73,28 @@ def run(
     cfg = config.load()
     levels = np.array(cfg.task.quantiles)
 
+    run_addressed = tuple(cfg.features.get("run_addressed", ()))
+    flags = assemble.run_flags(run_addressed)
     if refresh:
-        refresh_nwp(delivery_day, zone)
+        refresh_nwp(delivery_day, zone, run_addressed)
 
-    train = assemble.build(zone, fuel)
+    train = assemble.build(zone, fuel, **flags)
     train = train[train.delivery_day < pd.Timestamp(delivery_day)]
+    train = assemble.require_run_coverage(train, run_addressed)
     logger.info(
         "fitting on %s rows up to %s", len(train), train.delivery_day.max().date()
     )
 
     model = QuantileGBM(levels).fit(train)
-    future = assemble.build_operational(delivery_day, zone, fuel)
+    future = assemble.build_operational(delivery_day, zone, fuel, **flags)
+    for source in run_addressed:
+        column = assemble.RUN_SOURCES[source]
+        if future[column].isna().any():
+            # Refuse rather than silently forecast from a model fitted with a source
+            # the live row lacks: the trees would route every hour down their
+            # missing-value branches, which the backtest never scored.
+            msg = f"{source} run for {issue_day} is missing; cannot forecast"
+            raise RuntimeError(msg)
     quantiles = model.predict(future)
 
     out = future[["valid_time", "delivery_day", "lead_hour", "capacity_mw"]].copy()

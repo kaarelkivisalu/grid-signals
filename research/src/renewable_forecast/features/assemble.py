@@ -240,15 +240,19 @@ def meps_block(points: pd.DataFrame) -> pd.DataFrame:
 IFS_TRAJECTORY = ("power_curve__ifsrun", "wind_speed_100m__ifsrun")
 
 
-def ifs_block(points: pd.DataFrame) -> pd.DataFrame:
+def ifs_block(
+    points: pd.DataFrame, run_hour: int = ifs_runs.RUN_HOUR_UTC
+) -> pd.DataFrame:
     """Zonal IFS HRES features keyed by the run that produced them.
 
     The physics is the Open-Meteo path's (`wind.per_point`), since the variables are
     the same; only the addressing differs, which is the point of the source.
     """
     raw = ifs_runs.load()
+    if not raw.empty:
+        raw = raw[pd.to_datetime(raw.run_time, utc=True).dt.hour == run_hour]
     if raw.empty:
-        msg = "no IFS runs parsed; run pipelines.pull_ifs_runs first"
+        msg = f"no {run_hour:02d}z IFS runs parsed; run pipelines.pull_ifs_runs first"
         raise RuntimeError(msg)
 
     per_point = wind.add_icing_memory(
@@ -272,8 +276,13 @@ def ifs_block(points: pd.DataFrame) -> pd.DataFrame:
     return pd.concat([zonal, trajectory], axis=1)
 
 
-def attach_ifs(frame: pd.DataFrame, points: pd.DataFrame) -> pd.DataFrame:
-    """Join the IFS run block on the issue day's 00z run, exactly as for MEPS."""
+def attach_ifs(
+    frame: pd.DataFrame, points: pd.DataFrame, *, lagged: bool = True
+) -> pd.DataFrame:
+    """Join the IFS run block on the issue day's 00z run, exactly as for MEPS.
+
+    With `lagged`, also the previous day's 18z run and the change between the two.
+    """
     block = ifs_block(points)
     frame = frame.copy()
     frame[IFS_RUN_COLUMN] = frame.issue_day.dt.tz_localize("UTC") + pd.Timedelta(
@@ -288,6 +297,43 @@ def attach_ifs(frame: pd.DataFrame, points: pd.DataFrame) -> pd.DataFrame:
     missing = merged[f"power_curve{IFS_MARKER}"].isna().sum()
     if missing:
         logger.warning("%s of %s rows have no IFS run coverage", missing, len(merged))
+    if lagged:
+        merged = _attach_lagged_ifs(merged, points)
+    return merged
+
+
+#: Columns taken from the previous day's 18z run. Kept few: they exist to measure how
+#: much the forecast changed between cycles, not to add a second copy of the weather.
+LAGGED_COLUMNS = ("power_curve", "wind_speed_100m")
+LAG_SUFFIX = "_lag6"
+
+
+def _attach_lagged_ifs(frame: pd.DataFrame, points: pd.DataFrame) -> pd.DataFrame:
+    """Join the 18z run from the day before the issue day, and the 00z - 18z change.
+
+    Run-to-run change is a time-lagged ensemble of two members. It carries the IFS
+    marker, so the leakage guard dates it to the 00z run's availability -- later than
+    the 18z run's own, hence conservative.
+    """
+    try:
+        block = ifs_block(points, ifs_runs.LAGGED_RUN_HOUR_UTC)
+    except RuntimeError:
+        logger.warning("no 18z IFS runs parsed; lagged IFS features skipped")
+        return frame
+    keep = {f"{c}{IFS_MARKER}": f"{c}{IFS_MARKER}{LAG_SUFFIX}" for c in LAGGED_COLUMNS}
+    block = block[["run_time", "valid_time", *keep]].rename(columns=keep)
+    lag_run = frame[IFS_RUN_COLUMN] - pd.Timedelta(hours=24 - ifs_runs.LAGGED_RUN_HOUR_UTC)
+    merged = frame.assign(_lag_run=lag_run).merge(
+        block,
+        left_on=["_lag_run", "valid_time"],
+        right_on=["run_time", "valid_time"],
+        how="left",
+    ).drop(columns=["_lag_run", "run_time"])
+    for column in LAGGED_COLUMNS:
+        now = merged[f"{column}{IFS_MARKER}"]
+        before = merged[f"{column}{IFS_MARKER}{LAG_SUFFIX}"]
+        merged[f"{column}{IFS_MARKER}_jump"] = now - before
+        merged[f"{column}{IFS_MARKER}_jump_abs"] = (now - before).abs()
     return merged
 
 
@@ -520,8 +566,47 @@ def _annotate(frame: pd.DataFrame) -> pd.DataFrame:
     return frame
 
 
+#: Run-addressed sources a config may name under `features.run_addressed`, mapped to
+#: the column that says whether a row has that source.
+RUN_SOURCES = {"meps": "power_curve__meps", "ifs_runs": f"power_curve{IFS_MARKER}"}
+
+
+def run_flags(sources: list[str] | tuple[str, ...]) -> dict[str, bool]:
+    """`build` keyword arguments for a list of configured run-addressed sources."""
+    unknown = set(sources) - set(RUN_SOURCES)
+    if unknown:
+        msg = f"unknown run-addressed sources {sorted(unknown)}"
+        raise ValueError(msg)
+    return {"with_meps": "meps" in sources, "with_ifs": "ifs_runs" in sources}
+
+
+def require_run_coverage(
+    frame: pd.DataFrame, sources: list[str] | tuple[str, ...]
+) -> pd.DataFrame:
+    """Keep only delivery days on which every configured run-addressed source exists.
+
+    A model fitted across days with and without a source learns two regimes, and its
+    calibration block -- the most recent quarter of the window -- may fall entirely in
+    the one the live forecast is *not* in. Whole days are kept or dropped, never hours.
+    """
+    columns = [RUN_SOURCES[s] for s in sources if RUN_SOURCES[s] in frame.columns]
+    if not columns:
+        return frame
+    have = frame[columns].notna().all(axis=1)
+    complete = have.groupby(frame.delivery_day).transform("all")
+    dropped = frame.loc[~complete, "delivery_day"].nunique()
+    if dropped:
+        logger.info("%s delivery days lack a run-addressed source; dropped", dropped)
+    return frame[complete].reset_index(drop=True)
+
+
 def build_operational(
-    delivery_day: date, zone: str = "SE3", fuel: str = "wind_onshore"
+    delivery_day: date,
+    zone: str = "SE3",
+    fuel: str = "wind_onshore",
+    *,
+    with_meps: bool = False,
+    with_ifs: bool = False,
 ) -> pd.DataFrame:
     """Design matrix for one future delivery day, with no target column.
 
@@ -557,6 +642,14 @@ def build_operational(
 
     merged = grid.merge(stacked, on=["valid_time", "nwp_offset_days"], how="left")
     merged = pd.concat([merged, calendar(merged)], axis=1)
+    # The same attach functions as `build`, so the live row carries exactly the columns
+    # the model was fitted on.
+    if with_meps:
+        merged = attach_meps(merged, points)
+    if with_ifs:
+        merged = attach_ifs(merged, points)
+    if with_meps and with_ifs:
+        merged = pd.concat([merged, run_spread(merged)], axis=1)
     missing = merged.power_curve_model_mean.isna().sum()
     if missing:
         logger.warning("%s of %s hours have no NWP coverage", missing, len(merged))

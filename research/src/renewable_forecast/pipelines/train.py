@@ -7,6 +7,7 @@ import pandas as pd
 
 from renewable_forecast import config
 from renewable_forecast.evaluation import baselines
+from renewable_forecast.features import assemble
 from renewable_forecast.models.gbm import PointGBM
 from renewable_forecast.models.quantile import QuantileGBM
 from renewable_forecast.models.sanity import RidgeSanityFloor
@@ -67,8 +68,13 @@ def run(zone: str = "SE3", fuel: str = "wind_onshore") -> pd.DataFrame:
     cfg = config.load()
     levels = np.array(cfg.task.quantiles)
 
-    frame = evaluate.load_design_matrix(zone, fuel)
+    run_addressed = tuple(cfg.features.get("run_addressed", ()))
+    frame = evaluate.load_design_matrix(zone, fuel, **assemble.run_flags(run_addressed))
+    # The holdout is sealed on the full calendar *before* rows are dropped for missing
+    # run-addressed coverage, which is only pulled up to the holdout's start.
     development, _ = evaluate.development_split(frame, cfg)
+    frame = assemble.require_run_coverage(frame, run_addressed)
+    development = development[development.isin(frame.delivery_day.unique())]
 
     history = frame.set_index("valid_time").cf
     tso_mw = baselines.TsoForecast.load(zone, fuel)
