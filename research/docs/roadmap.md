@@ -13,14 +13,14 @@ starting points to change freely. The fixed constraints are the frozen protocol
  Open-Meteo Previous Runs ─┐
    (whole-day vintage, P2) │
  MEPS det_hl 00z ──────────┼──► point features ──► design ──► LightGBM ──► conformal layer ──► 19 quantiles
-   (run-addressed) [B1] ✓  │     + physics          matrix     quantiles    (StratifiedCQR →   ──► scenarios
- IFS HRES single runs ─────┘     power curve          ▲          ▲           SpreadCQR) [A2]
-   (run-addressed) [B2]                               │          │                ▲
+   (run-addressed) [B1] ✓  │     + physics          matrix     quantiles    (SpreadCQR, A2 ✓)  ──► scenarios
+ IFS HRES single runs ─────┘     power curve          ▲          ▲
+   (run-addressed) [B2] ✓                             │          │                ▲
                                                       │          │                │
  ENTSO-E actuals ──► target  cf = MW / capacity ──────┘          │         NWP spread column
  Turbine registry ─► capacity (installed → effective) [C1]       │         (model disagreement)
                                                                  │
-                         recent observed residual [D1] ──────────┘
+  issue-day prices [D2], recent residual [D1] ───────────────────┘
  evaluation: coverage by *forecast* bin, spread–skill, PIT, day-block tests [A1]
 ```
 
@@ -39,15 +39,16 @@ how the problems rank.
    SON falls *above* p90 20% of the time (autumn under-prediction).
 3. **NWP disagreement predicts error, and the model under-uses it.** Take hours whose raw
    p10–p90 width is the same, and sort them by the spread of the three models' power
-   curves. Mean absolute error roughly doubles from the lowest to the highest spread
-   quartile, and 80% coverage falls from 0.81 to 0.67. This is the spread–skill test
+   curves. Mean absolute error rises with spread in four of five width quintiles (about
+   2× in the narrower ones), and 80% coverage falls from 0.81 to 0.67. This is the spread–skill test
    Thorarinsdottir & Gneiting (2010) describe, and it passes. Browell et al. (2020) and
    Dantas & Browell (2025) found ensemble spread of little use *on average*. Here the
    signal is not in the average: it sits in the conditional width, and the calibration
    layer ignores it.
 4. **Daily bias persists.** The lag-1 autocorrelation of the daily mean error is 0.32, and
-   0.15 at lag 2. The most recent error the model could observe carries information it
-   does not currently get (see D1).
+   0.15 at lag 2. Only part of that is usable: at issue time just the first hours of the
+   current day are observed. The anomaly of the recent physics residual correlates
+   0.13–0.17 with the next delivery day's mean error (see D1).
 
 ## Tracks, in order
 
@@ -57,7 +58,10 @@ how the problems rank.
   outcome. Add a spread-conditioned coverage breakdown. *Why first:* a result judged on
   outcome bins can reward hedging (Lerch 2017).
 - [x] **A2. Spread-aware conformal layer (`SpreadCQR`).** Strata are predicted level ×
-  NWP-spread tercile, and scores are normalised by each hour's raw interval width.
+  NWP-spread tercile. **Done, ships** (`reports/calibration.md`): CRPS unchanged within
+  noise, 80% coverage 0.737 → 0.774 and flat across spread quartiles. Additive scores
+  beat width-normalised ones. The remaining gap is autumn (0.73), which is drift, so
+  it moves to A3/A5.
   Evidence: diagnostic 3; Moradi 2025 (context-weighted conformal); Romano 2019
   (normalised CQR); Gibbs 2024 (group-conditional coverage). The old strata (lead × level)
   left ~11 calibration rows per cell in early folds, so most fell back to the global
@@ -81,12 +85,19 @@ how the problems rank.
 
 ### B — Run-addressed NWP (P2). The largest measured structural error
 
-- [ ] **B1. MEPS A/B** (`pipelines/compare_meps.py`). The archive is fully downloaded
-  (735 of 745 runs) and the MEPS design matrix is built. Fixed on the way: the A/B
-  sealed its holdout relative to the MEPS frame rather than the full calendar, which
-  would have discarded Sept 2025 – Mar 2026. Result: see `reports/meps_archive.md` once
-  written.
-- [ ] **B2. ECMWF IFS HRES from the Open-Meteo Single Runs API.** Verified 2026-09-21:
+- [x] **B1. MEPS A/B** (`pipelines/compare_meps.py`, `reports/meps_archive.md`).
+  Adding MEPS to the Open-Meteo block: **nMAE −9%, CRPS −8%**. MEPS alone removes the
+  lead-34 step but is a weaker signal (one 2.5 km cell per cluster), so the combined
+  model keeps leaning on the stale block and the step survives. Fixed on the way: the
+  A/B sealed its holdout relative to the MEPS frame and discarded Sept 2025 – Mar 2026.
+- [ ] **B1b. MEPS neighbourhood.** Average a box of cells around each cluster instead
+  of one cell, and keep the box's spread as a pseudo-ensemble (Molinder 2018). Needs
+  a re-pull (~2 h): the puller already fetches the box but stores only the centre cell.
+- [x] **B2. ECMWF IFS HRES from the Open-Meteo Single Runs API.** Pulled: 713 runs,
+  2024-03-14 → 2026-02-28, four runs missing in August 2025. The run-addressed IFS power
+  curve correlates 0.967 with output, the best single input so far (Open-Meteo
+  three-model mean 0.965, its day-vintaged 0.25° sibling 0.956). A/B:
+  `compare_meps --ifs`. Verified 2026-09-21:
   `models=ecmwf_ifs&run=2024-09-01T00:00` returns 48 hourly steps with 100 m wind. GFS and
   ICON-EU runs from 2024 are *not* available there. This gives a run-addressed global
   model to pair with MEPS, at ~745 requests for eight points (one multi-location request
@@ -102,7 +113,7 @@ how the problems rank.
 - [ ] **C1. Effective capacity for the training target.** The ERA5 cohort study finds
   capacity added since 2018 delivers ~70% of physics-expected output. Train on
   `MW / effective capacity`, where effective = pre-2018 cohort + *k* × later additions
-  (*k* fitted inside each training window only, *start* 0.7), and multiply back before
+  (*k* from 2019–2023 cohort data, *start* 0.7; the backtest window alone cannot identify it), and multiply back before
   scoring. Scoring stays against installed capacity, as frozen. Precedents: Bellinguer
   2020 (mean of registered capacity and running maximum) and Browell 2020 (manual
   correction: −5% capacity, −10% pinball in SE1).
@@ -118,7 +129,8 @@ how the problems rank.
 
 ### D — Use information the model already has at issue time
 
-- [ ] **D1. Recent-residual feature.** At 09:00 UTC, actuals are known up to about 08:00
+- [ ] **D1. Recent-residual feature** (built: `assemble.residual_features`; A/B:
+  `pipelines/compare_blocks.py`). At 09:00 UTC, actuals are known up to about 08:00
   on the issue day. The error of the physical power curve over the last *n* observed
   hours (*start* 24) is a legitimate feature, provided its information age is registered
   with the leakage guard. It targets diagnostic 4 and the "confidently wrong for 24
@@ -126,7 +138,9 @@ how the problems rank.
   & Kariniotakis 2010 (time-adaptive) are precedents. Risk: redispatch shutdowns corrupt
   generation-derived features (Meisenbacher 2025), so clip the feature and compare it
   with and without C2's flags.
-- [ ] **D2. Curtailment risk from prices.** On the 551 backtest hours with negative
+- [ ] **D2. Curtailment risk from prices** (built: `assemble.price_features`; A/B:
+  `pipelines/compare_blocks.py`). In the old backtest, hours whose same hour on the issue
+  day was negative-priced had a bias of −42 MW, against −11 MW elsewhere (552 hours). On the 551 backtest hours with negative
   day-ahead prices, the ERA5 model over-predicts by +184 MW and the day-ahead model's MAE
   is 224 MW (`reports/era5_ceiling.md` §4). The delivery day's prices are not known at
   09:00, but the issue day's are: they were published at about 13:00 CET the day before.

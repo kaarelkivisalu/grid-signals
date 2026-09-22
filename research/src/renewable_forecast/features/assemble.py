@@ -358,6 +358,66 @@ def attach_prices(frame: pd.DataFrame, zone: str = "SE3") -> pd.DataFrame:
     return pd.concat([frame, price_features(frame, zone)], axis=1)
 
 
+#: Columns built from generation observed shortly before issue. The last hour used
+#: ends RESIDUAL_MARGIN before the issue time, which leaves ENTSO-E's one-hour
+#: publication deadline plus an hour of slack.
+RESIDUAL_PREFIX = "recent_resid_"
+RESIDUAL_MARGIN = timedelta(hours=2)
+RESIDUAL_WINDOWS_H = (8, 24, 72)
+
+#: The residual has a large standing offset (physics under-predicts by ~0.05 CF) that
+#: the model already learns from the level features. What it cannot learn is the
+#: *departure* from that offset, so each window is expressed against this baseline.
+#: Measured on the backtest: day-level correlation with the model's error rises from
+#: 0.04-0.07 for the raw residual to 0.13-0.17 for the anomaly.
+RESIDUAL_BASELINE = "30D"
+
+
+def is_residual_column(column: str) -> bool:
+    """Whether a column depends on generation observed on the issue day."""
+    return column.startswith(RESIDUAL_PREFIX)
+
+
+def residual_features(frame: pd.DataFrame, zone: str = "SE3") -> pd.DataFrame:
+    """How far the physics has been off in the hours just before issue.
+
+    Daily mean error is autocorrelated (0.32 at one day, `reports/calibration.md`), and
+    the only generation the model otherwise sees is at least 48 h old. The residual is
+    observed CF minus the capacity-weighted power curve at Open-Meteo offset 1, whose
+    values for issue-day hours were published the day before.
+
+    Generation-derived features inherit every redispatch and outage in the data
+    (Meisenbacher et al. 2025), so the residual is clipped rather than trusted raw.
+    """
+    fuel = "wind_onshore"
+    targets = pd.read_parquet(paths.INTERIM / f"targets_{zone.lower()}_{fuel}.parquet")
+    observed = targets.assign(
+        valid_time=pd.to_datetime(targets.period_start, utc=True)
+    ).set_index("valid_time").cf
+
+    physics = _features_at(openmeteo.load(), sites.build(zone), 1).set_index(
+        "valid_time"
+    ).power_curve_model_mean
+    residual = (observed - physics).dropna().clip(-0.3, 0.3).sort_index()
+    residual = residual.resample("h").mean()
+
+    # The value an hour-start label carries is known once the hour has ended.
+    last_start = issue_time_of(frame) - RESIDUAL_MARGIN - pd.Timedelta(hours=1)
+    baseline = residual.rolling(RESIDUAL_BASELINE, min_periods=100).mean()
+    out = pd.DataFrame(index=frame.index)
+    for window in RESIDUAL_WINDOWS_H:
+        rolled = residual.rolling(f"{window}h", min_periods=window // 2).mean()
+        out[f"{RESIDUAL_PREFIX}{window}h_anom"] = last_start.map(
+            rolled - baseline
+        ).to_numpy()
+    return out
+
+
+def attach_residuals(frame: pd.DataFrame, zone: str = "SE3") -> pd.DataFrame:
+    """Append the recent-residual block to an existing design matrix."""
+    return pd.concat([frame, residual_features(frame, zone)], axis=1)
+
+
 def attach_meps(frame: pd.DataFrame, points: pd.DataFrame) -> pd.DataFrame:
     """Join the MEPS block onto a design matrix that already carries `issue_day`.
 
@@ -533,6 +593,8 @@ def max_source_time(frame: pd.DataFrame) -> pd.DataFrame:
             out[column] = pd.Timestamp.min.tz_localize("UTC")
         elif column.startswith("cf_lag_"):
             out[column] = frame.valid_time - age
+        elif is_residual_column(column):
+            out[column] = issue_time_of(frame) - RESIDUAL_MARGIN
         elif is_price_column(column):
             out[column] = frame.issue_day.dt.tz_localize("UTC")
         elif is_ifs_column(column) and ifs_available is not None:

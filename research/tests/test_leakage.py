@@ -273,3 +273,13 @@ def test_price_same_hour_refers_to_the_issue_day() -> None:
     local = looked_up.dt.tz_convert(windows.MARKET_TZ).dt.normalize().dt.tz_localize(None)
     # DST days shift one hour across midnight; every other hour must land on D.
     assert (local == frame.issue_day).mean() > 0.9
+
+
+def test_recent_residuals_end_before_the_issue_time() -> None:
+    frame = _frame()
+    frame[f"{assemble.RESIDUAL_PREFIX}8h"] = 0.01
+    sources = assemble.max_source_time(frame)
+    column = f"{assemble.RESIDUAL_PREFIX}8h"
+    margin = assemble.issue_time_of(frame) - sources[column]
+    assert (margin >= assemble.RESIDUAL_MARGIN).all()
+    assert not _violations(frame)
