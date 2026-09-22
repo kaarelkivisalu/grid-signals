@@ -42,6 +42,7 @@ documentation and grey literature say about the problems the README lists.
 | German TSO "actual" PV is an upscaled estimate. A physical model using only register locations and capacities plus one fitted derating factor reached RMSE 4.2–4.9% of installed capacity against it (2015, April–October) and came within 0.4 points of two TSO day-ahead forecasts | SOL, EVAL | §10, Saint-Drenan 2017 | winter excluded; provenance of the TSO forecasts unclear; register currency differed by control area |
 | Neighbourhood pseudo-ensemble from a deterministic 2.5 km run | P1 | §3, Molinder 2018 | icing study, two weeks of data; still under-dispersive. Analog ensembles are biased low in the right tail when the archive is short (Alessandrini 2019) |
 | ENTSO-E `A03` step-curve encoding under-reports if parsed naively | P3 | §6, Nicolaysen 2026 | entsoe-py 0.7.11 already forward-fills it, so probably handled (not tested on SE3 data); single-author preprint |
+| Uncalibrated QRF/boosted-tree quantiles were the worst-reliability approach on all four SE zones regardless of model flexibility; a conformal calibration layer (CQR/SCPS) beat every uncalibrated baseline, and a logit-transformed nonconformity score (target mapped through logit before scoring) improved efficiency over the plain residual score | P1 | §5, Jonkers 2024 | competition data, anonymised dates; logit trick only tested on a [0,1]-bounded load-factor target |
 
 **Two headline results to treat with care.** Kean & O'Sullivan (2026) report beating the ENTSO-E
 day-ahead forecasts by about 26%, but their weather inputs are historical values "used as a
@@ -569,6 +570,60 @@ Third-place EEM20 entry (same four Swedish zones, HARMONIE 10 km, 10-member ense
 - → A physics-based first-guess power as an input feature is the same pattern as a turbine-level fleet model feeding a learned correction.
 - → The training-window result (more, later data clearly better while the fleet grows) bears on how far back the SE3 training set should reach.
 - Conference paper with no calibration analysis; the competition data cannot be joined to your archives (dates shifted to 2000–2001).
+
+### A novel day-ahead regional and probabilistic wind power forecasting framework using deep CNNs and conformalized regression forests
+Jonkers, Nieves Avendano, Van Wallendael, Van Hoecke · Applied Energy 361, 2024 ·
+[10.1016/j.apenergy.2024.122900](https://doi.org/10.1016/j.apenergy.2024.122900) · *read: full text (introduction, data, results and conclusion; methodology sections on CQR/SCPS/SCDRF skimmed)*
+PDF: `research/data/papers/jonkers2024_eem20-cnn-conformal-forests.pdf`
+
+Trains on the EEM20 dataset (same four Swedish zones, turbine list and 10-member MET Norway ensemble as Bellinguer, Browell and Basu, above) and directly benchmarks against those three competition entries plus new deep and tree-based baselines.
+- Introduces a "turbine map": a 2D grid encoding turbine location and capacity, stacked as an extra channel alongside the gridded NWP variables, so a single dense CNN (DenseNet) can be trained across all four zones and stay context-aware as the turbine mix changes over time — their fix for the same distribution-shift problem Bellinguer's running-maximum denominator and Browell's manual capacity correction address differently.
+- For point forecasts, DenseNet beat ResNet and MaxViT on MAE/NMAE in every task.
+- For quantiles, compares LQR, QXGB (boosted trees) and QRF, each with and without Conformalized Quantile Regression (CQR), plus their own Split Conformal Predictive System (SCPS) and a new method, Split Conformal Distribution Regression Forests (SCDRF, QRF combined with CPS) that outputs a full predictive distribution rather than fixed quantiles.
+- A logit-transformed nonconformity score (mapping the [0,1]-bounded load factor through logit before scoring) improved CQR/SCPS efficiency (narrower intervals at equal empirical coverage) over the plain residual score in most cases.
+- Uncalibrated quantile models were the worst performers and visibly overconfident (reliability plots below the diagonal), attributed to overfitting from the CNN's/QGBT's flexibility — calibration was necessary regardless of base model.
+- Headline numbers: CQR-logit-QRF reached an average pinball loss of 44.10 MW, 6.86% better than the best published EEM20 result (Bellinguer et al., 46.68 MW); DenseNet100-k12-BC with CQR-logit-QRF cut pinball loss 19.45% versus Basu et al.'s CNN. SCDRF gave the best CRPS (0.04299) of all methods tested.
+- → A second, independent confirmation (after Lindberg 2023/2024, §3/above) that quantile-forest and boosted-tree outputs need a calibration layer, not just more capacity or features, to stop being overconfident — direct evidence for P1.
+- → The turbine-map idea is a concrete way to make one model handle capacity growth/relocation across zones, relevant if SE1-style fleet changes get handled with a shared model rather than per-zone retraining.
+- → Logit-transforming a [0,1]-bounded target (load factor) before computing conformal nonconformity scores is a cheap, testable tweak for whatever conformal layer gets built for P1.
+- Competition data, anonymised 2000–2001 dates, 2020-era fleet — same caveat as the other EEM20 entries.
+
+**Three further precedents for the turbine-map/spatial-encoding idea**, found in a broader search prompted by the entry above. None are EEM20 or Nordic-specific, and none are cited by Jonkers et al. — kept here rather than in a new section since they only make sense next to that entry.
+
+### Scene learning: Deep convolutional networks for wind power prediction by embedding turbines into grid space
+Yu, Liu, Li, Lu, Ma, Yu, Wang, Li · Applied Energy 238, 2019 ·
+[10.1016/j.apenergy.2019.01.010](https://doi.org/10.1016/j.apenergy.2019.01.010) · *read: full text (introduction, related work, results and conclusion; the STF-construction method section skimmed)*
+PDF: `research/data/papers/yu2019_scene-learning-turbine-grid.pdf`
+
+Maps each turbine's live SCADA state (wind speed, power) onto a 2D grid ("scene") by relative geographic position, forming a multi-channel image sequence over time (a "spatio-temporal feature", STF); a CNN then predicts the future scene directly, so one forward pass forecasts every turbine in the region in parallel. 592 turbines, one Chinese wind-farm cluster.
+- Compared against kNN and SVR fed either the flattened scene or each turbine's own history. STF+FC-CNN cut average MSE from 10.05 MW² (best baseline) to 7.78 (24.1% lower, up to 45.55% on individual turbines) and training time from 91,000–207,000 s (SVR) to about 1,000–1,200 s, a >150× speedup.
+- Adding per-turbine weather variables as further channels (multi-STF) improved results again, to 7.25–7.35 MW² average.
+- → This is the direct, six-years-earlier precedent for "rasterize turbine positions into grid space, run a CNN over it." The structural difference from Jonkers 2024 is that here the grid pixels *are* the turbine measurements (bottom-up, turbine-level nowcasting), where Jonkers' turbine map is a static capacity mask concatenated with a *separate* NWP grid (top-down, zone-level day-ahead). Jonkers' narrower claim — turbine map combined specifically with an NWP grid — may still hold up; the general "embed turbines into grid space" idea does not originate with them.
+- Turbine-level SCADA nowcasting on one wind-farm cluster, not a day-ahead NWP-driven regional-zone setup, so the numbers don't transfer, only the architecture pattern.
+
+### Localized convolutional neural networks for geospatial wind forecasting
+Uselis, Lukoševičius, Stasytis · Energies 13(13), 3440, 2020 ·
+[10.3390/en13133440](https://doi.org/10.3390/en13133440) · *read: full text (introduction/motivation, architecture table, WIND and METAR results; synthetic bouncing-ball section and mutual-information ordering appendix skimmed)*
+PDF: `research/data/papers/uselis2020_localized-cnn-geospatial-wind.pdf`
+
+States the general problem precisely: plain CNNs are translation-invariant by construction, but in geospatial forecasting each grid location has its own intrinsic features (terrain, local climate, in this project's case installed capacity), so a shared filter can't learn location-specific behaviour without help. Formalises and compares several ways to fix this — explicit x/y coordinate channels (CoordConv), learnable per-location latent inputs (LI), and localized/non-shared filter weights per location (LW) — each addable to any conv layer with little extra cost.
+- Tested on a synthetic "bouncing ball" benchmark plus three real wind datasets: NREL's WIND Integration National Dataset (10×10 grid, Indiana, 5–60 min horizons), an unordered METAR station network re-embedded onto a grid by mutual information, and a third real dataset.
+- On the WIND dataset every localized variant beat its non-localized counterpart at short horizons (5–20 min), where spatial structure matters most; the LI variant had the fewest parameters of any model tested and still beat CoordConv. At longer horizons (30–60 min) a plain LSTM with no spatial component became competitive or best — the spatial-input advantage shrank as lead time grew.
+- → Theoretical grounding for *why* a turbine map helps: it's one instance (closer to their "LI" than to CoordConv, since it carries real capacity information rather than just coordinates) of a documented, systematically-tested class of fixes. Also flags a caveat Jonkers doesn't test: their result is on the WIND dataset's much shorter 5–60 min horizons, and this paper's own finding is that spatial encoding's edge fades with lead time — worth checking whether the turbine map's share of Jonkers' pinball-loss gain holds up at 24 h vs. 48 h ahead, day-ahead's full range.
+- → The "reorder an unordered set of locations onto a grid by mutual information" trick (§6.3) is reusable if a turbine or plant list ever needs a grid layout without trustworthy coordinates.
+- 5–60 minute horizons, not day-ahead; one US grid plus one station network, no wind-power capacity or fleet-growth angle.
+
+### WindDragon: automated deep learning for regional wind power forecasting
+Keisler, Le Naour · Environmental Data Science, 2025 (workshop version: ICLR 2024 "Tackling Climate Change with ML") ·
+[10.1017/eds.2025.10](https://doi.org/10.1017/eds.2025.10) · *read: full text, workshop version* (arXiv 2402.14385, Feb 2024)
+PDF: `research/data/papers/keisler2024_winddragon-automl-wind.pdf`
+
+Short-term (1–6 h) French national wind power forecasting from ECMWF HRES wind-speed maps (100 m, 9 km, hourly, 4 runs/day), submitted the same month as Jonkers et al. National forecast is built bottom-up from France's 12 administrative regions, which the authors found beats forecasting the national total directly.
+- To handle turbines being unevenly scattered within an administrative region, each region's NWP map is cropped to the **convex hull of the area around that region's wind farms** (their Fig. 3) instead of the raw administrative boundary, producing a seamless region-specific map — the same instinct as a turbine map (shape the spatial input to where the turbines actually are), though without a capacity-weighted channel; installed capacity is instead used only to scale the power target, updated quarterly.
+- WindDragon (DRAGON, an evolutionary AutoML search over architecture + hyperparameters, one search shared across all 12 regions) is benchmarked against CNN, ViT and XGBoost-on-mean-wind-speed baselines, plus persistence.
+- National results (aggregated over the 12 regions): full spatial NWP maps with any DL regressor clearly beat collapsing the map to its mean (XGBoost-on-mean 416.7 MW / 9.2% NMAE vs. CNN 369.0 MW / 8.1%, ViT 385.7 MW / 8.5%); WindDragon reached 346.7 MW / 7.7% NMAE, 6% better than the CNN and about 17% better than XGBoost-on-mean — roughly a French town of 32,000 people's annual consumption.
+- → Independent, near-simultaneous confirmation (different country, grid operator and horizon) that a full gridded NWP map beats a collapsed mean for regional wind power, and that shaping the map to true turbine geography (their convex hull; Jonkers' capacity mask) is worth doing over an arbitrary administrative or bidding-zone boundary.
+- 1–6 h horizon only, not day-ahead; the evolutionary architecture search is a real operational cost the paper doesn't compare against a fixed architecture at equal training budget.
 
 ### Day-ahead probabilistic forecasting at a co-located wind and solar power park in Sweden: Trading and forecast verification
 Lindberg, Lingfors, Arnqvist, van der Meer, Munkhammar · Adv. Appl. Energy 9, 2023 ·
