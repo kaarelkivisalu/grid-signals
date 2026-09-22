@@ -41,9 +41,9 @@ def refresh_nwp(
     """Pull the newest NWP covering the delivery day, merging into the archive.
 
     Run-addressed sources are fetched for the issue day's 00z run only. Each call also
-    self-archives that run, which matters for MEPS: MET Norway's thredds archive now
-    serves only the current month (checked 2026-09-22), so a run not saved on its day
-    may not be recoverable later.
+    self-archives that run. That is cheap insurance: during MET Norway's storeB network
+    maintenance (2026-09-22/23) the thredds MEPS archive served only the current month,
+    and a forecast must not depend on an archive being reachable later.
     """
     points = sites.build(zone)
     openmeteo.pull(

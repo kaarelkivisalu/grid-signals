@@ -226,3 +226,12 @@ share the same rows.
 **Decision:** the research model moves to the `all` feature set. The live path
 (`pipelines/predict.py`, `assemble.build_operational`) does not fetch MEPS or IFS runs
 yet; that is roadmap B4.
+
+## Note, 2026-09-22 — archive temporarily limited
+
+During MET Norway's network maintenance on "storeB" (scheduled 2026-09-22 10:00 →
+2026-09-23 14:00 CEST, extended by unplanned outages, per status.met.no) the
+`meps25epsarchive` catalogue listed only 2026-09, and older runs returned 404. The
+archive is expected back within days. The local copy (735 runs) is complete for the
+development window; the holdout months and the neighbourhood re-pull wait for the
+archive to return (`docs/roadmap.md` §0).
