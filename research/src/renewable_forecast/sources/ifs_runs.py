@@ -81,23 +81,34 @@ _MAX_RETRIES = 8
 _RETRYABLE = {429, 500, 502, 503, 504}
 
 
-def runs(start: date, end: date) -> Iterator[datetime]:
-    """The 00z run instants over a half-open date range."""
+#: The previous day's 18z run, a time-lagged partner for the 00z run. Run-to-run change
+#: between consecutive cycles is a flow-dependent uncertainty signal that needs no
+#: ensemble archive. The 18z HRES open-data files arrive ~6.5 h after initialisation,
+#: i.e. about 00:30 UTC on the issue day.
+LAGGED_RUN_HOUR_UTC = 18
+
+
+def runs(start: date, end: date, run_hour: int = RUN_HOUR_UTC) -> Iterator[datetime]:
+    """The run instants at `run_hour` over a half-open date range."""
     cursor = max(start, ARCHIVE_START)
     while cursor < end:
-        yield datetime(cursor.year, cursor.month, cursor.day, RUN_HOUR_UTC, tzinfo=UTC)
+        yield datetime(cursor.year, cursor.month, cursor.day, run_hour, tzinfo=UTC)
         cursor += timedelta(days=1)
 
 
 def params_for(run: datetime, points: pd.DataFrame) -> dict:
-    """Request parameters for one run over every point, in point order."""
+    """Request parameters for one run over every point, in point order.
+
+    The horizon is set so that every run reaches the end of the delivery window plus
+    the forward shifts: +53 h from 00z, so +59 h from the previous day's 18z.
+    """
     return {
         "latitude": ",".join(f"{v:.4f}" for v in points.latitude),
         "longitude": ",".join(f"{v:.4f}" for v in points.longitude),
         "models": MODEL,
         "run": run.strftime("%Y-%m-%dT%H:%M"),
         "hourly": ",".join(VARIABLES),
-        "forecast_hours": FORECAST_HOURS,
+        "forecast_hours": FORECAST_HOURS + (24 - run.hour) % 24,
         "wind_speed_unit": "ms",
         "timezone": "UTC",
     }
@@ -163,11 +174,13 @@ def _run_path(run: datetime) -> Path:
     return paths.PARSED / "ifs_runs" / f"run={run:%Y%m%dT%H}Z" / "data.parquet"
 
 
-def pull(points: pd.DataFrame, start: date, end: date) -> int:
-    """Backfill every 00z run over a date range, one parquet per run. Resumable."""
+def pull(
+    points: pd.DataFrame, start: date, end: date, run_hour: int = RUN_HOUR_UTC
+) -> int:
+    """Backfill every run at `run_hour` over a date range, one parquet per run."""
     written, missing = 0, []
     with httpx.Client(timeout=120.0) as client:
-        for run in runs(start, end):
+        for run in runs(start, end, run_hour):
             out = _run_path(run)
             if out.exists():
                 continue

@@ -283,3 +283,13 @@ def test_recent_residuals_end_before_the_issue_time() -> None:
     margin = assemble.issue_time_of(frame) - sources[column]
     assert (margin >= assemble.RESIDUAL_MARGIN).all()
     assert not _violations(frame)
+
+
+def test_lagged_ifs_columns_inherit_the_ifs_dating() -> None:
+    frame = _ifs_frame()
+    frame["power_curve__ifsrun_lag6"] = 0.3
+    frame["power_curve__ifsrun_jump"] = 0.15
+    sources = assemble.max_source_time(frame)
+    available = frame[assemble.IFS_RUN_COLUMN] + ifs_runs.AVAILABILITY_LAG
+    assert (sources["power_curve__ifsrun_jump"] == available).all()
+    assert not _violations(frame)

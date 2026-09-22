@@ -22,6 +22,7 @@ def main() -> None:
     )
     parser.add_argument("end", nargs="?", type=date.fromisoformat, default=DEFAULT_END)
     parser.add_argument("--zone", default="SE3")
+    parser.add_argument("--run-hour", type=int, default=ifs_runs.RUN_HOUR_UTC)
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -29,7 +30,9 @@ def main() -> None:
     )
     logging.getLogger("httpx").setLevel(logging.WARNING)
     paths.ensure_data_dirs()
-    written = ifs_runs.pull(sites.build(args.zone), args.start, args.end)
+    written = ifs_runs.pull(
+        sites.build(args.zone), args.start, args.end, args.run_hour
+    )
     logging.getLogger(__name__).info("done: %s runs written", written)
 
 

@@ -66,7 +66,10 @@ how the problems rank.
   (normalised CQR); Gibbs 2024 (group-conditional coverage). The old strata (lead × level)
   left ~11 calibration rows per cell in early folds, so most fell back to the global
   correction. A/B in `pipelines/compare_calibration.py`.
-- [ ] **A3. Use the calibration quarter for fitting as well.** The shipping booster never
+- [x] **A3 result: cross-fitted calibration ships.** CRPS −3.7% (significant), nMAE
+  −3%, 80% coverage 0.765 → 0.784, SON 0.73 → 0.78 (`reports/calibration.md`). Season
+  strata on top hurt. Original note:
+- **A3. Use the calibration quarter for fitting as well.** The shipping booster never
   sees the most recent 25% of its window, because those days are reserved for
   calibration. Options: refit on the full window after calibrating (tested as an arm
   in A2), or cross-fit so every training day gets an out-of-sample prediction. Cross-
@@ -116,6 +119,17 @@ how the problems rank.
   drop them. Their disagreement is the spread signal A2 uses, so replace the spread
   column before dropping them.
 
+- [x] **B5. Time-lagged IFS (previous day's 18z run) — tried as a feature, not adopted.**
+  Pulled 18z runs (archive starts 2024-08-06, so it covers 12 folds). Pooled CRPS is
+  unchanged (0.0205 → 0.0205). But the 00z − 18z jump is a strong *uncertainty* signal:
+  the 259 hours where the power curve moved by more than 0.1 CF between runs have 1.6× the
+  normal error, and 80% coverage of 0.67. As a feature it lifts their coverage to 0.73.
+  Candidate follow-up: use `power_curve__ifsrun_jump_abs` as a second stratifier in
+  `SpreadCQR` rather than as a tree input (`compare_blocks --lagged-ifs`).
+- [ ] **B6. Self-archive MEPS neighbourhood from now on.** `pull_meps --radius 4` works
+  on live runs, but the thredds archive now lists only 2026-09, so it cannot be
+  backtested. Run it daily alongside `predict` until enough history exists.
+
 ### C — Capacity denominator (P3)
 
 - [ ] **C1. Effective capacity for the training target.** The ERA5 cohort study finds
@@ -163,6 +177,15 @@ how the problems rank.
   calibration layer see the feature too, since curtailment is a one-sided risk.
 - [ ] D3. Neighbour-zone median layer (Landry 2016, Browell 2020): SE2/SE4 first-stage
   medians as inputs. Lower priority; it needs the SE2/SE4 targets built.
+
+### F — Seasonal bias (open)
+
+- [x] Tested whether the day-of-year features memorise one year's seasonal anomaly:
+  dropping `doy_sin`/`doy_cos` changes nothing (SON bias +0.0119 → +0.0116, CRPS
+  identical). The ERA5 study sees the same pattern with *actual* weather (winter/spring
+  over-prediction, autumn under-prediction), so it lives in the data — availability,
+  icing, maintenance seasons — not in the model. Needs an outage/availability source
+  (C2), not another feature transform.
 
 ### E — Later, unchanged from the README
 

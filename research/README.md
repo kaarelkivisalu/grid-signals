@@ -13,7 +13,7 @@ yet started.
 
 | | where it stands |
 |---|---|
-| **Wind, SE3** | Working. Typical miss **143 MW** per hour against 4,656 MW installed |
+| **Wind, SE3** | Working. Typical miss **122 MW** per hour against 4,656 MW installed (was 143 MW on 2026-09-20) |
 | **Solar** | Not started. Only the data checks are done |
 
 ![](reports/figures/task_horizon.png)
@@ -47,7 +47,7 @@ whole period, and the windiest:
 
 ![](reports/figures/leaderboard_crps.png)
 
-Each bar is a different method, all measured the same way: run it on eighteen months of past
+Each bar is a different method, all measured the same way: run it on seventeen months of past
 days it was never trained on, and see how far it lands from what actually happened.
 
 | method | what it actually does |
@@ -56,27 +56,29 @@ days it was never trained on, and see how far it lands from what actually happen
 | Long-run average | The average output for this hour of the day and time of year, ignoring the weather entirely |
 | Straight line through 8 physics numbers | A simple linear formula over forecast wind speed, the turbine power curve, and the time of year |
 | Turbine power curve, nothing learned | Pure physics: take forecast wind speed at each of 8 locations across SE3, push it through a manufacturer-style power curve, weight by how much capacity sits near each location. No fitting at all |
-| Boosted trees, single guess + spread | A machine-learning model (LightGBM) over 87 inputs, predicting one number, with the uncertainty estimated separately afterwards |
+| Boosted trees, single guess + spread | A machine-learning model (LightGBM) over 155 inputs, predicting one number, with the uncertainty estimated separately afterwards |
 | Boosted trees, full range of outcomes | The same model family, but trained to predict the whole range directly. **This is what the project ships** |
 | Grid operator's published forecast | Svenska kraftnät's own numbers, for reference only — see the caveat below |
 
-The 87 inputs are mostly forecast weather at 8 points spread across the zone, from three
-independent weather models, plus how much those models disagree with each other, how the
-weather is changing hour to hour, the time of year, and what the fleet generated two or
-more days ago.
+The 155 inputs are mostly forecast weather at 8 points spread across the zone. Three
+global models come from an archive addressed by whole days (see problem 2). Two more
+come from archives addressed by model run: MET Norway's 2.5 km MEPS and ECMWF's 9 km
+IFS. On top of that: how much the models disagree with each other, how the weather is
+changing hour to hour, the time of year, and what the fleet generated two or more days
+ago.
 
 **Three things are worth noticing.**
 
 Physics alone gets you most of the way. A power curve with nothing learned lands at
-166 MW; the machine-learning model takes that to 143 MW. Real, and worth having, but
+166 MW; the machine-learning model takes that to 122 MW. Real, and worth having, but
 this is a physics problem with a statistical correction on top — not a problem machine
 learning solves by itself.
 
-Weather-blind methods are hopeless. Guessing from the seasonal average misses by 760 MW,
-five times worse. That gap is the whole value of using a weather forecast at all.
+Weather-blind methods are hopeless. Guessing from the seasonal average misses by 780 MW,
+six times worse. That gap is the whole value of using a weather forecast at all.
 
 **The grid operator's number is not a fair comparison.** It looks far better than
-everything else, at 68 MW. It should not be: published research puts realistic day-ahead
+everything else, at 69 MW. It should not be: published research puts realistic day-ahead
 wind forecasting in the 140–280 MW range for a zone this size. The reason is that the
 public data archive serves the *latest revised version* of that forecast, with
 corrections folded in after the fact, and offers no way to retrieve what was actually
@@ -87,7 +89,7 @@ get, not a competitor we are losing to.
 
 ## What is wrong with it
 
-### 1. When we say 80% sure, we are right 74% of the time
+### 1. When we say 80% sure, we were right 74% of the time (now 78%)
 
 The forecast claims a range it expects the truth to fall inside 80% of the time. Across
 13,082 hours the truth actually landed inside it 74% of the time. The ranges are too narrow
@@ -104,10 +106,13 @@ missed by about twice as much. An earlier version of this chart grouped hours by
 *actual* output, which exaggerates the high-wind shortfall: hours that turned out windy
 are disproportionately the ones the forecast under-shot.
 
-*Update 2026-09-22:* a calibration layer that groups hours by that disagreement now
-ships. It lifts coverage from 74% to 77%, now about equal in calm and uncertain weather,
-without costing accuracy (`reports/calibration.md`). The chart above still shows the
-earlier model.
+*Update 2026-09-22:* two calibration changes now ship (`reports/calibration.md`).
+The first groups hours by model disagreement. The second fits the corrections on
+out-of-sample predictions from the whole training window, not only its most recent
+quarter, so an autumn forecast is no longer calibrated on summer residuals. Together
+with the run-addressed weather data, coverage is **78%**, roughly even across seasons
+and weather regimes, and the typical miss is down to 122 MW. The chart above shows the
+current model.
 
 The worst single day in the whole period, 13 February 2026, shows what this costs. The forecast
 said around 1,800 MW; actual output was near 1,200 MW and fell to 500 MW. It was wrong by
@@ -180,24 +185,27 @@ The full plan, with evidence for each item, is `docs/roadmap.md`. It was refined
 2026-09-21 from the literature review (`docs/literature.md`) and new diagnostics. Where
 things stand:
 
-1. **Run-addressed weather: measured, and the largest gain available.** Both archives
-   are now pulled: MET Norway MEPS (2.5 km) and ECMWF IFS HRES single runs via
-   Open-Meteo. Adding them to the current inputs cuts typical error by **12%** and CRPS
-   by **11%** on the same backtest rows, and shrinks the lead-34 step from +45% to +26%
-   (`reports/meps_archive.md`). **Next: the live path** (roadmap B4), because the daily
-   forecast must fetch both runs before the research model can ship.
-2. **Over-confidence (problem 1): partly fixed, and shipped.** Hours where the weather
-   models disagree turned out to carry twice the error, and the old calibration layer
-   could not see it. A new one, stratified by that disagreement, moves 80% coverage
-   from 0.74 to 0.77, flat across calm and uncertain weather, at unchanged CRPS
-   (`reports/calibration.md`). The "worse at high wind" picture was partly an
-   artefact of binning by actual output, and the chart now bins by forecast. What is
-   left is mostly autumn drift (roadmap A3/A5).
-3. **Capacity drift (problem 3)**: an effective-capacity target (roadmap C1). It
-   matters little inside the current window, but it is the precondition for training on
-   pre-2024 history.
-4. Tried and not adopted: recent-error and negative-price features (roadmap D1/D2).
-5. **15-minute resolution**, then **German solar**, both unchanged.
+1. **Run-addressed weather: done and shipped.** MET Norway MEPS (2.5 km) and ECMWF
+   IFS HRES 00z runs now feed both the backtest and the daily forecast, which fetches
+   and archives each day's runs (`configs/base.yaml: features.run_addressed`). On the
+   same backtest rows they cut typical error by 12% and shrink the lead-34 step from
+   +45% to about +20% (`reports/meps_archive.md`).
+2. **Over-confidence (problem 1): largely fixed, and shipped.** Calibration is now
+   grouped by weather-model disagreement and fitted on cross-fitted residuals: 80%
+   coverage 0.74 → **0.78**, CRPS a further −3.7%, autumn 0.73 → 0.78
+   (`reports/calibration.md`). The "worse at high wind" picture was partly an artefact
+   of binning by actual output; the chart now bins by forecast.
+3. **Watch the MEPS archive.** MET Norway's thredds archive now lists only the current
+   month (checked 2026-09-22). The local copy of 735 runs cannot be re-downloaded, and
+   the live model trains only on days with MEPS, so it currently stops at 2026-03-01
+   until daily archiving fills the gap.
+4. **Remaining bias by season** (winter over-, autumn under-prediction, about ±40 MW).
+   Neither the day-of-year features nor calibration cause it; ERA5 shows it with the
+   actual weather too, so it needs availability or outage data (roadmap C2/F).
+5. Tried and not adopted: recent-error, negative-price and 18z lagged-run features
+   (roadmap D1, D2, B5). The 18z jump is a strong uncertainty signal on rare hours and
+   is a candidate calibration stratifier.
+6. **Capacity drift (problem 3)**, **15-minute resolution**, then **German solar**.
 
 Two deliberate omissions: a six-month slice of recent data (March–September 2026) has
 been set aside untouched, to be used once for a final honest score, and no effort has
@@ -211,8 +219,9 @@ flattering numbers rather than better forecasts.
 ### Where the numbers come from
 
 Every figure here is generated from the outputs of the backtest itself, so a chart
-cannot drift away from the number it illustrates. Headline results cover **546 delivery
-days, 13,082 hours**, between September 2024 and March 2026 — see `docs/metrics.md` for
+cannot drift away from the number it illustrates. Headline results cover **502 delivery
+days, 12,026 hours**, between October 2024 and March 2026 (days that have every weather
+source; before 2026-09-22 the board covered 546 days from September 2024) — see `docs/metrics.md` for
 exactly which rows each statistic covers and what it measures.
 
 | document | what it settles |
@@ -289,9 +298,13 @@ export PYTHONPATH=research/src
 
 uv run python -m renewable_forecast.pipelines.data_audit   # data quality gate
 uv run python -m renewable_forecast.pipelines.pull_meps    # MEPS archive backfill
-uv run python -m renewable_forecast.pipelines.compare_meps # run-addressed A/B
+uv run python -m renewable_forecast.pipelines.pull_ifs_runs  # IFS HRES 00z runs (--run-hour 18 for 18z)
+uv run python -m renewable_forecast.pipelines.compare_meps --ifs      # run-addressed NWP A/B
+uv run python -m renewable_forecast.pipelines.compare_calibration --schemes  # calibration A/B
+uv run python -m renewable_forecast.pipelines.compare_blocks --help   # feature-block A/Bs
 uv run python -m renewable_forecast.pipelines.train        # backtest + results
-uv run python -m renewable_forecast.pipelines.predict      # forecast tomorrow
+uv run python -m renewable_forecast.pipelines.predict      # forecast tomorrow; run after ~08:40 UTC,
+                                                           # when the IFS 00z run is out
 uv run python -m renewable_forecast.reporting.figures      # regenerate every figure
 uv run mlflow ui --backend-store-uri sqlite:///research/mlruns/mlflow.db
 

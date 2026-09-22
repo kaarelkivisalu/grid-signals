@@ -277,11 +277,14 @@ def ifs_block(
 
 
 def attach_ifs(
-    frame: pd.DataFrame, points: pd.DataFrame, *, lagged: bool = True
+    frame: pd.DataFrame, points: pd.DataFrame, *, lagged: bool = False
 ) -> pd.DataFrame:
     """Join the IFS run block on the issue day's 00z run, exactly as for MEPS.
 
     With `lagged`, also the previous day's 18z run and the change between the two.
+    Off by default: the 18z archive only starts 2024-08-06, so the features are absent
+    from the first months of training, and they are not adopted until an A/B on rows
+    where they exist says so.
     """
     block = ifs_block(points)
     frame = frame.copy()

@@ -24,7 +24,7 @@ import pandas as pd
 
 from renewable_forecast import config, paths
 from renewable_forecast.evaluation import metrics
-from renewable_forecast.features import assemble
+from renewable_forecast.features import assemble, sites
 from renewable_forecast.models.quantile import QuantileGBM
 from renewable_forecast.pipelines import compare_meps, evaluate
 
@@ -87,15 +87,110 @@ def run(*, with_meps: bool = False, with_ifs: bool = False) -> pd.DataFrame:
     return overall
 
 
+def is_lagged_column(column: str) -> bool:
+    """Whether a column comes from the previous day's 18z IFS run."""
+    return assemble.LAG_SUFFIX in column or column.endswith(("_jump", "_jump_abs"))
+
+
+def run_lagged_ifs() -> pd.DataFrame:
+    """Base configured matrix against base + the 18z lagged-IFS block (roadmap B5).
+
+    Restricted to delivery days where the 18z run exists (from 2024-08-06), so that
+    neither arm is fitted across the boundary where the block appears.
+    """
+    cfg = config.load()
+    levels = np.array(cfg.task.quantiles)
+    sources = tuple(cfg.features.get("run_addressed", ()))
+    frame = evaluate.load_design_matrix(**assemble.run_flags(sources))
+    frame = assemble.require_run_coverage(frame, sources)
+    frame = assemble._attach_lagged_ifs(frame, sites.build(cfg.task.zone))  # noqa: SLF001
+    have = frame["power_curve__ifsrun_lag6"].notna().groupby(frame.delivery_day)
+    frame = frame[have.transform("all")].reset_index(drop=True)
+    development = compare_meps.development_days(frame, cfg)
+    logger.info("%s delivery days with an 18z run", frame.delivery_day.nunique())
+
+    rows = []
+    for arm in ("base", "lagged_ifs"):
+        subset = frame[
+            [c for c in frame.columns if arm == "lagged_ifs" or not is_lagged_column(c)]
+        ]
+        actual, context, predictions = evaluate.run_folds(
+            subset, development, {QuantileGBM.name: lambda: QuantileGBM(levels)}, cfg
+        )
+        quantiles = predictions[QuantileGBM.name]
+        rows.append({"arm": arm, **metrics.summarise(actual, quantiles, levels)})
+        # The block exists to flag unstable forecasts; score where it says so.
+        jump = frame.set_index("valid_time")["power_curve__ifsrun_jump_abs"]
+        jumpy = (context.valid_time.map(jump) > 0.1).to_numpy()
+        rows.append(
+            {
+                "arm": f"{arm} | jump > 0.1",
+                "n": int(jumpy.sum()),
+                **metrics.summarise(actual[jumpy], quantiles[jumpy], levels),
+            }
+        )
+    overall = pd.DataFrame(rows)
+    overall.to_parquet(paths.INTERIM / "compare_lagged_ifs_overall.parquet", index=False)
+    logger.info("\n%s", overall.round(4).to_string(index=False))
+    return overall
+
+
+def run_drop(columns: tuple[str, ...]) -> pd.DataFrame:
+    """Configured matrix with and without `columns`, same rows and folds.
+
+    Scored pooled and per season, because the question that motivated it -- do the
+    day-of-year terms memorise one year's seasonal anomaly? -- shows up as seasonal
+    bias, not in the pooled score.
+    """
+    cfg = config.load()
+    levels = np.array(cfg.task.quantiles)
+    sources = tuple(cfg.features.get("run_addressed", ()))
+    frame = evaluate.load_design_matrix(**assemble.run_flags(sources))
+    frame = assemble.require_run_coverage(frame, sources)
+    development = compare_meps.development_days(frame, cfg)
+    missing = set(columns) - set(frame.columns)
+    if missing:
+        msg = f"columns not in the matrix: {sorted(missing)}"
+        raise ValueError(msg)
+
+    rows = []
+    for arm, subset in (("base", frame), ("dropped", frame.drop(columns=list(columns)))):
+        actual, context, predictions = evaluate.run_folds(
+            subset, development, {QuantileGBM.name: lambda: QuantileGBM(levels)}, cfg
+        )
+        quantiles = predictions[QuantileGBM.name]
+        rows.append({"arm": arm, "season": "all", **metrics.summarise(actual, quantiles, levels)})
+        for season in ("DJF", "MAM", "JJA", "SON"):
+            mask = (context.season == season).to_numpy()
+            rows.append(
+                {
+                    "arm": arm,
+                    "season": season,
+                    **metrics.summarise(actual[mask], quantiles[mask], levels),
+                }
+            )
+    overall = pd.DataFrame(rows)
+    overall.to_parquet(paths.INTERIM / "compare_drop_overall.parquet", index=False)
+    logger.info("dropped %s\n%s", columns, overall.round(4).to_string(index=False))
+    return overall
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--meps", action="store_true")
     parser.add_argument("--ifs", action="store_true")
+    parser.add_argument("--lagged-ifs", action="store_true")
+    parser.add_argument("--drop", nargs="*", help="A/B the matrix without these columns")
     args = parser.parse_args()
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
-    run(with_meps=args.meps or args.ifs, with_ifs=args.ifs)
+    if args.drop:
+        run_drop(tuple(args.drop))
+    elif args.lagged_ifs:
+        run_lagged_ifs()
+    else:
+        run(with_meps=args.meps or args.ifs, with_ifs=args.ifs)
 
 
 if __name__ == "__main__":
