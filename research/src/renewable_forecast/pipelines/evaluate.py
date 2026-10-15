@@ -30,13 +30,25 @@ def load_design_matrix(
     with_ifs: bool = False,
 ) -> pd.DataFrame:
     """Read the design matrix built in Phase 4."""
-    path = assemble.design_matrix_path(zone, fuel, with_meps=with_meps, with_ifs=with_ifs)
+    path = assemble.design_matrix_path(
+        zone, fuel, with_meps=with_meps, with_ifs=with_ifs
+    )
     if not path.exists():
         msg = f"{path} missing; run renewable_forecast.features.assemble first"
         raise FileNotFoundError(msg)
     frame = pd.read_parquet(path)
     frame["valid_time"] = pd.to_datetime(frame.valid_time, utc=True)
     frame["delivery_day"] = pd.to_datetime(frame.delivery_day)
+    if "nwp_max_valid_time" not in frame:
+        raise RuntimeError(
+            f"{path} predates the weather information-age correction; rebuild it with assemble.write"
+        )
+    latest = pd.to_datetime(frame.nwp_max_valid_time, utc=True)
+    available = latest - pd.to_timedelta(frame.nwp_offset_days * 24, unit="h")
+    if (available > assemble.issue_time_of(frame)).any():
+        raise RuntimeError(
+            f"{path} contains weather newer than issue time; rebuild it with assemble.write"
+        )
     return frame.sort_values("valid_time").reset_index(drop=True)
 
 
@@ -45,7 +57,17 @@ def development_split(
 ) -> tuple[pd.DatetimeIndex, pd.DatetimeIndex]:
     """Separate the sealed holdout from the development set."""
     days = pd.DatetimeIndex(sorted(frame.delivery_day.unique()))
-    development, holdout = splits.seal_holdout(days, cfg.splits.holdout_months)
+    if cfg.splits.holdout_start:
+        start = pd.Timestamp(cfg.splits.holdout_start)
+        end = (
+            pd.Timestamp(cfg.splits.holdout_end)
+            if cfg.splits.holdout_end
+            else days.max()
+        )
+        development = days[days < start]
+        holdout = days[(days >= start) & (days <= end)]
+    else:
+        development, holdout = splits.seal_holdout(days, cfg.splits.holdout_months)
     logger.info(
         "development %s..%s (%sd) | holdout %s..%s (%sd) SEALED",
         development.min().date(),

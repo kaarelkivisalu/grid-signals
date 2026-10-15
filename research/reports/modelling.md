@@ -1,5 +1,13 @@
 # Phase 5 — Modelling
 
+**Version note, 2026-10-15:** these are the archived September hourly results. The
+new product path also dates forward NWP trajectory features to their latest input
+(+3 h, including interpolation endpoints). The old guard dated them to the target
+instant and could admit too-fresh weather around an offset boundary. These tables
+therefore do not establish accuracy for the corrected current code. The corrected
+quarter-hour A/B and initial solar evaluation are in `products_15min.md`; neither
+opens the sealed holdout. The September tables remain as historical evidence.
+
 **Run 2026-09-20, development set only.** The 184-day holdout (2026-03-20 → 2026-09-19)
 is **sealed** and is not reported here. 18 rolling-origin folds over 763 development
 days, 7-day embargo, resampled by delivery day, on the frozen protocol in

@@ -47,6 +47,8 @@ def delivery_day_starts(
     the spring-forward day is 23 hours long and the autumn-back day 25.
     """
     local_start = datetime(day.year, day.month, day.day, tzinfo=tz)
+    if resolution <= timedelta(0):
+        raise ValueError("resolution must be positive")
     # Aware arithmetic adds to the wall clock and keeps the zone, so this is the next
     # local midnight rather than a fixed 24 hours later.
     local_end = local_start + timedelta(days=1)

@@ -13,6 +13,8 @@ Everything else -- offsets, lags, calendar, the capacity denominator -- comes fr
 same functions the training path uses, so the two cannot drift apart.
 """
 
+import argparse
+import fcntl
 import logging
 from datetime import UTC, date, datetime, timedelta
 
@@ -20,8 +22,10 @@ import numpy as np
 import pandas as pd
 
 from renewable_forecast import config, experiment, paths, windows
-from renewable_forecast.features import assemble, sites
+from renewable_forecast.features import assemble, sites, solar
+from renewable_forecast.features.resolution import validate
 from renewable_forecast.models.quantile import QuantileGBM
+from renewable_forecast.models.solar import SolarQuantileGBM
 from renewable_forecast.sources import ifs_runs, meps, openmeteo
 
 logger = logging.getLogger(__name__)
@@ -65,39 +69,103 @@ def run(
     fuel: str = "wind_onshore",
     *,
     refresh: bool = True,
+    resolution: str = "15min",
+    wind_method: str = "repeat",
 ) -> pd.DataFrame:
     """Forecast one delivery day and append the vintage. Defaults to tomorrow."""
     delivery_day = delivery_day or (datetime.now(UTC).date() + timedelta(days=1))
     issue_day = delivery_day - timedelta(days=1)
     issued = windows.issue_time(issue_day)
-    cfg = config.load()
+    step = validate(resolution)
+    is_solar = (zone, fuel) == ("DE_LU", "solar")
+    if wind_method not in {"repeat", "interpolate"}:
+        raise ValueError("wind_method must be repeat or interpolate")
+    if not is_solar and (zone, fuel) != ("SE3", "wind_onshore"):
+        raise ValueError("supported tasks: SE3 wind_onshore and DE_LU solar")
+    cfg = config.load("delu_solar" if is_solar else None)
+    cfg.task.zone = zone
+    cfg.task.fuel_types = [fuel]
+    cfg.task.resolution = resolution
+    if is_solar:
+        temporal_method = "native"
+    elif step == pd.Timedelta("1h"):
+        temporal_method = "hourly"
+    else:
+        temporal_method = {
+            "repeat": "hourly_repeated",
+            "interpolate": "interpolated_weather",
+        }[wind_method]
+    cfg.features["temporal_method"] = temporal_method
     levels = np.array(cfg.task.quantiles)
 
     run_addressed = tuple(cfg.features.get("run_addressed", ()))
     flags = assemble.run_flags(run_addressed)
     if refresh:
-        refresh_nwp(delivery_day, zone, run_addressed)
+        if is_solar:
+            solar.refresh(delivery_day)
+        else:
+            refresh_nwp(delivery_day, zone, run_addressed)
 
-    train = assemble.build(zone, fuel, **flags)
-    train = train[train.delivery_day < pd.Timestamp(delivery_day)]
-    train = assemble.require_run_coverage(train, run_addressed)
+    future = (
+        solar.build(delivery_day, resolution)
+        if is_solar
+        else assemble.build_operational(
+            delivery_day,
+            zone,
+            fuel,
+            resolution="1h" if temporal_method == "hourly_repeated" else resolution,
+            **flags,
+        )
+    )
+    required = (
+        ["physical_cf", "clear_sky_cf", "solar_elevation"]
+        if is_solar
+        else [
+            "power_curve_model_mean",
+            *[assemble.RUN_SOURCES[source] for source in run_addressed],
+        ]
+    )
+    if future[required].isna().any().any():
+        raise RuntimeError(
+            f"incomplete weather coverage for {zone} {delivery_day}; cannot forecast"
+        )
+    if is_solar:
+        train = solar.build(resolution=resolution)
+    else:
+        # Stage 1: train on hourly means; evaluate interpolated NWP with that model.
+        train = assemble.require_run_coverage(
+            assemble.build(zone, fuel, **flags), run_addressed
+        )
+    # Whole delivery days ending before the issue day only. A historic invocation
+    # must never train on the issue day's later actuals simply because they are cached.
+    train = train[train.delivery_day < pd.Timestamp(issue_day)]
+    if train.empty:
+        raise RuntimeError("no training history available before issue")
     logger.info(
         "fitting on %s rows up to %s", len(train), train.delivery_day.max().date()
     )
-
-    model = QuantileGBM(levels, **cfg.model.get("quantile", {})).fit(train)
-    future = assemble.build_operational(delivery_day, zone, fuel, **flags)
-    for source in run_addressed:
-        column = assemble.RUN_SOURCES[source]
-        if future[column].isna().any():
-            # Refuse rather than silently forecast from a model fitted with a source
-            # the live row lacks: the trees would route every hour down their
-            # missing-value branches, which the backtest never scored.
-            msg = f"{source} run for {issue_day} is missing; cannot forecast"
-            raise RuntimeError(msg)
+    factory = SolarQuantileGBM if is_solar else QuantileGBM
+    model = factory(levels, **cfg.model.get("quantile", {})).fit(train)
     quantiles = model.predict(future)
+    if temporal_method == "hourly_repeated":
+        grid = pd.DatetimeIndex(
+            windows.delivery_day_starts(delivery_day, resolution=step)
+        )
+        positions = pd.DatetimeIndex(future.valid_time).get_indexer(grid.floor("h"))
+        if (positions < 0).any():
+            raise RuntimeError(
+                "hourly forecast does not cover the quarter-hour delivery grid"
+            )
+        future = future.iloc[positions].reset_index(drop=True)
+        future["valid_time"] = grid
+        quantiles = quantiles[positions]
 
     out = future[["valid_time", "delivery_day", "lead_hour", "capacity_mw"]].copy()
+    out["zone"] = zone
+    out["fuel_type"] = fuel
+    out["resolution"] = resolution
+    out["temporal_method"] = temporal_method
+    out["period_end"] = out.valid_time + step
     out["issue_time"] = issued
     out["model_version"] = experiment.version(cfg)
     out["created_at"] = datetime.now(UTC)
@@ -106,28 +174,98 @@ def run(
         out[f"mw_q{level:.2f}"] = column * out.capacity_mw
 
     paths.PREDICTIONS.mkdir(parents=True, exist_ok=True)
-    if VINTAGES.exists():
-        out = pd.concat([pd.read_parquet(VINTAGES), out], ignore_index=True)
-    out.to_parquet(VINTAGES, index=False)
-    logger.info("wrote %s rows to %s", len(out), VINTAGES)
+    # Wind and solar jobs may finish together. Lock the append as well as replacing
+    # atomically, or the later writer could discard the other task's new vintage.
+    with VINTAGES.with_suffix(".lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        archive = pd.concat([_read_vintages(), out], ignore_index=True)
+        temporary = VINTAGES.with_suffix(".tmp.parquet")
+        archive.to_parquet(temporary, index=False)
+        temporary.replace(VINTAGES)
+    logger.info("wrote %s new rows to %s", len(out), VINTAGES)
     return out
 
 
-def latest(zone: str = "SE3") -> pd.DataFrame:  # noqa: ARG001
-    """The newest vintage on file, one row per delivery hour."""
+def _read_vintages() -> pd.DataFrame:
+    """Read the archive, including legacy wind-only hourly vintages."""
     if not VINTAGES.exists():
-        msg = f"{VINTAGES} does not exist; run predict first"
-        raise FileNotFoundError(msg)
+        return pd.DataFrame()
     frame = pd.read_parquet(VINTAGES)
-    newest = frame.created_at.max()
-    return frame[frame.created_at == newest].sort_values("valid_time")
+    for column, default in {
+        "zone": "SE3",
+        "fuel_type": "wind_onshore",
+        "resolution": "1h",
+    }.items():
+        if column not in frame:
+            frame[column] = default
+        else:
+            frame[column] = frame[column].fillna(default)
+    if "period_end" not in frame:
+        frame["period_end"] = frame.valid_time + pd.Timedelta(hours=1)
+    # Before temporal_method was recorded, the first quarter-hour wind vintages
+    # used interpolated weather; older wind was hourly and solar was always native.
+    inferred = pd.Series(
+        np.where(
+            frame.fuel_type == "solar",
+            "native",
+            np.where(frame.resolution == "1h", "hourly", "interpolated_weather"),
+        ),
+        index=frame.index,
+    )
+    frame["temporal_method"] = (
+        frame["temporal_method"].fillna(inferred)
+        if "temporal_method" in frame
+        else inferred
+    )
+    return frame
+
+
+def latest(
+    zone: str = "SE3", fuel: str = "wind_onshore", resolution: str | None = None
+) -> pd.DataFrame:
+    """Newest forecast for the requested task; never another zone or fuel's vintage."""
+    frame = _read_vintages()
+    if not frame.empty:
+        frame = frame[(frame.zone == zone) & (frame.fuel_type == fuel)]
+        if resolution is not None:
+            frame = frame[frame.resolution == resolution]
+    if frame.empty:
+        raise FileNotFoundError(
+            f"no forecast archived for {zone} {fuel} {resolution or ''}"
+        )
+    return frame[frame.created_at == frame.created_at.max()].sort_values("valid_time")
 
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    frame = run()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--day", type=date.fromisoformat, help="local delivery day (default tomorrow)"
+    )
+    parser.add_argument(
+        "--fuel", choices=["wind_onshore", "solar"], default="wind_onshore"
+    )
+    parser.add_argument("--zone", choices=["SE3", "DE_LU"])
+    parser.add_argument("--resolution", choices=["1h", "15min"], default="15min")
+    parser.add_argument(
+        "--wind-method",
+        choices=["repeat", "interpolate"],
+        default="repeat",
+        help="repeat hourly distributions (default), or predict using interpolated weather",
+    )
+    parser.add_argument("--no-refresh", action="store_true", help="use cached weather")
+    args = parser.parse_args()
+    zone = args.zone or ("DE_LU" if args.fuel == "solar" else "SE3")
+    frame = run(
+        args.day,
+        zone,
+        args.fuel,
+        refresh=not args.no_refresh,
+        resolution=args.resolution,
+        wind_method=args.wind_method,
+    )
     logger.info(
-        "%s: %.0f-%.0f MW (p10-p90), median %.0f MW",
+        "%s: mean interval forecasts p10 %.0f MW, p90 %.0f MW, p50 %.0f MW",
         frame.delivery_day.iloc[0].date(),
         frame["mw_q0.10"].mean(),
         frame["mw_q0.90"].mean(),

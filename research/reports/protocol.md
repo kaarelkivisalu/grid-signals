@@ -89,7 +89,59 @@ that did not exist at 09:00 UTC the day before.
    benchmark requires capturing A69 at issue time, one request per day — recommended as a
    standing job, not started here, since ongoing self-archiving was deliberately deferred.
 
-## Still to be added
+## Amendment, 2026-10-15 — quarter-hour wind and DE-LU solar
+
+This adds a separate product evaluation; it does not replace the frozen hourly board
+or open the 2026-03-20 → 2026-09-19 holdout. The split dates are now explicit in
+`configs/base.yaml`, so refreshing inputs cannot move the sealed window.
+
+- **Evaluation:** December 2025, January 2026 and February 2026, three monthly
+  rolling-origin folds, each with a seven-day embargo. Only complete delivery days
+  with genuine quarter-hour actuals and required weather are scored. Each arm sees
+  the same intervals. Days outside this set can enter production fitting only.
+- **Wind Stage 1:** fit the existing quantile model on hourly mean MW. Interpolate
+  weather linearly, within each model/run/point/height, before applying the power
+  curve. Compare against the same hourly model's quantiles repeated over its four
+  quarter-hours. No claim of native sub-hourly weather skill is made. Hourly actuals
+  are arithmetic averages of four complete quarter-hours; they are never expanded
+  into artificial quarter-hour training labels.
+- **Information-age correction:** both wind arms date the entire whole-day NWP block
+  to the latest forward trajectory input (+3 h, rounded to the following hour for
+  interpolation). The earlier hourly guard dated these features only to the target
+  instant and could admit too-fresh weather at an offset boundary. The September
+  hourly tables are retained as historical results, not corrected-code accuracy.
+- **Solar:** DE-LU A75 estimated generation, native 15-minute intervals. Normalize
+  by the latest cached annual A68 capacity snapshot preceding each issue. Annual
+  chunk-boundary carryovers resolve to the larger snapshot for this growing fleet.
+  No interpolation to a future annual capacity is allowed. This is a provisional
+  denominator until dated MaStR capacity is available; A68 publication vintages are
+  not recoverable, so the normalization is not claimed to be vintage-audited.
+- **Solar evaluation hours:** headline marginal metrics use intervals whose midpoint
+  solar elevation exceeds **5° at at least one declared site**. Fit on daylight
+  (>0°); set all quantiles to zero when every site is below the horizon. Report
+  daylight and all-hours diagnostics separately, so night cannot inflate headline
+  skill. Interval means are approximated by midpoint PV output.
+- **Solar references:** clear-sky-index climatology, 48-hour smart persistence and a
+  physical PV baseline with one derating factor fitted inside each training fold.
+  Irradiance uses a pinned `ecmwf_ifs025` Previous Runs archive at safe whole-day
+  offsets, with clear-sky-index interpolation. The following hourly interpolation
+  endpoint must also predate issue; missing endpoint values and hours remain missing.
+  The first fleet is an explicit equal-area six-site approximation, with half its
+  panels south-facing and a quarter each east/west. It is not a MaStR fleet model.
+- **Metrics:** the existing marginal metrics, plus median quarter-hour ramp MAE and
+  error in the timing of the largest absolute daily ramp. Paired CRPS differences
+  use the same day-block bootstrap. All-hours hourly-averaged **point** MAE is a
+  diagnostic only; averaging marginal quantiles is not a joint distribution.
+- **Exclusions:** incomplete intervals, missing weather and CF outside [0,1] for
+  solar. Record actual scored day/interval counts. These product tests do not score
+  scenarios; energy/variogram scoring remains a prerequisite for using joint paths.
+
+Operational forecasts can fit on observations from days ending before the issue day,
+including past holdout days, without scoring them. The production path and the
+development scorer use separate cutoffs. Forecast files identify zone, fuel,
+resolution, interval end, issue time, capacity assumption and model version.
+
+## Original Phase 4 follow-up
 
 The **physical power-curve baseline** — capacity-weighted NWP wind speed → density
 correction → fleet power curve → CF, with no learning — lands in Phase 4 once NWP features

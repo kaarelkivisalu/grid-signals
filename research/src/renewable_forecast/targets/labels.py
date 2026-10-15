@@ -28,7 +28,9 @@ def _prices(zone: str) -> pd.Series:
     )
 
 
-def build(zone: str = "SE3", fuel: str = "wind_onshore") -> pd.DataFrame:
+def build(
+    zone: str = "SE3", fuel: str = "wind_onshore", resolution: str = "1h"
+) -> pd.DataFrame:
     """Build the target table for one zone and fuel.
 
     Returns one row per hour with observed MW, the capacity denominator from both
@@ -40,7 +42,15 @@ def build(zone: str = "SE3", fuel: str = "wind_onshore") -> pd.DataFrame:
         raise RuntimeError(msg)
     raw["fuel_type"] = raw.fuel_type.map(actuals.slug)
 
-    hourly = actuals.to_hourly(raw)
+    if resolution not in {"1h", "15min"}:
+        raise ValueError("resolution must be 1h or 15min")
+    hourly = (
+        actuals.to_hourly(raw)
+        if resolution == "1h"
+        else actuals.to_quarter_hourly(raw).assign(
+            n_sub=1, expected_sub=1, native_minutes=15
+        )
+    )
     hourly = hourly[hourly.fuel_type == fuel].sort_values("period_start")
     observed = hourly.set_index("period_start").mw
 
@@ -87,11 +97,14 @@ def build(zone: str = "SE3", fuel: str = "wind_onshore") -> pd.DataFrame:
     return frame
 
 
-def write(zone: str = "SE3", fuel: str = "wind_onshore") -> pd.DataFrame:
+def write(
+    zone: str = "SE3", fuel: str = "wind_onshore", resolution: str = "1h"
+) -> pd.DataFrame:
     """Build the target table and persist it to the interim store."""
-    frame = build(zone, fuel)
+    frame = build(zone, fuel, resolution)
     paths.INTERIM.mkdir(parents=True, exist_ok=True)
-    out = paths.INTERIM / f"targets_{zone.lower()}_{fuel}.parquet"
+    suffix = "_15min" if resolution == "15min" else ""
+    out = paths.INTERIM / f"targets_{zone.lower()}_{fuel}{suffix}.parquet"
     frame.to_parquet(out, index=False)
     logger.info(
         "wrote %s (%s rows, %.1f%% trainable)",

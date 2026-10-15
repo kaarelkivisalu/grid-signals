@@ -18,6 +18,7 @@ EXCLUDED = frozenset(
         "issue_day",
         "season",
         "nwp_offset_days",
+        "nwp_max_valid_time",
         # The MEPS run instant is bookkeeping, not weather: it tells the leakage guard
         # how old a __meps column is and must never become a feature itself.
         "meps_run_time",

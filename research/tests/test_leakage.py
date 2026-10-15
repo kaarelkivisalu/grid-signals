@@ -40,10 +40,13 @@ def _frame(*, fixed_offset: int | None = None) -> pd.DataFrame:
             "cf": 0.4,
         }
     )
+    frame["nwp_max_valid_time"] = frame.valid_time + pd.Timedelta(hours=3)
     frame["nwp_offset_days"] = (
         fixed_offset
         if fixed_offset is not None
-        else assemble.required_offset(frame.valid_time, assemble.issue_time_of(frame))
+        else assemble.required_offset(
+            frame.nwp_max_valid_time, assemble.issue_time_of(frame)
+        )
     )
     return frame
 
@@ -74,24 +77,33 @@ def test_a_fixed_24h_offset_would_leak() -> None:
     """Proof the guard fires: this is the defect it caught, preserved as a test."""
     leaked = _violations(_frame(fixed_offset=1))
     assert "power_curve_model_mean" in leaked
-    assert leaked["power_curve_model_mean"] == 13, (
-        "previous_day1 is legitimate for only the first 11 of 24 delivery hours"
+    assert leaked["power_curve_model_mean"] == 16, (
+        "the three-hour weather lookahead makes day1 safe for only eight hours"
     )
 
 
 def test_a_48h_offset_is_always_safe_but_needlessly_stale() -> None:
     assert not _violations(_frame(fixed_offset=2))
     chosen = _frame().nwp_offset_days
-    assert (chosen == 1).sum() == 11, (
+    assert (chosen == 1).sum() == 8, (
         "the fresher offset should be used where it is safe"
     )
+
+
+def test_target_only_age_would_leak_forward_weather_at_the_boundary() -> None:
+    frame = _frame()
+    frame["nwp_offset_days"] = assemble.required_offset(
+        frame.valid_time, assemble.issue_time_of(frame)
+    )
+    leaked = _violations(frame)
+    assert leaked["power_curve_model_mean"] == 3
 
 
 def test_required_offset_is_the_smallest_safe_one() -> None:
     frame = _frame()
     issued = assemble.issue_time_of(frame)
-    age_hours = (frame.valid_time - issued).dt.total_seconds() / 3600
-    chosen = assemble.required_offset(frame.valid_time, issued)
+    age_hours = (frame.nwp_max_valid_time - issued).dt.total_seconds() / 3600
+    chosen = assemble.required_offset(frame.nwp_max_valid_time, issued)
     assert (chosen * 24 >= age_hours).all(), (
         "chosen offset must not be fresher than the task"
     )
@@ -270,7 +282,9 @@ def test_price_same_hour_refers_to_the_issue_day() -> None:
     """The lag is exactly one day, so the price hour sits on the issue day."""
     frame = _frame()
     looked_up = frame.valid_time - pd.Timedelta(hours=24)
-    local = looked_up.dt.tz_convert(windows.MARKET_TZ).dt.normalize().dt.tz_localize(None)
+    local = (
+        looked_up.dt.tz_convert(windows.MARKET_TZ).dt.normalize().dt.tz_localize(None)
+    )
     # DST days shift one hour across midnight; every other hour must land on D.
     assert (local == frame.issue_day).mean() > 0.9
 

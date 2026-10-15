@@ -241,7 +241,7 @@ def _interpolate(
 
 
 def add_icing_memory(
-    frame: pd.DataFrame, keys: tuple[str, ...] = ("point_id",)
+    frame: pd.DataFrame, keys: tuple[str, ...] = ("point_id",), steps_per_hour: int = 1
 ) -> pd.DataFrame:
     """Rolling icing-hour counts per point. Ice persists long after conditions pass.
 
@@ -253,7 +253,9 @@ def add_icing_memory(
     grouped = frame.groupby(list(keys)).icing_now
     for window in ICING_WINDOWS_H:
         frame[f"icing_{window}h"] = grouped.transform(
-            lambda s, w=window: s.rolling(w, min_periods=1).sum()
+            lambda s, w=window: (
+                s.rolling(w * steps_per_hour, min_periods=1).sum() / steps_per_hour
+            )
         )
     return frame
 
@@ -280,35 +282,27 @@ def aggregate(
 
     value_columns = [c for c in frame.columns if c not in {*keys, "point_id", "weight"}]
 
-    def _collapse(group: pd.DataFrame) -> pd.Series:
-        weight = group.weight.to_numpy(dtype=float)
-        values = group[value_columns].to_numpy(dtype=float)
-        # Weighted mean over the clusters that have a value, with the weights
-        # renormalised over those clusters; NaN when none do. A plain nansum turns an
-        # all-missing hour into 0.0 -- a forecast of dead calm -- and biases a partly
-        # missing hour low. That happened: an IFS run that came back all-null
-        # (2025-08-07) was read as zero wind and halved the forecast.
-        finite = np.isfinite(values)
-        mass = (finite * weight[:, None]).sum(axis=0)
-        total = np.where(finite, values, 0.0).T @ weight
-        weighted = np.divide(
-            total, mass, out=np.full(len(value_columns), np.nan), where=mass > 0
-        )
-        result = dict(zip(value_columns, weighted, strict=True))
-        # Dispersion across clusters, for the features where it is physically meaningful.
-        for column in dispersion:
-            series = group[column].to_numpy(dtype=float)
-            finite = series[np.isfinite(series)]
-            # A cluster-hour with no finite values happens where a model has a gap;
-            # nan is the honest answer, and numpy's all-NaN warnings are just noise.
-            if finite.size == 0:
-                result[f"{column}_spatial_std"] = np.nan
-                result[f"{column}_spatial_range"] = np.nan
-            else:
-                result[f"{column}_spatial_std"] = float(finite.std())
-                result[f"{column}_spatial_range"] = float(finite.max() - finite.min())
-        return pd.Series(result)
-
-    return (
-        frame.groupby(list(keys)).apply(_collapse, include_groups=False).reset_index()
+    # All feature columns share the same grouping. Sum values and finite weight mass
+    # in bulk: quarter-hour assembly otherwise spends minutes in Python per source.
+    index = pd.MultiIndex.from_frame(frame[list(keys)])
+    values = (
+        frame[value_columns]
+        .astype(float)
+        .where(np.isfinite(frame[value_columns].to_numpy(dtype=float)))
     )
+    weight = frame.weight.fillna(0.0)
+    total = values.mul(weight, axis=0)
+    mass = values.notna().mul(weight, axis=0)
+    total.index = mass.index = index
+    levels = list(range(len(keys)))
+    result = (
+        total.groupby(level=levels)
+        .sum(min_count=1)
+        .div(mass.groupby(level=levels).sum().replace(0, np.nan))
+    )
+    for column in dispersion:
+        series = pd.Series(values[column].to_numpy(), index=index)
+        grouped = series.groupby(level=levels)
+        result[f"{column}_spatial_std"] = grouped.std(ddof=0)
+        result[f"{column}_spatial_range"] = grouped.max() - grouped.min()
+    return result.reset_index()

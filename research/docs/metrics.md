@@ -1,5 +1,10 @@
 # What the metrics measure, and over which rows
 
+This documents the archived hourly boards. The corrected quarter-hour wind and solar
+populations and their added ramp metrics are in `reports/products_15min.md` and the
+2026-10-15 protocol amendment. The old hourly results predate the forward-weather
+information-age correction and must not be quoted as current-code accuracy.
+
 Every number on the leaderboard is a mean over the **same fixed population of delivery
 hours**. This document states exactly which hours those are, what each metric does to
 them, and what the numbers mean in megawatts.

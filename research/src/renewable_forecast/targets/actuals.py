@@ -92,3 +92,31 @@ def to_hourly(
     )
     hourly["native_minutes"] = 60.0 / hourly.expected_sub
     return hourly
+
+
+def to_quarter_hourly(raw: pd.DataFrame) -> pd.DataFrame:
+    """Keep genuine quarter-hour observations; never expand hourly measurements.
+
+    An hour must contain all four starts. This also excludes transition days' hourly
+    observations and incomplete hours without treating gaps as zero generation.
+    """
+    frame = raw.copy()
+    if "aggregation" in frame:
+        frame = frame[frame.aggregation == "Actual Aggregated"]
+    frame["fuel_type"] = frame.fuel_type.map(slug)
+    frame["period_start"] = pd.to_datetime(frame.period_start, utc=True)
+    frame = frame.sort_values("fetched_at").drop_duplicates(
+        ["zone", "fuel_type", "period_start"], keep="last"
+    )
+    aligned = (frame.period_start.dt.minute % 15 == 0) & (
+        frame.period_start.dt.second == 0
+    )
+    frame = frame[aligned].copy()
+    hour = frame.period_start.dt.floor("h")
+    count = frame.groupby(["zone", "fuel_type", hour]).period_start.transform("size")
+    frame = frame[count == 4].rename(columns={"value_mw": "mw"})
+    return (
+        frame[["zone", "fuel_type", "period_start", "mw"]]
+        .sort_values("period_start")
+        .reset_index(drop=True)
+    )

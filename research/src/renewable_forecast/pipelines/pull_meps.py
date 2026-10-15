@@ -37,6 +37,11 @@ def main() -> None:
     parser.add_argument("end", nargs="?", type=date.fromisoformat, default=DEFAULT_END)
     parser.add_argument("--zone", default="SE3")
     parser.add_argument(
+        "--newest-first",
+        action="store_true",
+        help="restore live coverage before older history",
+    )
+    parser.add_argument(
         "--radius",
         type=int,
         default=0,
@@ -56,7 +61,9 @@ def main() -> None:
     logger.info(
         "pulling MEPS %s .. %s for %s points", args.start, args.end, len(points)
     )
-    written = meps.pull(points, args.start, args.end, args.radius)
+    written = meps.pull(
+        points, args.start, args.end, args.radius, newest_first=args.newest_first
+    )
     logger.info("done: %s runs written", written)
 
 

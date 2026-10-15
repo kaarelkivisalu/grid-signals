@@ -10,11 +10,11 @@ converts them into expected generation for each hour of tomorrow, and reports no
 a single number but a **range**: how much output is likely, and how confident we
 should be.
 
-| | where it stands (2026-09-22) |
+| | where it stands (2026-10-15) |
 |---|---|
-| **Wind, SE3** (central Sweden) | Working end to end; the daily job is not yet scheduled. Typical miss **120 MW** per hour against 4,656 MW installed (143 MW on 2026-09-20). 80% ranges contain the outcome **78%** of the time |
-| **15-minute output** | Not started; the forecast is hourly. Next priority |
-| **Solar** (Germany) | Not started. Only the data checks are done |
+| **Wind, SE3** (central Sweden) | Working end to end; the daily job is not yet scheduled. Corrected quarter-hour winter evaluation: **2.90% nMAE**, **72%** coverage for nominal 80% ranges, over **79 days** |
+| **15-minute output** | Implemented and evaluated on genuine quarter-hours. Default repeats hourly forecasts after interpolation showed no significant CRPS gain; interpolation is optional. See `reports/products_15min.md` |
+| **Solar** (Germany) | First DE-LU quarter-hour forecasts: **1.96% daylight nMAE** over **90 winter days**, ahead of the three references. Fleet and annual capacity approximations are documented in `reports/products_15min.md` |
 | **Other bidding zones** | Not started. Resource and per-zone assessment in `docs/roadmap.md` §6 |
 
 What is planned next, and why, is in **`docs/roadmap.md`**. The sources behind the
@@ -30,12 +30,13 @@ A forecast for a delivery day, made the morning before:
 
 ![](reports/figures/latest_forecast.png)
 
-The dark line is the single most likely output for each hour. The shaded bands say how
+The dark line is the median output for each interval. The shaded bands say how
 uncertain that is: the darkest covers the middle half of plausible outcomes, the palest
 covers all but the most extreme 10%. A wide band means the weather is genuinely hard to
-call that hour; a narrow one means we expect to be close. (The chart shows the newest
-forecast on file, issued 2026-09-21 by the previous model version. The daily job is not
-yet scheduled.)
+call that interval; a narrow one means we expect to be close. The chart shows the newest
+forecast on file. Operational output defaults to 15-minute intervals; the daily job is
+not yet scheduled. The solar chart and new product evaluations are in
+[`reports/products_15min.md`](reports/products_15min.md).
 
 The same method on four days from the past, picked by rank rather than by hand: an
 average day, a poor one, the worst in the period, and the windiest.
@@ -45,6 +46,11 @@ average day, a poor one, the worst in the period, and the windiest.
 ---
 
 ## How good is it
+
+The figures below describe the archived September hourly board. They predate the
+October correction that dates forward weather features to their latest input
+(+3 hours). Use `reports/products_15min.md` for the corrected current product
+evaluation; the older hourly numbers are historical, not a current accuracy claim.
 
 ![](reports/figures/leaderboard_crps.png)
 
@@ -89,7 +95,8 @@ time of year, and what the fleet generated two or more days ago.
 | change | effect | details |
 |---|---|---|
 | Weather addressed by model run (MEPS + IFS) alongside the whole-day archive | nMAE −12%, CRPS −11%; the jump in error at lead hour 34 falls from +45% to about +20% | `reports/meps_archive.md` |
-| Calibration grouped by how much the weather models disagree | 80% coverage 0.74 → 0.77 at equal CRPS; coverage now even across calm and uncertain weather | `reports/calibration.md` |
+| Calibration grouped by how much the weather models disagree | 80% coverage 0.74 → 0.77 at equal CRPS; coverage now even across calm and uncertain weather | `reports/products_15min.md` | quarter-hour wind and solar evaluation, forecasts and archive coverage |
+| `reports/calibration.md` |
 | Calibration fitted on out-of-sample predictions from the whole training window | CRPS −3.7%, coverage → 0.78, autumn 0.73 → 0.78 | `reports/calibration.md` |
 | Fixed: missing weather values averaged into "zero wind" | one IFS run that came back empty had been read as dead calm (2025-08-08 forecast at half the actual output); a few Open-Meteo hours likewise | `features/wind.py` |
 
@@ -134,16 +141,22 @@ current two-year training window, but it blocks training on older history.
 
 ![](reports/figures/ceiling_drift.png)
 
-**5. Hourly output in a 15-minute market.** Trading and Swedish reporting moved to
-15-minute periods (reporting from 2025-12-01). The forecast is hourly. This is now
-the top roadmap item (§1).
+**5. Quarter-hour wind still uses an hourly-trained model.** Weather is interpolated
+before the power curve, and output is evaluated against real quarter-hour actuals.
+Native quarter-hour training and joint ramp uncertainty remain open (§1).
 
 **6. One zone only.** Every finding comes from SE3. Whether it transfers is the point of
 roadmap §4 (SE4 as an in-country control, Finland as an out-of-country test).
 
-**7. The daily model trains only up to 2026-03-01.** It uses days that have every weather
-source, and MEPS runs after that date have not been pulled yet: MET Norway's archive
-was down for maintenance on 2026-09-22/23. The re-pull is roadmap §0.
+**7. Production fitting needs complete weather coverage.** MEPS historical access is
+working again and the archive refresh is tracked in `reports/products_15min.md`.
+Production can use new observations without scoring the sealed holdout; development
+is fixed to dates before 2026-03-20 even as inputs are refreshed.
+
+**8. Solar is a first fleet approximation.** Six equal-area sites, fixed panel
+orientations and annual ENTSO-E capacity snapshots stand in for a dated MaStR fleet.
+It uses one pinned ECMWF Previous Runs model. These assumptions and measured interval
+coverage must accompany its forecasts.
 
 ---
 
@@ -183,8 +196,8 @@ rather than better forecasts.
 | 1–3 dataflow, data audit, targets, frozen protocol, baselines | done |
 | 4–5 weather features, modelling | done |
 | 6 run-addressed weather (MEPS + IFS), calibration | done, shipped |
-| 6 15-minute output | next (roadmap §1) |
-| 6 German solar | not started (roadmap §3) |
+| 6 15-minute output | Stage 1 implemented; native wind training remains (roadmap §1) |
+| 6 German solar | initial quarter-hour model implemented; registry fleet remains (roadmap §3) |
 | 7 integration contract | drafted |
 | 7 scheduled daily run and live trial | not started (roadmap §0, §7) |
 
@@ -238,7 +251,13 @@ uv run python -m renewable_forecast.pipelines.data_audit      # data quality gat
 uv run python -m renewable_forecast.pipelines.pull_meps       # MEPS backfill (--radius 4 for neighbourhoods)
 uv run python -m renewable_forecast.pipelines.pull_ifs_runs   # IFS HRES 00z runs (--run-hour 18 for 18z)
 uv run python -m renewable_forecast.pipelines.train           # backtest leaderboard
-uv run python -m renewable_forecast.pipelines.predict         # forecast tomorrow; after ~08:40 UTC
+uv run python -m renewable_forecast.pipelines.pull_actuals    # refresh training observations (.env / ENTSOE_API_KEY)
+uv run python -m renewable_forecast.pipelines.predict         # forecast tomorrow; 09:00 UTC
+uv run python -m renewable_forecast.pipelines.predict --fuel solar  # DE-LU, 15-minute
+uv run python -m renewable_forecast.pipelines.refresh_archives --status-only
+uv run python -m renewable_forecast.pipelines.backtest_products --fuel wind_onshore
+uv run python -m renewable_forecast.pipelines.backtest_products --fuel solar
+uv run python -m renewable_forecast.reporting.products
 uv run python -m renewable_forecast.reporting.figures         # regenerate every figure
 
 # A/B comparisons (same rows and folds per arm)

@@ -1,0 +1,15 @@
+task:
+  zone: DE_LU
+  fuel_types: [solar]
+  resolution: 15min
+sources:
+  openmeteo:
+    models: [ecmwf_ifs025]
+features:
+  run_addressed: []
+  # Initial equal-area lattice; not a claim of registry-weighted PV coverage.
+  solar_sites: solar_sites.csv
+  capacity_source: entsoe_a68_annual_asof
+model:
+  quantile:
+    calibration: crossfit

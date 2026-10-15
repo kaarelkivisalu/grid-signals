@@ -404,7 +404,7 @@ def _fan(ax, frame: pd.DataFrame, prefix: str = "mw", colour: str = "#bc4b51") -
             alpha=alpha,
             linewidth=0,
             step="post",
-            label=f"{low * 100:.0f}-{high * 100:.0f}% of outcomes",
+            label=f"p{low * 100:02.0f}-p{high * 100:02.0f}",
         )
     ax.plot(
         hours,
@@ -412,7 +412,7 @@ def _fan(ax, frame: pd.DataFrame, prefix: str = "mw", colour: str = "#bc4b51") -
         color=colour,
         lw=1.8,
         drawstyle="steps-post",
-        label="most likely",
+        label="median",
     )
 
 
@@ -505,7 +505,9 @@ def plot_backtest_examples(zone: str = "SE3", fuel: str = "wind_onshore") -> str
     return _save(fig, "backtest_examples")
 
 
-def plot_latest_forecast(zone: str = "SE3", fuel: str = "wind_onshore") -> str:  # noqa: ARG001
+def plot_latest_forecast(
+    zone: str = "SE3", fuel: str = "wind_onshore", resolution: str | None = None
+) -> str:
     """The operational forecast for a delivery day whose actuals do not exist yet.
 
     Written by `pipelines.predict`. There is nothing to score it against -- that is the
@@ -514,29 +516,17 @@ def plot_latest_forecast(zone: str = "SE3", fuel: str = "wind_onshore") -> str: 
     """
     from renewable_forecast.pipelines import predict
 
-    frame = predict.latest(zone).sort_values("valid_time")
+    frame = predict.latest(zone, fuel, resolution).sort_values("valid_time")
     day = pd.Timestamp(frame.delivery_day.iloc[0]).date()
     capacity = frame.capacity_mw.iloc[0]
 
     fig, ax = plt.subplots(figsize=(10, 3.8), constrained_layout=True)
     _fan(ax, frame, colour="#2a6f97")
-    boundary = (
-        frame[frame.lead_hour >= VINTAGE_BOUNDARY]
-        .valid_time.min()
-        .tz_convert(MARKET_TZ)
-    )
-    ax.axvline(boundary, color="black", lw=1.0, ls=":")
-    ax.text(
-        boundary,
-        capacity * 0.02,
-        "  from here on, the weather data is a day older",
-        fontsize=8,
-    )
     secondary = ax.secondary_yaxis(
         "right",
         functions=(lambda mw: 100 * mw / capacity, lambda pct: pct * capacity / 100),
     )
-    secondary.set_ylabel("% of installed capacity")
+    secondary.set_ylabel("% of assumed capacity")
     ax.set_ylim(0, max(frame["mw_q0.95"].max() * 1.15, capacity * 0.1))
     ax.set_ylabel("MW")
     ax.set_xlabel(f"{day}, market time (CET/CEST) — the traded day runs 00:00 to 24:00")
@@ -544,14 +534,25 @@ def plot_latest_forecast(zone: str = "SE3", fuel: str = "wind_onshore") -> str: 
     _market_axis(ax, frame)
     ax.legend(fontsize=8, ncol=4, loc="upper right")
     issued_local = frame.issue_time.iloc[0].tz_convert(MARKET_TZ)
+    label = "solar" if fuel == "solar" else "onshore wind"
+    resolution = frame.resolution.iloc[0]
+    repeated = (
+        " (hourly values repeated)"
+        if frame.temporal_method.iloc[0] == "hourly_repeated"
+        else ""
+    )
     ax.set_title(
-        f"{zone} onshore wind, forecast for {day} — it has not happened yet\n"
-        f"made {issued_local:%d %b %H:%M} market time, "
-        f"{capacity:,.0f} MW installed · hourly, while the market now trades "
-        "15-minute blocks",
+        f"{zone.replace('_', '-')} {label}, forecast for {day}\n"
+        f"as of {issued_local:%d %b %H:%M} market time, "
+        f"{capacity:,.0f} MW assumed capacity · {resolution} intervals{repeated}",
         fontsize=9.5,
     )
-    return _save(fig, "latest_forecast")
+    filename = (
+        "latest_forecast"
+        if (zone, fuel) == ("SE3", "wind_onshore")
+        else f"latest_forecast_{zone.lower()}_{fuel}"
+    )
+    return _save(fig, filename)
 
 
 #: Capacity-factor buckets for the conditional-coverage breakdown.
@@ -630,7 +631,9 @@ def _coverage_panel(ax, grid: pd.DataFrame, xlabel: str, title: str) -> None:
         ("coverage_90", "#bc4b51", "o", "observed 90%"),
         ("coverage_80", "#f4a259", "s", "observed 80%"),
     ):
-        ax.plot(labels, grid[column].where(solid), marker=marker, color=colour, label=label)
+        ax.plot(
+            labels, grid[column].where(solid), marker=marker, color=colour, label=label
+        )
     ax.axhline(NOMINAL_90, color="#bc4b51", ls=":", lw=1.2)
     ax.axhline(NOMINAL_80, color="#f4a259", ls=":", lw=1.2)
     ax.set_ylim(0.5, 1.0)

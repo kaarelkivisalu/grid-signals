@@ -17,6 +17,9 @@ splits:
   embargo_days: 7
   origin_freq: MS
   holdout_months: 6
+  # Frozen dates, so refreshing source data cannot move holdout days into development.
+  holdout_start: "2026-03-20"
+  holdout_end: "2026-09-19"
 
 sources:
   entsoe:
@@ -28,6 +31,8 @@ sources:
     models: []   # pinned in Phase 4, after the lead-time semantics sub-gate
 
 features:
+  # Forward weather trajectory terms reach three hours beyond the target instant.
+  trajectory_lookahead_hours: 3
   # Run-addressed NWP blocks joined on the issue day's 00z run, on top of the
   # Open-Meteo whole-day block. Both together: nMAE -12%, CRPS -11% on the development
   # folds (reports/meps_archive.md). Remove an entry to fall back without it.

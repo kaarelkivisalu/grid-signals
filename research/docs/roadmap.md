@@ -1,6 +1,6 @@
 # Roadmap
 
-What is still to be done, in priority order. Where the project stands today is in the
+Remaining work after the 2026-10-15 quarter-hour and solar implementation. Where the project stands today is in the
 README. The evidence behind finished work is in `reports/` (see the index at the end).
 Numbers marked *start* are starting points, not commitments. Four things are fixed:
 the frozen protocol (`reports/protocol.md`), the sealed holdout
@@ -14,7 +14,7 @@ every change.
  ───────────                              ────────────────                     ──────
  Open-Meteo Previous Runs (whole-day) ─┐
  MEPS det_hl 00z (run-addressed)     ──┼─► point features ─► LightGBM quantiles ─► SpreadCQR ─► 19 quantiles
- IFS HRES 00z (+18z) (run-addressed) ──┘   (8 clusters)      (cross-fitted)       (level x    hourly, SE3 wind
+ IFS HRES 00z (+18z) (run-addressed) ──┘   (8 clusters)      (cross-fitted)       (level x    hourly fit, SE3 wind
                                                  │                                 spread)       │
    [2] gridded NWP + turbine map ──► [2] spatial model (CNN) ─────────────────────┘             │
                                                                                                 ▼
@@ -26,48 +26,43 @@ every change.
 
 ## 0. Housekeeping (small, do first)
 
-- [ ] **Re-pull MEPS once thredds is back.** MET Norway's archive ("storeB") has been
-  down for network maintenance since 2026-09-22 and is expected back around
-  2026-09-23/24 (status.met.no); only the current month is served until then. Then:
-  - Pull the missing MEPS runs for 2026-03-01 → today. The live model trains only on
-    days that have every run-addressed source, so it stops at 2026-03-01 until this is
-    done. These runs are holdout days: they feed the *production* fit only, never a
-    development score.
+- [ ] **Keep weather inputs current.** MEPS access recovered; the October refresh and
+  its explicit upstream gaps are recorded in `reports/products_15min.md`. Repeat with
+  `pipelines.refresh_archives`, which backs up parsed weather and emits a coverage
+  manifest. New input dates can feed production fitting without moving or scoring the
+  frozen holdout.
   - Re-pull the development window with `pull_meps --radius 4` (~2 h). The single-cell
     MEPS signal is noisy (corr 0.936, against 0.959 for 0.25° IFS). The 9 × 9 mean and
-    its spread (Molinder 2018 pseudo-ensemble) are coded but not yet backtested.
-  - Pull IFS 00z and 18z for the holdout months too, for the same production-fit reason.
-- [ ] **Schedule the daily run.** `predict` after ~08:40 UTC (IFS 00z availability). It
+    its spread are coded but not yet backtested.
+- [ ] **Schedule the daily run.** `predict` at 09:00 UTC, after IFS 00z availability. It
   already self-archives the day's MEPS and IFS runs. Add the MEPS neighbourhood pull to
   the same job.
 - [ ] **Capture the TSO forecast (A69) at issue time**, one request per day. The archive
   serves only the latest revision, so this is the only way to get an honest day-ahead
   benchmark (protocol, "A69 is not a day-ahead benchmark").
-- [ ] **Back up `data/parsed/`** (~60 MB of NWP). It is gitignored, and upstream archives
-  go offline for maintenance (MEPS, 2026-09-22).
-- [ ] **Vectorise feature assembly.** `wind.aggregate` is a pandas groupby-apply. The MEPS
-  block takes ~2 min per build and would scale linearly with zones (see §6).
+- [ ] **Schedule weather backups.** `refresh_archives` takes a local snapshot before a
+  refresh; copy those snapshots off-machine and set retention. The parsed store is
+  gitignored and upstream archives can go offline.
+
+Feature aggregation is now vectorised for the quarter-hour path. Re-measure the
+resource table in §6 before using its September timings for scaling decisions.
 
 ## 1. 15-minute output — raised priority
 
-The market has traded 15-minute MTUs since 2025-10-01, and SE generation is reported per
-15 minutes from 2025-12-01. The forecast is still hourly, so it is not yet in the units
-the product is used in.
+Stage 1 is implemented and evaluated. The operational default repeats hourly
+forecasts on the quarter-hour grid: interpolated weather showed no significant CRPS gain,
+although it improves median ramp MAE. The interpolation candidate remains available
+with `predict --wind-method interpolate`. The protocol
+amendment fixes three development months (December 2025–February 2026), compares the
+same rows against repeated hourly predictions, and preserves the original hourly
+board and sealed holdout. Results, ramp diagnostics and commands are in
+`reports/products_15min.md`. Solar trains and forecasts natively at 15 minutes.
 
-- [ ] **Decide the target and the evaluation set.** 15-minute actuals exist from
-  2025-12-01: three months inside the development window, and all of the holdout.
-  Amend the protocol (not rewrite it): add a 15-minute score on Dec 2025 – Feb 2026, and
-  keep the hourly board for continuity. State whether hourly values are averages of the
-  quarter-hours (IEA 13.2.2).
-- [ ] **Stage 1 — hourly model, 15-minute output.** Interpolate the NWP inputs to quarter
-  hours (a monotone spline on wind speed; Thorarinsdottir 2019 use non-negative splines),
-  and predict at each quarter hour with the hourly-trained model. Measure the cost
-  against the hourly score, i.e. how much intra-hour variability adds.
 - [ ] **Stage 2 — native 15-minute training** once enough 15-minute history exists
   (roughly a year, around 2026-12). Pre-December data enters as hourly averages with a
   resolution flag, or is dropped.
-- [ ] **Ramps.** Quarter-hour ramps are where the value is in a 15-minute market. Score
-  ramp magnitude and timing separately, not only marginal CRPS. `models/scenarios.py`
+- [ ] **Joint ramp uncertainty.** Median ramp magnitude and timing are scored by the new
+  product backtest. `models/scenarios.py`
   (Schaake shuffle, Gaussian copula) already produces temporally coherent paths;
   scoring them needs the energy or variogram score over the delivery-day vector.
 - Watch: MEPS and IFS are hourly, so sub-hourly skill must come from interpolation and
@@ -100,29 +95,34 @@ tested at short horizons, not at 22–46 h.
   years. Training wants one GPU (≥12 GB); CPU-only is possible but slow for
   rolling-origin backtests.
 
-## 3. Solar, DE-LU — soon
+## 3. Solar, DE-LU — improve the initial forecast
 
-Swedish PV is largely behind the meter (`docs/dataflow.md`). German TSOs publish a
-15-minute *estimated* total, which makes a usable target.
+The first quarter-hour model is implemented and operational forecasts are archived.
+It uses pinned ECMWF Previous Runs irradiance, clear-sky-index interpolation, a
+PVWatts physical chain, daylight-only quantile fitting and explicit zero-at-night
+bounds. Daylight-only development evaluation compares it with PV physics, smart
+persistence and clear-sky climatology. See `reports/products_15min.md`; the sealed
+holdout remains untouched.
 
-- [ ] **Fix the evaluation choices before modelling** (van der Meer 2018; IEA 12.1.1):
-  - denominator (installed capacity from MaStR, interpolated within the year);
-  - which hours count (drop night; state the solar-elevation cut);
-  - benchmark (smart persistence and a clear-sky climatology).
-  The TSO "actual" is itself an upscaled estimate (Saint-Drenan 2016/2017), so there is
-  an error floor no forecast can beat.
-- [ ] **Physical baseline:** register-based PV model, orientation mix from Saint-Drenan
-  2017, one derating factor fitted per control area. Irradiance interpolated in the
-  clear-sky index (Lorenz 2011).
-- [ ] **NWP:** IFS HRES single runs carry radiation variables and are run-addressed from
-  2024-03-14. MEPS does not cover Germany. ICON is best for solar per Wanek (2026), but
-  no archive addresses it by run for 2024–25 (literature §4), so start with IFS and add
-  ICON forward-archived.
-- [ ] **Snow flag**, the solar counterpart of high-wind shutdowns (Lorenz 2011).
-- [ ] **Resolution:** build at 15 minutes from the start (§1), since the target is
-  15-minute.
-- Calibration may need the opposite direction to wind. Pierro (2017) found solar
-  Gaussian intervals *over*-covered, so test reliability per level before assuming.
+- [ ] **Dated MaStR fleet and denominator.** Replace the declared equal-area six-site
+  lattice and annual A68 snapshots with installed capacity, locations, commissioning
+  dates and panel orientation mix from the registry. Annual capacity is currently
+  carried forward from a preceding snapshot; future anchors are never used. Historical
+  A68 publication vintages are not available.
+- [ ] **Run-addressed solar weather.** Add IFS HRES radiation, stored under its own task
+  namespace. The initial solar model uses a whole-day-vintaged ECMWF archive, so its
+  interpolation endpoints are included in the information-age check. ICON can be
+  forward-archived; no consistent run-addressed 2024–25 archive is established here.
+- [ ] **Solar-specific calibration.** Initial nominal coverage is measured in the new
+  product report; do not assume wind's calibration transfers. Test reliability by
+  output, cloudiness and season on development rows only.
+- [ ] **Better physical assumptions.** Registry orientation mix, thermal model,
+  clear-sky-index interpolation around sunrise, one derating factor per control area
+  and improved snow handling. A basic snow flag is implemented.
+
+German TSO actuals are upscaled estimates, so an observation error floor remains.
+The operational dry-run and final holdout evaluation are still required before
+integration.
 
 ## 4. A second wind zone — does SE3 generalise?
 

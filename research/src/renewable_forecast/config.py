@@ -3,6 +3,7 @@
 import copy
 import hashlib
 import json
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +32,8 @@ class SplitConfig(BaseModel):
     embargo_days: int = 7
     origin_freq: str = "MS"
     holdout_months: int = 6
+    holdout_start: date | None = None
+    holdout_end: date | None = None
 
 
 class Config(BaseModel):

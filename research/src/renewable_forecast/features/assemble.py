@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 from renewable_forecast import paths, windows
+from renewable_forecast.features import resolution as time_grid
 from renewable_forecast.features import sites, wind
 from renewable_forecast.sources import entsoe, fleet, ifs_runs, meps, openmeteo
 
@@ -82,6 +83,7 @@ def _provenance(columns: list[str]) -> dict[str, timedelta | None]:
         "delivery_day",
         "issue_day",
         "season",
+        "nwp_max_valid_time",
     }
     provenance: dict[str, timedelta | None] = {}
     for column in columns:
@@ -144,16 +146,20 @@ def multi_model(zonal: pd.DataFrame) -> pd.DataFrame:
         members = [c for c in wide.columns if c.startswith(f"{column}__")]
         if len(members) < 2:
             continue
-        values = wide[members].to_numpy(dtype=float)
-        out[f"{column}_model_mean"] = np.nanmean(values, axis=1)
-        out[f"{column}_model_std"] = np.nanstd(values, axis=1)
-        out[f"{column}_model_range"] = np.nanmax(values, axis=1) - np.nanmin(
-            values, axis=1
-        )
+        values = wide[members]
+        # Empty forecast hours stay NaN without flooding a backfill with numpy's
+        # all-NaN warnings. Population std matches the original numpy calculation.
+        out[f"{column}_model_mean"] = values.mean(axis=1).to_numpy()
+        out[f"{column}_model_std"] = values.std(axis=1, ddof=0).to_numpy()
+        out[f"{column}_model_range"] = (
+            values.max(axis=1) - values.min(axis=1)
+        ).to_numpy()
     return out
 
 
-def temporal(frame: pd.DataFrame, columns: tuple[str, ...]) -> pd.DataFrame:
+def temporal(
+    frame: pd.DataFrame, columns: tuple[str, ...], steps_per_hour: int = 1
+) -> pd.DataFrame:
     """Lags, leads and ramps of the key NWP features.
 
     These describe the weather trajectory around the target hour, which at a fixed lead
@@ -165,21 +171,32 @@ def temporal(frame: pd.DataFrame, columns: tuple[str, ...]) -> pd.DataFrame:
             continue
         series = frame[column]
         for shift in (-3, -1, 1, 3):
-            out[f"{column}_shift{shift:+d}"] = series.shift(shift)
-        out[f"{column}_ramp1"] = series.diff(1)
-        out[f"{column}_ramp3"] = series.diff(3)
-        out[f"{column}_roll6_mean"] = series.rolling(6, min_periods=1).mean()
-        out[f"{column}_roll6_std"] = series.rolling(6, min_periods=2).std()
+            out[f"{column}_shift{shift:+d}"] = series.shift(shift * steps_per_hour)
+        out[f"{column}_ramp1"] = series.diff(steps_per_hour)
+        out[f"{column}_ramp3"] = series.diff(3 * steps_per_hour)
+        out[f"{column}_roll6_mean"] = series.rolling(
+            6 * steps_per_hour, min_periods=1
+        ).mean()
+        out[f"{column}_roll6_std"] = series.rolling(
+            6 * steps_per_hour, min_periods=2
+        ).std()
     return out
 
 
-def _features_at(raw: pd.DataFrame, points: pd.DataFrame, offset: int) -> pd.DataFrame:
+def _features_at(
+    raw: pd.DataFrame, points: pd.DataFrame, offset: int, resolution: str = "1h"
+) -> pd.DataFrame:
     """Zonal, multi-model features at one information-age offset."""
-    per_point = wind.add_icing_memory(wind.per_point(raw, offset))
+    raw = time_grid.interpolate(raw[raw.point_id.isin(points.point_id)], resolution)
+    per_point = wind.add_icing_memory(
+        wind.per_point(raw, offset), steps_per_hour=4 if resolution == "15min" else 1
+    )
     zonal = wind.aggregate(per_point, points)
     frame = multi_model(zonal).sort_values("valid_time").reset_index(drop=True)
     trajectory = temporal(
-        frame, ("power_curve_model_mean", "wind_speed_100m_model_mean")
+        frame,
+        ("power_curve_model_mean", "wind_speed_100m_model_mean"),
+        4 if resolution == "15min" else 1,
     )
     frame = pd.concat([frame, trajectory], axis=1)
     frame["nwp_offset_days"] = offset
@@ -191,7 +208,12 @@ def _features_at(raw: pd.DataFrame, points: pd.DataFrame, offset: int) -> pd.Dat
 MEPS_TRAJECTORY = ("power_curve__meps", "wind_speed_hub__meps")
 
 
-def meps_block(points: pd.DataFrame) -> pd.DataFrame:
+def meps_block(
+    points: pd.DataFrame,
+    resolution: str = "1h",
+    start: date | None = None,
+    end: date | None = None,
+) -> pd.DataFrame:
     """Zonal MEPS features, keyed by the run that produced them.
 
     The contrast with `_features_at` is the whole point of this source. There, a row's
@@ -203,13 +225,16 @@ def meps_block(points: pd.DataFrame) -> pd.DataFrame:
     Returns one row per `(run_time, valid_time)`, with columns suffixed `__meps` so they
     sit unambiguously alongside the Open-Meteo blocks.
     """
-    raw = meps.load()
+    raw = meps.load(start, end) if start or end else meps.load()
     if raw.empty:
         msg = "no MEPS data parsed; run pipelines.pull_meps first"
         raise RuntimeError(msg)
 
+    raw = time_grid.interpolate(raw, resolution)
     per_point = wind.add_icing_memory(
-        wind.per_point_meps(raw, points), keys=("run_time", "point_id")
+        wind.per_point_meps(raw, points),
+        keys=("run_time", "point_id"),
+        steps_per_hour=4 if resolution == "15min" else 1,
     )
     zonal = wind.aggregate(
         per_point,
@@ -230,7 +255,10 @@ def meps_block(points: pd.DataFrame) -> pd.DataFrame:
     # is why this groups rather than shifting the whole frame.
     trajectory = (
         zonal.groupby("run_time", group_keys=False)
-        .apply(lambda g: temporal(g, MEPS_TRAJECTORY), include_groups=False)
+        .apply(
+            lambda g: temporal(g, MEPS_TRAJECTORY, 4 if resolution == "15min" else 1),
+            include_groups=False,
+        )
         .reindex(zonal.index)
     )
     return pd.concat([zonal, trajectory], axis=1)
@@ -241,7 +269,11 @@ IFS_TRAJECTORY = ("power_curve__ifsrun", "wind_speed_100m__ifsrun")
 
 
 def ifs_block(
-    points: pd.DataFrame, run_hour: int = ifs_runs.RUN_HOUR_UTC
+    points: pd.DataFrame,
+    run_hour: int = ifs_runs.RUN_HOUR_UTC,
+    resolution: str = "1h",
+    start: date | None = None,
+    end: date | None = None,
 ) -> pd.DataFrame:
     """Zonal IFS HRES features keyed by the run that produced them.
 
@@ -249,14 +281,21 @@ def ifs_block(
     the same; only the addressing differs, which is the point of the source.
     """
     raw = ifs_runs.load()
+    if start and not raw.empty:
+        raw = raw[raw.run_time >= pd.Timestamp(start, tz="UTC")]
+    if end and not raw.empty:
+        raw = raw[raw.run_time < pd.Timestamp(end, tz="UTC")]
     if not raw.empty:
         raw = raw[pd.to_datetime(raw.run_time, utc=True).dt.hour == run_hour]
     if raw.empty:
         msg = f"no {run_hour:02d}z IFS runs parsed; run pipelines.pull_ifs_runs first"
         raise RuntimeError(msg)
 
+    raw = time_grid.interpolate(raw, resolution)
     per_point = wind.add_icing_memory(
-        wind.per_point(raw, suffix=""), keys=("run_time", "point_id")
+        wind.per_point(raw, suffix=""),
+        keys=("run_time", "point_id"),
+        steps_per_hour=4 if resolution == "15min" else 1,
     )
     per_point = per_point.drop(columns=["lead_spread"], errors="ignore")
     zonal = wind.aggregate(per_point, points, keys=("run_time", "valid_time"))
@@ -270,14 +309,21 @@ def ifs_block(
     zonal = zonal.sort_values(["run_time", "valid_time"]).reset_index(drop=True)
     trajectory = (
         zonal.groupby("run_time", group_keys=False)
-        .apply(lambda g: temporal(g, IFS_TRAJECTORY), include_groups=False)
+        .apply(
+            lambda g: temporal(g, IFS_TRAJECTORY, 4 if resolution == "15min" else 1),
+            include_groups=False,
+        )
         .reindex(zonal.index)
     )
     return pd.concat([zonal, trajectory], axis=1)
 
 
 def attach_ifs(
-    frame: pd.DataFrame, points: pd.DataFrame, *, lagged: bool = False
+    frame: pd.DataFrame,
+    points: pd.DataFrame,
+    *,
+    lagged: bool = False,
+    resolution: str = "1h",
 ) -> pd.DataFrame:
     """Join the IFS run block on the issue day's 00z run, exactly as for MEPS.
 
@@ -286,7 +332,16 @@ def attach_ifs(
     from the first months of training, and they are not adopted until an A/B on rows
     where they exist says so.
     """
-    block = ifs_block(points)
+    block = (
+        ifs_block(
+            points,
+            resolution=resolution,
+            start=frame.issue_day.min().date(),
+            end=frame.issue_day.max().date() + timedelta(days=1),
+        )
+        if resolution == "15min"
+        else ifs_block(points)
+    )
     frame = frame.copy()
     frame[IFS_RUN_COLUMN] = frame.issue_day.dt.tz_localize("UTC") + pd.Timedelta(
         hours=ifs_runs.RUN_HOUR_UTC
@@ -325,13 +380,19 @@ def _attach_lagged_ifs(frame: pd.DataFrame, points: pd.DataFrame) -> pd.DataFram
         return frame
     keep = {f"{c}{IFS_MARKER}": f"{c}{IFS_MARKER}{LAG_SUFFIX}" for c in LAGGED_COLUMNS}
     block = block[["run_time", "valid_time", *keep]].rename(columns=keep)
-    lag_run = frame[IFS_RUN_COLUMN] - pd.Timedelta(hours=24 - ifs_runs.LAGGED_RUN_HOUR_UTC)
-    merged = frame.assign(_lag_run=lag_run).merge(
-        block,
-        left_on=["_lag_run", "valid_time"],
-        right_on=["run_time", "valid_time"],
-        how="left",
-    ).drop(columns=["_lag_run", "run_time"])
+    lag_run = frame[IFS_RUN_COLUMN] - pd.Timedelta(
+        hours=24 - ifs_runs.LAGGED_RUN_HOUR_UTC
+    )
+    merged = (
+        frame.assign(_lag_run=lag_run)
+        .merge(
+            block,
+            left_on=["_lag_run", "valid_time"],
+            right_on=["run_time", "valid_time"],
+            how="left",
+        )
+        .drop(columns=["_lag_run", "run_time"])
+    )
     for column in LAGGED_COLUMNS:
         now = merged[f"{column}{IFS_MARKER}"]
         before = merged[f"{column}{IFS_MARKER}{LAG_SUFFIX}"]
@@ -346,7 +407,9 @@ def run_spread(frame: pd.DataFrame) -> pd.DataFrame:
     Carries the same information age as its inputs, so it is marked as both a MEPS and
     an IFS column and the leakage guard dates it to the later of the two.
     """
-    members = [c for c in ("power_curve__meps", f"power_curve{IFS_MARKER}") if c in frame]
+    members = [
+        c for c in ("power_curve__meps", f"power_curve{IFS_MARKER}") if c in frame
+    ]
     out = pd.DataFrame(index=frame.index)
     if len(members) < 2:
         return out
@@ -390,8 +453,8 @@ def price_features(frame: pd.DataFrame, zone: str = "SE3") -> pd.DataFrame:
 
     out = pd.DataFrame(index=frame.index)
     out[f"{PRICE_PREFIX}same_hour"] = (
-        frame.valid_time - pd.Timedelta(hours=24)
-    ).map(hourly).to_numpy()
+        (frame.valid_time - pd.Timedelta(hours=24)).map(hourly).to_numpy()
+    )
 
     local_day = hourly.index.tz_convert(windows.MARKET_TZ).normalize().tz_localize(None)
     daily = hourly.groupby(local_day).agg(
@@ -440,13 +503,17 @@ def residual_features(frame: pd.DataFrame, zone: str = "SE3") -> pd.DataFrame:
     """
     fuel = "wind_onshore"
     targets = pd.read_parquet(paths.INTERIM / f"targets_{zone.lower()}_{fuel}.parquet")
-    observed = targets.assign(
-        valid_time=pd.to_datetime(targets.period_start, utc=True)
-    ).set_index("valid_time").cf
+    observed = (
+        targets.assign(valid_time=pd.to_datetime(targets.period_start, utc=True))
+        .set_index("valid_time")
+        .cf
+    )
 
-    physics = _features_at(openmeteo.load(), sites.build(zone), 1).set_index(
-        "valid_time"
-    ).power_curve_model_mean
+    physics = (
+        _features_at(openmeteo.load(), sites.build(zone), 1)
+        .set_index("valid_time")
+        .power_curve_model_mean
+    )
     residual = (observed - physics).dropna().clip(-0.3, 0.3).sort_index()
     residual = residual.resample("h").mean()
 
@@ -467,14 +534,25 @@ def attach_residuals(frame: pd.DataFrame, zone: str = "SE3") -> pd.DataFrame:
     return pd.concat([frame, residual_features(frame, zone)], axis=1)
 
 
-def attach_meps(frame: pd.DataFrame, points: pd.DataFrame) -> pd.DataFrame:
+def attach_meps(
+    frame: pd.DataFrame, points: pd.DataFrame, resolution: str = "1h"
+) -> pd.DataFrame:
     """Join the MEPS block onto a design matrix that already carries `issue_day`.
 
     A delivery day is served by exactly one run -- 00z on its issue day -- so this is an
     equality join on the run instant, with no offset to choose and nothing to decide per
     hour.
     """
-    block = meps_block(points)
+    block = (
+        meps_block(
+            points,
+            resolution,
+            frame.issue_day.min().date(),
+            frame.issue_day.max().date() + timedelta(days=1),
+        )
+        if resolution == "15min"
+        else meps_block(points)
+    )
     frame = frame.copy()
     frame["meps_run_time"] = frame.issue_day.dt.tz_localize("UTC") + pd.Timedelta(
         hours=meps.RUN_HOUR_UTC
@@ -497,6 +575,7 @@ def build(
     *,
     with_meps: bool = False,
     with_ifs: bool = False,
+    resolution: str = "1h",
 ) -> pd.DataFrame:
     """Join NWP features to the target, picking the smallest safe offset per hour.
 
@@ -511,22 +590,31 @@ def build(
         raise RuntimeError(msg)
 
     points = sites.build(zone)
+    raw = raw[raw.point_id.isin(points.point_id)]
     stacked = pd.concat(
-        [_features_at(raw, points, offset) for offset in AVAILABLE_OFFSETS],
+        [_features_at(raw, points, offset, resolution) for offset in AVAILABLE_OFFSETS],
         ignore_index=True,
     )
 
-    targets = pd.read_parquet(paths.INTERIM / f"targets_{zone.lower()}_{fuel}.parquet")
+    suffix = "_15min" if resolution == "15min" else ""
+    targets = pd.read_parquet(
+        paths.INTERIM / f"targets_{zone.lower()}_{fuel}{suffix}.parquet"
+    )
     targets["period_start"] = pd.to_datetime(targets.period_start, utc=True)
     targets = targets[targets.trainable].rename(columns={"period_start": "valid_time"})
 
     targets = _annotate(targets)
 
     history = targets.set_index("valid_time").cf
-    for lag in ACTUAL_LAGS_H:
-        targets[f"cf_lag_{lag}"] = (targets.valid_time - pd.Timedelta(hours=lag)).map(
-            history
+    if resolution == "15min":
+        hourly_history = pd.read_parquet(
+            paths.INTERIM / f"targets_{zone.lower()}_{fuel}.parquet"
         )
+        history = hourly_history.set_index("period_start").cf
+    for lag in ACTUAL_LAGS_H:
+        targets[f"cf_lag_{lag}"] = (
+            targets.valid_time.dt.floor("h") - pd.Timedelta(hours=lag)
+        ).map(history)
 
     keep = [
         "valid_time",
@@ -540,14 +628,16 @@ def build(
         "nwp_offset_days",
         *[f"cf_lag_{lag}" for lag in ACTUAL_LAGS_H],
     ]
+    if "nwp_max_valid_time" in targets:
+        keep.append("nwp_max_valid_time")
     merged = targets[keep].merge(
         stacked, on=["valid_time", "nwp_offset_days"], how="inner"
     )
     merged = pd.concat([merged, calendar(merged)], axis=1)
     if with_meps:
-        merged = attach_meps(merged, points)
+        merged = attach_meps(merged, points, resolution)
     if with_ifs:
-        merged = attach_ifs(merged, points)
+        merged = attach_ifs(merged, points, resolution=resolution)
     if with_meps and with_ifs:
         merged = pd.concat([merged, run_spread(merged)], axis=1)
     return merged
@@ -565,7 +655,13 @@ def _annotate(frame: pd.DataFrame) -> pd.DataFrame:
         (frame.valid_time - frame.issue_day.dt.tz_localize("UTC")).dt.total_seconds()
         // 3600
     ).astype(int)
-    frame["nwp_offset_days"] = required_offset(frame.valid_time, issue_time_of(frame))
+    # Forward trajectory terms use weather three hours later. Even hourly inputs
+    # must be dated to that endpoint, rather than only to the instantaneous value.
+    # Quarter-hour interpolation additionally uses the following hourly sample.
+    frame["nwp_max_valid_time"] = frame.valid_time.dt.ceil("h") + pd.Timedelta(hours=3)
+    frame["nwp_offset_days"] = required_offset(
+        frame.nwp_max_valid_time, issue_time_of(frame)
+    )
     return frame
 
 
@@ -610,6 +706,7 @@ def build_operational(
     *,
     with_meps: bool = False,
     with_ifs: bool = False,
+    resolution: str = "1h",
 ) -> pd.DataFrame:
     """Design matrix for one future delivery day, with no target column.
 
@@ -624,12 +721,25 @@ def build_operational(
         raise RuntimeError(msg)
 
     points = sites.build(zone)
+    raw = raw[raw.point_id.isin(points.point_id)]
+    first = pd.Timestamp(windows.delivery_day_starts(delivery_day)[0])
+    raw = raw[
+        raw.valid_time.between(
+            first - pd.Timedelta(days=2), first + pd.Timedelta(days=2)
+        )
+    ]
     stacked = pd.concat(
-        [_features_at(raw, points, offset) for offset in AVAILABLE_OFFSETS],
+        [_features_at(raw, points, offset, resolution) for offset in AVAILABLE_OFFSETS],
         ignore_index=True,
     )
 
-    grid = pd.DataFrame({"valid_time": windows.delivery_day_starts(delivery_day)})
+    grid = pd.DataFrame(
+        {
+            "valid_time": windows.delivery_day_starts(
+                delivery_day, resolution=time_grid.validate(resolution)
+            )
+        }
+    )
     grid["valid_time"] = pd.to_datetime(grid.valid_time, utc=True)
     grid = _annotate(grid)
 
@@ -641,16 +751,20 @@ def build_operational(
     targets["period_start"] = pd.to_datetime(targets.period_start, utc=True)
     history = targets.set_index("period_start").cf
     for lag in ACTUAL_LAGS_H:
-        grid[f"cf_lag_{lag}"] = (grid.valid_time - pd.Timedelta(hours=lag)).map(history)
+        # The Stage 1 model was trained on hourly means. Keep lagged observations
+        # hourly as well, rather than manufacturing quarter-hour measurements.
+        grid[f"cf_lag_{lag}"] = (
+            grid.valid_time.dt.floor("h") - pd.Timedelta(hours=lag)
+        ).map(history)
 
     merged = grid.merge(stacked, on=["valid_time", "nwp_offset_days"], how="left")
     merged = pd.concat([merged, calendar(merged)], axis=1)
     # The same attach functions as `build`, so the live row carries exactly the columns
     # the model was fitted on.
     if with_meps:
-        merged = attach_meps(merged, points)
+        merged = attach_meps(merged, points, resolution)
     if with_ifs:
-        merged = attach_ifs(merged, points)
+        merged = attach_ifs(merged, points, resolution=resolution)
     if with_meps and with_ifs:
         merged = pd.concat([merged, run_spread(merged)], axis=1)
     missing = merged.power_curve_model_mean.isna().sum()
@@ -701,7 +815,7 @@ def max_source_time(frame: pd.DataFrame) -> pd.DataFrame:
             # A MEPS column depends on nothing later than the run that produced it.
             out[column] = run_time
         else:
-            out[column] = frame.valid_time - nwp_age
+            out[column] = frame.get("nwp_max_valid_time", frame.valid_time) - nwp_age
     return out
 
 
@@ -711,9 +825,11 @@ def design_matrix_path(
     *,
     with_meps: bool = False,
     with_ifs: bool = False,
+    resolution: str = "1h",
 ):
     """Where a design matrix of the given flavour lives."""
     suffix = ("_meps" if with_meps else "") + ("_ifs" if with_ifs else "")
+    suffix += "_15min" if resolution == "15min" else ""
     return paths.FEATURES / f"design_matrix_{zone.lower()}_{fuel}{suffix}.parquet"
 
 
@@ -723,11 +839,16 @@ def write(
     *,
     with_meps: bool = False,
     with_ifs: bool = False,
+    resolution: str = "1h",
 ) -> pd.DataFrame:
     """Build the design matrix and persist it."""
-    frame = build(zone, fuel, with_meps=with_meps, with_ifs=with_ifs)
+    frame = build(
+        zone, fuel, with_meps=with_meps, with_ifs=with_ifs, resolution=resolution
+    )
     paths.FEATURES.mkdir(parents=True, exist_ok=True)
-    out = design_matrix_path(zone, fuel, with_meps=with_meps, with_ifs=with_ifs)
+    out = design_matrix_path(
+        zone, fuel, with_meps=with_meps, with_ifs=with_ifs, resolution=resolution
+    )
     frame.to_parquet(out, index=False)
     logger.info("wrote %s (%s rows, %s columns)", out, len(frame), frame.shape[1])
     return frame

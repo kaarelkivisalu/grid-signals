@@ -374,7 +374,14 @@ def runs(start: date, end: date) -> Iterator[datetime]:
         cursor += timedelta(days=1)
 
 
-def pull(points: pd.DataFrame, start: date, end: date, radius: int = 0) -> int:
+def pull(
+    points: pd.DataFrame,
+    start: date,
+    end: date,
+    radius: int = 0,
+    *,
+    newest_first: bool = False,
+) -> int:
     """Backfill every 00z run over a date range, one parquet per run.
 
     Resumable: a run whose parquet already exists is skipped, so an interrupted pull
@@ -382,7 +389,8 @@ def pull(points: pd.DataFrame, start: date, end: date, radius: int = 0) -> int:
     """
     written = 0
     missing: list[str] = []
-    for run in runs(start, end):
+    ordered = list(runs(start, end))
+    for run in reversed(ordered) if newest_first else ordered:
         out = _run_path(run, radius)
         if out.exists():
             continue

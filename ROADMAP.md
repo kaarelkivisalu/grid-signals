@@ -119,7 +119,10 @@ written contract only. Renewable quantiles are the highest-value input to Direct
 - [x] Phase 6c — improvement roadmap (`research/docs/roadmap.md`): run-addressed NWP (MEPS +
   IFS HRES) and cross-fitted, spread-stratified calibration shipped — typical miss 143 → 122 MW,
   80% coverage 0.74 → 0.78
-- [ ] Phase 6b — DE-LU solar
+- [x] Phase 6b — initial DE-LU solar forecasts at 15-minute resolution; explicit fleet
+  and capacity approximations, with daylight-only development evaluation
+- [x] 15-minute wind output — hourly-trained model on interpolated weather, evaluated
+  against actual quarter-hours; native wind training remains open
 - [x] Phase 7a — integration contract (`research/docs/integration_contract.md`)
 - [ ] Phase 7b — operational dry-run
 
