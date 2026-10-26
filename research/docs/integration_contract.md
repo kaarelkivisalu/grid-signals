@@ -1,101 +1,95 @@
-# Integration contract — `renewable-forecast` → `grid-signals`
+# Forecast publication contract
 
-**Status: specification only. No code in `grid-signals` implements this yet, and none
-should until the Phase 7 dry-run exit criterion is met.**
+**Status:** the read-only portfolio demo and local Parquet publication trial are
+implemented. The [target architecture](../../docs/implementation-plan.md) uses
+publishing Parquet and other result files, a result-reading website and a Prefect-operated
+forecast lifecycle. A downstream database/API feed is not a planned requirement.
+Displaying research snapshots does not establish reliable daily delivery.
 
-This document exists so that when integration happens it is a mechanical exercise rather
-than a negotiation. It describes what this project would publish, what it needs in
-return, and what must be true before either side writes code.
+## Operational gate
 
-## Precondition
+Require approximately **30 consecutive scheduled daily issues per product** with
+near-total on-time success. Report all due issues, including missing and failed
+runs. Two products issued on one day do not count as two days of reliability.
 
-Integration does not begin until the operational dry-run has produced **~30 consecutive
-scheduled runs with near-total success, and live nMAE within ~1.25× of backtest nMAE at
-matched lead hours**. A wider gap means train/serve skew and must be diagnosed first —
-that check is the entire point of the dry-run, and shipping past it would move an unknown
-error into a system that other things depend on.
+Investigate live error above roughly 1.25 times the relevant backtest error at
+matched leads. Compare season, output regime, input coverage and baseline-relative
+skill before diagnosing train/serve skew: a winter aggregate is not an adequate
+sole reference for an autumn trial. Assess bias and interval coverage as well as
+point error. Historical replay cannot establish operational reliability.
 
-## Table
+## Identity and timing
 
-`renewable_forecasts`, primary key `(zone, issue_time, target_period_start, fuel_type, quantile)`.
+The current archive implements these semantics; package and orchestration changes
+must preserve them:
 
-| column | type | notes |
-|---|---|---|
-| `zone` | VARCHAR | matches `grid_signals.models.zones.BiddingZone` |
-| `fuel_type` | VARCHAR | existing slugs: `wind_onshore`, `wind_offshore`, `solar` |
-| `issue_time` | TIMESTAMPTZ | 09:00 UTC on the issue day |
-| `target_period_start` | TIMESTAMPTZ | follows the existing `period_start` convention |
-| `target_period_end` | TIMESTAMPTZ | follows the existing `period_end` convention |
-| `quantile` | DOUBLE PRECISION | 0.05…0.95 by 0.05, plus 0.01/0.99. `NULL` is the deterministic forecast |
-| `capacity_factor` | DOUBLE PRECISION | the model's native output |
-| `generation_mw` | DOUBLE PRECISION | `capacity_factor × capacity_mw_assumed` |
-| `capacity_mw_assumed` | DOUBLE PRECISION | the denominator used, so CF stays interpretable later |
-| `model_version` | VARCHAR | git SHA + config fingerprint, always resolvable |
-| `created_at` | TIMESTAMPTZ | |
+| Field | Meaning |
+|---|---|
+| `forecast_id` | Unique identity of one complete issued forecast |
+| `issue_time` / `information_cutoff_at` | Intended information cutoff: 09:00 UTC D-1 |
+| `run_started_at` | Actual start of generation |
+| `created_at` | Actual completion of the forecast rows |
+| `published_at` | Actual archive publication time |
+| `publication_deadline_at` | 09:30 UTC D-1 |
+| `publication_status` | On time, late, early, retrospective or legacy unverified |
+| `is_primary` | First eligible on-time issue for this product/day |
+| `revision_of` | Original eligible forecast, if this is a later revision |
+| `model_version` | Resolvable source/configuration identity |
 
-Naming deliberately mirrors `src/grid_signals/db/schema.py`. All times are tz-aware UTC.
+All timestamps are timezone-aware UTC. A revision retains the original cutoff,
+receives a new forecast ID and never replaces the forecast used for scoring.
+An intended issue timestamp alone does not prove on-time publication.
 
-`capacity_mw_assumed` is not redundant. The denominator is a modelling assumption that
-changes as the fleet grows, and without it a capacity factor stored today cannot be
-reinterpreted tomorrow.
+## Forecast files and model versions
 
-## Guarantees out
+Published forecast files retain the metadata above plus zone, fuel/target,
+units, resolution, delivery day, interval bounds and quantile values. There is at
+most one primary eligible forecast per `(zone, target, resolution, issue_time)`.
+Renewable results retain their capacity factor and installed-capacity denominator;
+prices retain EUR/MWh and negative values. Current models issue 19 quantiles from
+0.05 through 0.95; extra tails require explicit implementation.
 
-- One complete forecast set per delivery day, published by **09:30 UTC**.
-- Idempotent upsert, matching the existing `ON CONFLICT … DO UPDATE` pattern in
-  `db/queries.py`.
-- Forecasts are **immutable per `issue_time`**. A revision gets a new `issue_time`; it
-  never overwrites an existing one. This is what makes honest backtesting possible later
-  — it is precisely the property ENTSO-E's A69 lacks, which is why A69 is unusable as a
-  day-ahead benchmark.
-- `model_version` always resolves to a commit.
+Preserve the append-only archive and original eligible forecast across retries
+and revisions. Do not confuse a scheduler retry with a replacement for a scored
+issue. Model versions and original code and input files must remain recoverable.
 
-## Guarantees in
+The code-reorganisation milestone also introduces saved trained models and
+model version records listing the code/settings, training cutoff and reasons for
+approving each model. This is target work, not an existing reload/promotion guarantee. Source
+relocation must not rewrite the original model version records or reopen evaluation
+windows. A future database or public API would require a separate justified design.
 
-- `generation_by_type` for the target zone at ≤26 h latency. The existing health check in
-  `health.py` already enforces this.
-- A stable capacity source — either an `installed_capacity` table or an agreed static
-  file. Note that **ENTSO-E A68 is published per country for Sweden**, so a zonal
-  denominator cannot come from it; this project derives SE3 capacity from Vindbrukskollen
-  anchored nationally to A68.
-- Stable fuel slugs.
+## Input and output guarantees
 
-## Failure mode
+- Complete market delivery days, including 23/25-hour DST days; resolution and
+  native versus repeated-hourly semantics accompany every forecast.
+- Input observations arrive within the declared latency policy; actuals and
+  capacity have stable zone/fuel definitions and units.
+- Swedish ENTSO-E A68 capacity is national, so SE3 needs its declared fleet split.
+- Public forecasts require producer, process, publication/retrieval timestamps,
+  raw-response evidence and complete target coverage before benchmark eligibility.
+- A69/A01's documented reference is fixed at 18:00 Brussels time, later than our
+  cutoff. Its historical response is not automatically a matched benchmark;
+  high apparent accuracy alone does not prove a revision mechanism.
 
-If no forecast is published by 10:00 UTC, consumers fall back to ENTSO-E A69 and the
-health check alerts. A69 is unsuitable as a *benchmark* but perfectly serviceable as a
-fallback *input* — those are different uses.
+## Failure behaviour
 
-## Consumption surface (sketch only, not built)
+Retain and label late, missing and failed issues. A downstream consumer may use a
+complete public fallback only if its availability and target definition are
+verified at that consumer's decision time. Otherwise report unavailable. Do not
+silently substitute a later public curve or score a retrospective reconstruction.
+The website keeps historical results visible with their underlying dates.
 
-An agent tool mirroring the signatures in `src/grid_signals/agent/tools.py`:
+## Interpretation that travels with the data
 
-```
-get_renewable_forecast(zone, date, fuel_type, quantiles=None)
-  → per-hour capacity factor and MW at the requested quantiles,
-    with model_version and capacity_mw_assumed attached
-```
+Development scores support model selection; final evaluation and subsequent live
+scores provide separate evidence of generalisation and operation. Report scored
+versus requested days. Renewable final aggregate coverage is close to nominal;
+price intervals under-cover. Neither establishes calibrated guarantees for each
+regime. Fleet availability, weather age and capacity assumptions
+remain limitations; conservative source timing does not prove an accuracy floor.
 
-And a dashboard fan chart alongside the existing `wind_vs_price` panel in
-`app/charts.py`.
-
-## Why this matters to the roadmap
-
-`ROADMAP.md` Direction H proposes a price model. Renewable generation is the dominant
-driver of Nordic-Baltic day-ahead prices, so these quantiles are the highest-value input
-it could take — and because they are a *distribution* rather than a point, the price
-model can propagate uncertainty instead of inventing it.
-
-## Caveats that must travel with the data
-
-Any consumer, human or model, needs to know:
-
-1. **The 184-day holdout is the only honest accuracy figure.** Development-set numbers
-   are for model selection, not for setting expectations.
-2. **The quantile model is mildly underdispersed** (0.737 coverage at nominal 0.80 on the
-   development set). Intervals are somewhat too narrow; treat them as a lower bound on
-   uncertainty until this is closed.
-3. **Winter forecasts over-predict** (DJF nBIAS −0.0138), consistent with unmodelled
-   icing losses.
-4. **Features are at least as stale as the real forecast would be** — the per-hour offset
-   selection is conservative by construction, so reported skill is a floor.
+Renewable and load forecasts are potential price inputs. Their added value must
+be established against a price-only baseline with out-of-sample upstream inputs.
+Residual-load and price uncertainty require an appropriate joint/scenario model;
+marginal quantiles do not propagate automatically through subtraction or pricing.

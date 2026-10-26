@@ -1,0 +1,27 @@
+{
+  "release": "load_2026_10_15",
+  "frozen_at": "2026-10-15T15:56:00.771319+00:00",
+  "start": "2026-09-01",
+  "end_exclusive": "2026-10-15",
+  "selected_model": "load_quantile_gbm",
+  "selection_rule": "lowest development CRPS, then MAE; fixed before final evaluation",
+  "decision": "All four fixed methods; candidate chosen using development CRPS. No tuning after final evaluation.",
+  "input_matrix": "holdout_load_2026_10_15/input_matrix.parquet",
+  "input_sha256": "5a30a27beb43d5b66d4764380ea7843f17c646270d1efa7f3eeff5876ca6bde5",
+  "revision_assumption": "historical lag values are latest-revised observations with assumed 24-hour latency",
+  "sources": {
+    "configs/load.yaml": "c4416b94161d26f5fd979fe887231bd5ec84bb703c764e4e86c84b11a87b82c6",
+    "configs/solar_sites.csv": "db914943016e1130198de82ab777bea2118723cc36598871a965ea0884bf06cd",
+    "src/renewable_forecast/pipelines/load.py": "d8a82f5b5cebdc993dd7c167d905349ce20827911d3385b689b06ed0e2213c45",
+    "src/renewable_forecast/models/load.py": "beca06cdb8d75989a5b3dcf8f6589efe5ae712c8dfc9135f0aa99fa86016f067",
+    "src/renewable_forecast/features/load.py": "6b176aaa59975ce09cc76c4fe5484b71c50a2135476b45c5e3159de3c85ec68c",
+    "src/renewable_forecast/sources/load.py": "5e32e7b256d7da979a06f5ec1ad870ee37b25fd40040b1b0b5446a36432df9d9",
+    "src/renewable_forecast/windows.py": "d5b0c8cba7265afce1c8a2b4313e41c94b42ece426791bfe53054451bdbd59fb",
+    "src/renewable_forecast/evaluation/splits.py": "e37c57a463d369e7ce749328ee68b1f5d041dae49618da3b3538e9dd98e1c87e",
+    "src/renewable_forecast/pipelines/backtest_products.py": "1c53e8ad08ecf93ab85facf2e3842693dc13db4a58194c1640744cd37213807b",
+    "src/renewable_forecast/sources/entsoe.py": "215b940b2eeae7a94671949498a018713a4c21adc692debc3cacb16492b97093",
+    "src/renewable_forecast/sources/openmeteo.py": "678157fc76806503c6aeb1d92a38fa5980f2571f564a6749d2a8025f56fdb600",
+    "src/renewable_forecast/pipelines/load_holdout.py": "3a9c86301bbe0f4148874813fc5d196f516b544adefd5ad6f04714a718d9205e"
+  },
+  "selection_sha256": "991f001212f8005b60f3eeb8cc2f66a6f4bc8646b52a0beec24756c3ae3deb06"
+}

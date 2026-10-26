@@ -1,274 +1,137 @@
-# Day-ahead wind and solar forecasting
+# Day-ahead power forecasting
 
-Electricity for tomorrow is bought and sold today. Bidding for a given day closes at
-midday the day before, so everyone trading has to guess how much wind and solar will
-actually generate over the 24 hours that follow. Wind is the least predictable part of
-the supply, which makes it the hardest part of that guess to get right.
+Public market data and forecast weather become next-day generation and price
+forecasts, with explicit information cutoffs, uncertainty and publication records.
+The [project roadmap](../ROADMAP.md) sets current priorities: SE3-led demo delivery,
+SE4 wind transfer, a bounded deep-learning comparison, then onshore wind, solar
+and spot prices across all 15 Nordic/Baltic zones. German results remain supporting
+case studies; the existing implementation does not yet provide regional coverage. The
+[website](../README.md#run-the-local-demo) presents portable results.
 
-This project builds that guess. Every morning it takes the overnight weather forecasts,
-converts them into expected generation for each hour of tomorrow, and reports not just
-a single number but a **range**: how much output is likely, and how confident we
-should be.
+The evidence table below records the October 15 research releases. Local
+publication has since begun; see the [assessment](../docs/implementation-plan.md)
+for the later trial observations. The [earlier research backlog](docs/roadmap.md)
+is historical context, not a competing roadmap.
 
-| | where it stands (2026-10-15) |
-|---|---|
-| **Wind, SE3** (central Sweden) | Working end to end; the daily job is not yet scheduled. Corrected quarter-hour winter evaluation: **2.90% nMAE**, **72%** coverage for nominal 80% ranges, over **79 days** |
-| **15-minute output** | Implemented and evaluated on genuine quarter-hours. Default repeats hourly forecasts after interpolation showed no significant CRPS gain; interpolation is optional. See `reports/products_15min.md` |
-| **Solar** (Germany) | First DE-LU quarter-hour forecasts: **1.96% daylight nMAE** over **90 winter days**, ahead of the three references. Fleet and annual capacity approximations are documented in `reports/products_15min.md` |
-| **Other bidding zones** | Not started. Resource and per-zone assessment in `docs/roadmap.md` §6 |
+The [target architecture](../docs/implementation-plan.md) consolidates reusable
+research code into the installed product package and one CLI, with Prefect
+orchestration and saved models with recorded versions. The commands and paths below describe
+the current implementation until that migration. Preserve original release inputs,
+source hashes and results before moving code; standalone learning exercises are
+not part of the target product.
 
-What is planned next, and why, is in **`docs/roadmap.md`**. The sources behind the
-methods are reviewed in **`docs/literature.md`**.
+## Current evidence — 2026-10-15
 
-![](reports/figures/task_horizon.png)
-
----
-
-## What a forecast looks like
-
-A forecast for a delivery day, made the morning before:
-
-![](reports/figures/latest_forecast.png)
-
-The dark line is the median output for each interval. The shaded bands say how
-uncertain that is: the darkest covers the middle half of plausible outcomes, the palest
-covers all but the most extreme 10%. A wide band means the weather is genuinely hard to
-call that interval; a narrow one means we expect to be close. The chart shows the newest
-forecast on file. Operational output defaults to 15-minute intervals; the daily job is
-not yet scheduled. The solar chart and new product evaluations are in
-[`reports/products_15min.md`](reports/products_15min.md).
-
-The same method on four days from the past, picked by rank rather than by hand: an
-average day, a poor one, the worst in the period, and the windiest.
-
-![](reports/figures/backtest_examples.png)
-
----
-
-## How good is it
-
-The figures below describe the archived September hourly board. They predate the
-October correction that dates forward weather features to their latest input
-(+3 hours). Use `reports/products_15min.md` for the corrected current product
-evaluation; the older hourly numbers are historical, not a current accuracy claim.
-
-![](reports/figures/leaderboard_crps.png)
-
-Each bar is a different method, all measured the same way: run it on seventeen months of
-past days it was never trained on, and see how far it lands from what actually happened.
-
-| method | what it actually does |
-|---|---|
-| Repeat what happened 48 h ago | Generation two days earlier, copied forward. The crudest possible guess |
-| Long-run average | The average output for this hour of the day and time of year, ignoring the weather |
-| Straight line through 8 physics numbers | A linear formula over forecast wind speed, the turbine power curve and the time of year |
-| Turbine power curve, nothing learned | Forecast wind at 8 locations across SE3, through a manufacturer-style power curve, weighted by the capacity near each location. No fitting |
-| Boosted trees, single guess + spread | LightGBM over 155 inputs, predicting one number, with the uncertainty estimated afterwards |
-| Boosted trees, full range of outcomes | The same model family, trained to predict the whole range directly. **This is what the project ships** |
-| Grid operator's published forecast | Svenska kraftnät's own numbers, for reference only (see below) |
-
-The inputs are mostly forecast weather at 8 points spread across the zone, from five
-weather models:
-- **Three global models** (ECMWF, GFS, ICON) from an archive that can only be asked for
-  forecasts "as they stood a whole number of days earlier".
-- **MET Norway's 2.5 km MEPS and ECMWF's 9 km IFS**, addressed by the specific model run
-  that would have been in hand at 09:00 UTC.
-
-Also included: how much the models disagree, how the weather changes hour to hour, the
-time of year, and what the fleet generated two or more days ago.
-
-**What the chart says:**
-- **Physics gets you most of the way.** The power curve alone misses by 166 MW. Machine
-  learning takes that to 120 MW: a 28% gain in the headline score (CRPS), up from 15%
-  when only the whole-day archive was used. This is a physics problem with a
-  statistical correction on top.
-- **Weather-blind methods are hopeless.** The seasonal average misses by 783 MW. That gap
-  is the value of using weather forecasts at all.
-- **The grid operator's 69 MW is not a fair comparison.** The public archive serves the
-  *latest revised* version of that forecast, with corrections made after bidding closed.
-  Published day-ahead skill for a zone this size is 140–280 MW. Treat it as a yardstick,
-  not a competitor. An honest comparison needs the forecast captured at issue time
-  (roadmap §0).
-
-### What changed on 2026-09-21/22
-
-| change | effect | details |
+| Task | Evidence | Limit |
 |---|---|---|
-| Weather addressed by model run (MEPS + IFS) alongside the whole-day archive | nMAE −12%, CRPS −11%; the jump in error at lead hour 34 falls from +45% to about +20% | `reports/meps_archive.md` |
-| Calibration grouped by how much the weather models disagree | 80% coverage 0.74 → 0.77 at equal CRPS; coverage now even across calm and uncertain weather | `reports/products_15min.md` | quarter-hour wind and solar evaluation, forecasts and archive coverage |
-| `reports/calibration.md` |
-| Calibration fitted on out-of-sample predictions from the whole training window | CRPS −3.7%, coverage → 0.78, autumn 0.73 → 0.78 | `reports/calibration.md` |
-| Fixed: missing weather values averaged into "zero wind" | one IFS run that came back empty had been read as dead calm (2025-08-08 forecast at half the actual output); a few Open-Meteo hours likewise | `features/wind.py` |
+| SE3 wind | Final: 2.46% capacity-normalised MAE, 81.1% coverage at nominal 80%, 182/184 days | Hourly model repeated to quarter-hours; fleet availability remains approximate |
+| DE-LU solar | Final: 2.84% daylight capacity-normalised MAE, 80.6% coverage, 184/184 days | Approximate fleet; mean overprediction of 2.07% capacity on daylight rows |
+| DE-LU prices | Four fixed price-only references; 123 development days, 42/44 final holdout days | LEAR leads; uncertainty coverage deteriorates on holdout |
+| DE-LU load | Four references; selected quantile GBM: 1,433 MW MAE vs 1,746 MW weekly naive, 79.7% 80% coverage, 44/44 final days | Actual-lag revisions assumed; six-site temperature approximation |
+| Daily publication | Local timers installed; first scheduled issue October 16 | No completed on-time forward record yet |
+| German wind, residual load, other zones | Planned | No complete custom German renewable chain or Europe-wide coverage claim |
 
-Full metric tables for both model versions are in `reports/modelling.md`.
+Price results in EUR/MWh:
 
----
+| Method | Development MAE | Final holdout MAE | Final 80% coverage |
+|---|---|---|---|
+| Hourly price-only LEAR | 24.72 | 37.21 | 68.2% |
+| Native quarter-hour point GBM + residuals | 26.92 | 41.38 | 65.5% |
+| Native quarter-hour direct quantile GBM | 26.16 | 42.97 | 52.9% |
+| Weekly seasonal naive + residuals | 35.66 | 57.89 | 62.6% |
 
-## Known limitations
+See [price development](reports/price_benchmark.md),
+[final price evaluation](reports/price_holdout.md),
+[price protocol](reports/price_protocol.md) and
+[corrected renewable development](reports/products_15min.md).
+The [final renewable evaluation](reports/holdout.md) compares fixed candidates with
+physical and persistence references; its harness correction is recorded in the protocol.
+The [monthly diagnostics](reports/holdout_diagnostics.md) report bias, coverage,
+excluded dates and paired day-block confidence intervals against physical references.
+Direct-quantile price GBM remains an experimental reference. LEAR is the newly
+declared forward publication baseline, selected after the historical evaluations;
+new forward issues assess that serving decision. No historical model was retuned.
 
-**1. Ranges are still slightly too narrow: 78% coverage at a nominal 80%.** The
-worst remaining failure is a day on which the model is confidently wrong. On 13
-February 2026 it over-forecast by about 520 MW for all 24 hours with an ordinary-width
-range, in the old and new versions alike. Better weather data did not change it, which
-points at the fleet (availability, icing), not the forecast. Coverage by forecast level
-and by model disagreement:
+Load evidence: [protocol](reports/load_protocol.md), [development](reports/load_benchmark.md),
+[final evaluation](reports/load_holdout.md). The final load matrix is frozen and hashed.
+An [out-of-sample load-input price experiment](reports/price_load_protocol.md) compares
+price-only inputs with custom load medians and quantiles on matched development rows.
+It requires separate forward confirmation; the completed price final window is not reopened.
+The [first result](reports/price_load.md) changes MAE from 26.16 to 25.89 EUR/MWh
+with the load median, but paired CRPS intervals include zero for both added-input
+arms. This does not establish downstream value from the improved load forecast.
 
-![](reports/figures/coverage_by_output.png)
+## Information and evaluation rules
 
-**2. A seasonal bias the model cannot remove.** It over-forecasts in winter and
-under-forecasts in autumn, by roughly ±40 MW:
+- Cutoff: **09:00 UTC D-1**; publication deadline: 09:30 UTC. Creation and actual
+  publication have separate timestamps. Only immutable first on-time issues enter
+  live scoring; late, early, retrospective, legacy and revised forecasts are excluded.
+- Use run-addressed weather where available, train-only preprocessing/calibration,
+  rolling refits, a seven-day embargo and matched complete delivery days.
+- Renewable errors use installed-capacity normalisation; solar headline metrics
+  exclude night. Prices use EUR/MWh, retain negative values and avoid MAPE.
+- Historical hourly prices are not native quarter-hour GBM targets. The price GBMs
+  use the genuine SDAC quarter-hour regime from October 2025.
+- ENTSO-E A69/A01's reference is fixed at 18:00 Brussels time. Its historical API
+  response alone does not establish availability at our cutoff. Exceptional apparent
+  accuracy does not prove a particular revision mechanism.
+- Save public forecasts with raw XML, request/receipt timestamps, metadata and
+  hashes. Retain missing and late responses. Historical public fundamentals are
+  excluded from price modelling until evidence that the data was available before the cutoff is verified.
+- Residual-load uncertainty needs a joint distribution, not marginal subtraction.
 
-![](reports/figures/seasonal_bias.png)
+The renewable final window is March 20–September 19, 2026; the separate price final
+window is September 1–October 14. Model version records with source/settings checksums are in
+`configs/releases/`; local data and publication evidence remain gitignored.
+Older September hourly charts predate the corrected weather-age policy and are
+archival evidence, not current accuracy claims.
 
-The same pattern appears in a study that uses the *actual* weather
-(`reports/era5_ceiling.md`), and removing the day-of-year inputs does not change it. So
-it lives in the data (availability, icing, maintenance seasons), and fixing it needs an
-outage or availability source (roadmap §5).
-
-**3. A residual jump in error at lead hour 34.** Half of each delivery day was
-forecast from weather a day staler than necessary, because the main archive can only
-be asked for forecasts by whole days (`reports/openmeteo_vintage.md`). The run-addressed
-sources remove most of the jump, but not all of it, because the model still uses the
-whole-day block:
-
-![](reports/figures/nmae_by_lead.png)
-
-**4. The capacity figure drifts against reality.** The highest output reached relative
-to registered capacity fell from 0.91 in 2018 to 0.79 in 2025, in all four Swedish
-zones. With the weather held fixed, turbines added since 2018 deliver only ~70% of
-what physics expects (`reports/era5_ceiling.md`). This matters little inside the
-current two-year training window, but it blocks training on older history.
-
-![](reports/figures/ceiling_drift.png)
-
-**5. Quarter-hour wind still uses an hourly-trained model.** Weather is interpolated
-before the power curve, and output is evaluated against real quarter-hour actuals.
-Native quarter-hour training and joint ramp uncertainty remain open (§1).
-
-**6. One zone only.** Every finding comes from SE3. Whether it transfers is the point of
-roadmap §4 (SE4 as an in-country control, Finland as an out-of-country test).
-
-**7. Production fitting needs complete weather coverage.** MEPS historical access is
-working again and the archive refresh is tracked in `reports/products_15min.md`.
-Production can use new observations without scoring the sealed holdout; development
-is fixed to dates before 2026-03-20 even as inputs are refreshed.
-
-**8. Solar is a first fleet approximation.** Six equal-area sites, fixed panel
-orientations and annual ENTSO-E capacity snapshots stand in for a dated MaStR fleet.
-It uses one pinned ECMWF Previous Runs model. These assumptions and measured interval
-coverage must accompany its forecasts.
-
----
-
-## Reference
-
-### Documents
-
-| document | what it settles |
-|---|---|
-| `docs/roadmap.md` | what is still to be done, in order, including the cost of scaling to other zones |
-| `docs/literature.md` | the published record behind every method choice |
-| `docs/metrics.md` | what every number means, and which rows it covers |
-| `docs/dataflow.md` | where the data comes from and what is known when |
-| `docs/integration_contract.md` | how this would plug into `grid-signals` |
-| `reports/protocol.md` | the scoring rules, frozen before any model was built |
-| `reports/data_audit.md` | which data is trustworthy enough to model |
-| `reports/modelling.md` | leaderboards (v1 Open-Meteo only; v2 current), all metrics |
-| `reports/calibration.md` | why the ranges were too narrow and what fixed most of it |
-| `reports/meps_archive.md` | the run-addressed weather sources and their A/B tests |
-| `reports/openmeteo_vintage.md` | the whole-day archive's timing problem |
-| `reports/era5_ceiling.md` | how much the actual weather can explain; the added-capacity shortfall |
-
-### Where the numbers come from
-
-Every figure is generated from the backtest's own outputs, so a chart cannot drift away
-from the number it illustrates. The current board covers **501 delivery days, 12,002
-hours, 2024-10-02 → 2026-03-01**. These are the days that have every weather source,
-scored over 17 rolling-origin folds with a 7-day embargo. A six-month holdout
-(2026-03-20 → 2026-09-19) is sealed and will be opened once (roadmap §7). No
-hyperparameters have been tuned: with two years of data that buys flattering numbers
-rather than better forecasts.
-
-### Progress
-
-| phase | state |
-|---|---|
-| 1–3 dataflow, data audit, targets, frozen protocol, baselines | done |
-| 4–5 weather features, modelling | done |
-| 6 run-addressed weather (MEPS + IFS), calibration | done, shipped |
-| 6 15-minute output | Stage 1 implemented; native wind training remains (roadmap §1) |
-| 6 German solar | initial quarter-hour model implemented; registry fleet remains (roadmap §3) |
-| 7 integration contract | drafted |
-| 7 scheduled daily run and live trial | not started (roadmap §0, §7) |
-
-### Rules the code holds to
-
-- **All times are stored in UTC.** Local market time appears only when defining which
-  hours belong to a delivery day, and in the charts.
-- **Nothing becomes an input unless it was knowable at the issue time** (09:00 UTC).
-  Every input column records how old its information is, and a test fails the build if
-  any of them is too fresh. Run-addressed weather is dated to when the run was
-  *published*, not when it started.
-- **Never use a weather provider's automatic "best model" blend.** What it blends
-  changes over time, and a model would learn that as if it were weather.
-- **Errors are measured against installed capacity, not average output**, so they stay
-  comparable across years as the fleet grows.
-- **Every change is judged by a same-rows A/B** on the development folds, with a
-  day-block bootstrap for significance.
-- **Every number in a report comes from a function in `src/`**, so it can be re-derived.
-
-### Layout
-
-```
-docs/      roadmap, literature review, dataflow, metrics, integration contract
-configs/   base.yaml (incl. weather sources and calibration scheme) + experiments/
-src/renewable_forecast/
-  windows.py   issue times, delivery days, lead hours
-  config.py    YAML load, deep merge, run fingerprint
-  paths.py     every filesystem path, in one place
-  store.py     parquet source of truth, DuckDB views over it
-  sources/     ENTSO-E, Open-Meteo, MEPS, IFS single runs, ERA5, turbine registry
-  targets/     what we are predicting, and the capacity denominator
-  features/    weather to power conversion, and the design matrix
-  evaluation/  splits, metrics, baselines
-  models/      quantile boosters, conformal calibration, scenarios
-  pipelines/   pulls, backtest, A/B comparisons, predict
-  reporting/   every figure, generated from backtest outputs
-notebooks/ exploration only -- may import from src/, never the reverse
-tests/     time alignment, information-age guards, calibration, figure integrity
-reports/   committed markdown + figures
-data/      gitignored
-mlruns/    gitignored (MLflow, SQLite backend)
-```
-
-### Running it
+## Run the research
 
 ```bash
 uv sync --group research
 export PYTHONPATH=research/src
 
-uv run python -m renewable_forecast.pipelines.data_audit      # data quality gate
-uv run python -m renewable_forecast.pipelines.pull_meps       # MEPS backfill (--radius 4 for neighbourhoods)
-uv run python -m renewable_forecast.pipelines.pull_ifs_runs   # IFS HRES 00z runs (--run-hour 18 for 18z)
-uv run python -m renewable_forecast.pipelines.train           # backtest leaderboard
-uv run python -m renewable_forecast.pipelines.pull_actuals    # refresh training observations (.env / ENTSOE_API_KEY)
-uv run python -m renewable_forecast.pipelines.predict         # forecast tomorrow; 09:00 UTC
-uv run python -m renewable_forecast.pipelines.predict --fuel solar  # DE-LU, 15-minute
-uv run python -m renewable_forecast.pipelines.refresh_archives --status-only
+# Root .env supplies ENTSOE_API_KEY.
+uv run python -m renewable_forecast.pipelines.daily capture
+uv run python -m renewable_forecast.pipelines.daily forecast
+uv run python -m renewable_forecast.pipelines.daily score
+
+uv run python -m renewable_forecast.pipelines.price refresh
+uv run python -m renewable_forecast.pipelines.price backtest
+uv run python -m renewable_forecast.pipelines.price predict
+uv run python -m renewable_forecast.pipelines.price_forward  # current LEAR publication
+uv run python -m renewable_forecast.sources.load
+uv run python -m renewable_forecast.pipelines.load backtest
+uv run python -m renewable_forecast.pipelines.load predict
+uv run python -m renewable_forecast.pipelines.price_load
+uv run python -m renewable_forecast.pipelines.decision_study
+
+uv run python -m renewable_forecast.reporting.export_demo
+uv run python -m renewable_forecast.reporting.export_price
+uv run python -m renewable_forecast.reporting.export_load
 uv run python -m renewable_forecast.pipelines.backtest_products --fuel wind_onshore
 uv run python -m renewable_forecast.pipelines.backtest_products --fuel solar
-uv run python -m renewable_forecast.reporting.products
-uv run python -m renewable_forecast.reporting.figures         # regenerate every figure
-
-# A/B comparisons (same rows and folds per arm)
-uv run python -m renewable_forecast.pipelines.compare_meps --ifs            # weather sources
-uv run python -m renewable_forecast.pipelines.compare_calibration --schemes # calibration
-uv run python -m renewable_forecast.pipelines.compare_blocks --help         # feature blocks
-
-uv run mlflow ui --backend-store-uri sqlite:///research/mlruns/mlflow.db
 uv run pytest research/tests
 ```
 
-The research dependencies are an opt-in group, so a plain `uv sync` keeps the
-`grid-signals` environment lean. `research/` shares the root `pyproject.toml` rather
-than being an installed package, which is why `PYTHONPATH` is needed outside pytest.
+Use `daily forecast --no-refresh` only with the required source data already cached.
+It preserves real publication timing. See [operations](../docs/operations.md) for
+local timer installation and logs. No scheduled job reopens a holdout.
+
+The exploratory decision example shifts 1 MWh/day into eight quarter-hours under a
+0.5 MW limit. It uses development predictions, allows interruptions and excludes
+fees, taxes and grid charges. Weekly persistence captures most of the benefit
+versus uniform consumption; this is not a trading-profit claim.
+
+## Package map and background
+
+`sources/` acquires data; `targets/` defines actuals and capacity; `features/`
+assembles eligible inputs; `models/` holds predictors; `evaluation/` defines
+splits and scores; `pipelines/` runs evaluation/publication; `reporting/` exports
+results. Parquet datasets and MLflow runs remain local and gitignored.
+
+Further context: [dataflow](docs/dataflow.md), [metrics](docs/metrics.md),
+[literature](docs/literature.md), [renewable final protocol](reports/holdout_protocol.md),
+[integration contract](docs/integration_contract.md),
+[public forecast inventory](configs/benchmarks.yaml).

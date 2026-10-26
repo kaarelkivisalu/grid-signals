@@ -1,145 +1,222 @@
-# Grid Signals — Roadmap
+# Grid Signals roadmap
 
-Nordic-Baltic Energy Intelligence Agent: automated market analysis powered by structured data and LLM reasoning.
+**Direction agreed 2026-10-26.** This is the authoritative product direction and
+delivery order. The [target architecture and implementation plan](docs/implementation-plan.md)
+evaluates the existing code and explains what to combine or remove; research reports
+retain their own frozen evaluation protocols.
 
----
+## Purpose and public features
 
-## MVP — Completed ✅
+An employer-facing portfolio for energy-sector ML and data science: **Nordic/Baltic
+day-ahead wind, solar and spot-price forecasts, credible model comparisons and an
+honest public record of publication and performance**. Machine learning, one
+bounded deep-learning comparison and practical orchestration/MLOps are explicit
+portfolio goals. The website makes that work assessable.
 
-Milestones 1–3, 5–8 are done: project setup, PostgreSQL schemas (migrated from DuckDB), ENTSO-E ingestion, Open-Meteo weather, scheduling/CLI, LLM agent with tool use, daily briefing generation, testing & docs.
+The public experience should answer: what was forecast, what was knowable at issue
+time, how it compared with credible alternatives, and whether it arrived on time.
 
-### Milestone 4: Data Ingestion — Baltic/Nordic System Data
+| Public feature | Visitor outcome | Current position |
+|---|---|---|
+| Forecast explorer | Inspect predictions, uncertainty, actuals and errors by market, date, target and model; download results | Implemented locally for existing research outputs |
+| Performance evidence | Compare models on matched data; distinguish development, final evaluation and forward results | Historical comparisons implemented; a visible forward record remains work |
+| Methods, data sources and timing | Understand inputs, cutoffs, resolution, assumptions and limitations | Implemented locally; presentation must follow the regional direction |
+| Daily publication record | See latest forecasts, freshness, missing/late/failed issues and subsequent scores | Local trial and scorecards exist; always-on delivery is unproven |
+| Regional coverage matrix | See separate observation, evaluation and publication status for every zone and target | Existing map shows data/model coverage; the regional matrix remains work |
+| Research case studies | Assess SE3-to-SE4 transfer and one deep-learning challenger, including negative results | SE3 research exists; transfer and challenger remain work |
 
-**Goal:** Pull supplementary real-time and system-level data.
+Agent/RAG integration is a later usefulness evaluation, not a promised chatbot.
+Choose a task and success measure before selecting an AI approach or adding a
+public feature. The original generic chat and briefing product is scheduled for
+retirement, rather than kept as a permanent second application.
 
-- [ ] Elering (Estonian TSO) API:
-  - System balance and frequency
-  - Real-time production/consumption
-  - Cross-border flows (EE-FI, EE-LV)
-  - NPS (Nord Pool Spot) prices for EE
-- [ ] Fingrid (Finnish TSO) API:
-  - Nuclear production (Olkiluoto status is a key market driver)
-  - Wind power production (actual vs forecast)
-  - System state and frequency
-  - Requires free API key registration
-- [ ] Evaluate: Litgrid/AST APIs for LT/LV (less mature, may skip)
+## Coverage destination
 
-**Note:** Some of this data overlaps with ENTSO-E. The TSO APIs are useful for near-real-time data (updated every few minutes) vs ENTSO-E (hourly/daily).
+Cover all **15 bidding zones**: **SE1–SE4, NO1–NO5, DK1–DK2, FI, EE, LV and LT**.
+For each, deliver evaluated **onshore wind, solar and day-ahead spot-price**
+forecasts with a publication record. Offshore wind follows as a separate milestone
+where generation exists. Iceland and expansion beyond these zones are outside
+this roadmap.
 
----
+SE3 wind leads the initial demo. Retain German solar/load/price results as
+supporting case studies; completing the German forecasting chain is not the main
+destination. Imported observations alone never count as forecast coverage.
 
-## Post-MVP — Future Directions
+Every zone/target has separate observation, research evaluation and publication
+statuses. Missing or unsuitable targets remain explicit blockers, not completed
+coverage. Distinguish absent generation from missing measurements, especially for
+small or behind-the-meter solar fleets and offshore wind.
 
-### Direction A: Interactive Chat Interface ✅ (basic)
+## Ordered milestones
 
-- [x] Streamlit chat page with `st.chat_input()` / `st.chat_message()`
-- [x] Tool call visibility in expanders, token/cost display
-- [ ] Persistent conversation context — the agent remembers what was discussed earlier in the session (requires `Agent.run()` refactor to accept message history)
+The [whole-project assessment and implementation plan](docs/implementation-plan.md)
+evaluates what to keep, consolidate, remove or move. Read it before implementing
+a milestone. The target is one forecasting package/CLI and lifecycle across local
+use and deployment, with Prefect orchestration and a result-reading website.
+Existing code is retained only where it serves that target. Standalone learning
+exercises move outside this focused product repository. The architecture is
+documented; the code has not yet been combined or removed.
 
-### Direction B: Anomaly Detection & Real-Time Alerts
+### 0. Establish direction — complete
 
-Shift from scheduled briefings to continuous monitoring with alerts when something unusual happens.
+- [x] Agree the audience, public features, 15-zone destination and delivery order.
+- [x] Consolidate active priorities here; mark older direction documents historical.
+- [x] Separate existing implementation from unverified deployment and reliability.
+- [x] Assess the whole repository and record subsystem ownership, reuse and integration gaps.
 
-- Build a statistical baseline model: expected price given wind forecast, temperature, outage schedule, day-of-week, season
-- Detect significant deviations from the baseline in near-real-time
-- LLM explains the anomaly: what's unusual and what might be causing it
-- Alert channels: email, webhook, dashboard notifications
-- Requires: more frequent data ingestion (every 5-15 min from TSO APIs), a baseline model, alert throttling
+This session establishes direction and documentation only. Application changes,
+new model experiments and deployment belong to later sessions.
 
-### Direction C: Scenario Analysis & Backtesting
+### 1. Publish the historical demo — next
 
-Enable counterfactual questions about the market.
+Reuse the existing Streamlit explorer, saved results and standalone demo image.
+Open on **SE3 onshore wind with a populated historical comparison**. Keep German
+case studies accessible and database-dependent tools outside the public demo.
 
-- "What would prices have been last January if Olkiluoto had been online?"
-- "How often does EE price exceed 100 EUR/MWh when wind < 2 GW and Narva is partially offline?"
-- "If 500 MW of new LT-PL interconnector capacity is added, what happens to LT price volatility?"
-- Requires: deep historical data (2+ years), a simulation or statistical model for counterfactuals
+- [ ] Align the default selection and introductory copy with this direction.
+- [ ] Check that all result files are present; include only the versions listed in the current file index.
+- [ ] Resolve release checks, including the test that assumes the latest issue is late.
+- [ ] Confirm the release's commands, dependencies and result files against the
+  whole-project assessment; review uncommitted implementation into a reproducible revision.
+- [ ] Expose only the forecast product. Plan removal of old navigation and runtime
+  dependencies without making all backend changes a demo-launch prerequisite.
+- [ ] Verify the standalone image without database access or API credentials.
+- [ ] Review the local demo, then hand deployment to the project owner.
+- [ ] Verify anonymous HTTPS access, desktop/mobile use and explicit historical dates.
 
-### Direction D: Structured Report Generation
+**Done when:** a visitor can inspect forecasts, evidence and methods on the public
+site even when forecast production is unavailable. Daily freshness is not a launch
+requirement. The project owner will handle deployment later; start with existing
+Dokploy capacity and reconsider hosting only for a concrete operational/cost reason.
 
-Generate weekly/monthly PDF reports suitable for distribution within a trading organization.
+### 2. Bring the code together and run daily SE3 forecasts
 
-- Professional formatting with charts, tables, and narrative
-- Sections: Price Review, Fundamental Drivers, Spread Analysis, Outage Calendar, Weather Outlook
-- Backtest mode: generate a report for any historical period and compare predictions vs actuals
-- Requires: PDF generation (WeasyPrint or similar), chart rendering (matplotlib/plotly), templating
+Complete these two parts in order, keeping the demo usable throughout.
 
-### Direction E: Dashboard & Visualization ✅ (basic)
+**2a — One product:**
 
-- [x] Streamlit dashboard with Plotly charts: hourly prices, generation mix, cross-border flows, wind vs price, price heatmap
-- [x] Briefing viewer page with date selector
-- [x] CLI command: `uv run python -m grid_signals ui`
-- [x] Interconnector flow visualization (map-based)
-- [ ] Spread evolution over time chart
+- [ ] Save copies of the original code, data and evaluated results before moving code.
+- [ ] Bring reusable forecasting code together into the installed package with one CLI,
+  product registry and explicit data/output configuration. Local and scheduled runs
+  must invoke the same functions.
+- [ ] Extract needed mappings/data, then retire the original PostgreSQL market
+  application, briefing/chat product, stale commands/scripts and duplicate pages.
+- [ ] Move standalone exercises/exploration elsewhere; focused experiments import
+  the product package and share its data/evaluation contracts.
+- [ ] Reshape dependencies and tests around the retained product; verify fixed-input
+  model predictions and metrics before removing superseded implementations.
 
-### Direction F: Production Hardening (Single Server) ✅
+**2b — Run the forecast workflow:**
 
-**Critical:**
-- [x] CI pipeline (GitHub Actions): ruff linting, mypy type checking, pytest on every push
-- [ ] Add authentication to Streamlit (nginx basic auth or built-in password)
-- [x] Rate limit chat page to cap daily LLM spend
-- [x] Structured logging (JSON format) — stdlib JSONFormatter, auto-detect TTY
-- [x] Failure alerting: Prefect automations (configurable via Prefect UI)
-- [x] Daily health check: verify all jobs ran, latest `period_start` is within 26h
-- [x] Automated daily PostgreSQL backup (pg_dump) to S3 (30-day retention via S3 lifecycle policy)
-- [x] Add timeouts to ENTSO-E (60s) and Anthropic (120s) API calls
-- [x] Validate environment variables at startup with clear error messages
-- [x] Run validation *before* briefing generation so bad data doesn't produce a bad briefing
+- [ ] Replace old Prefect flows with data fetching/checks, training,
+  prediction, publishing, scoring and export flows. Use one scheduled runner with
+  versioned code and saved models, data and results that survive restarts.
+- [ ] Separate model preparation from deadline-sensitive prediction; validate and
+  identify saved trained models and training cutoffs before promotion.
+- [ ] Provision an always-on producer independently of page serving, with bounded
+  retries, resource limits, backup/restore and tested restart behaviour.
+- [ ] Cut over to Prefect scheduling and retire local forecast timers and old
+  deployment definitions after equivalent lifecycle behaviour is verified.
+- [ ] Address observed timeout failures; monitor public forecast collection, forecasting and scoring.
+- [ ] Report failures to fetch data, generate forecasts or deliver results in each
+  product's job status; a successful task run alone does not prove results were published.
+- [ ] Deliver results automatically; publish a complete update at once and keep the last working version if an update fails.
+- [ ] Expose every due issue, publication time/status, freshness and available scores.
+- [ ] Compare eligible first publications with baselines and track bias/interval coverage.
 
-**Scheduling — migrated from cron to Prefect:**
-- [x] Prefect flows and tasks wrapping existing pipeline functions
-- [x] Cron-based schedules with catchup for missed runs
-- [x] Built-in retries, timeouts, and failure handling per task
-- [x] Docker Compose deployment (Prefect server + worker)
-- [x] Prefect UI dashboard for observability at localhost:4200
+**Done when:** current SE3 forecasts and subsequent scores reach the public site
+automatically, including visible failures and stale data. Assess the existing
+[approximately 30-consecutive-issue gate](research/docs/integration_contract.md)
+before claiming dependable operation. Prefect run state and MLflow experiment
+tracking complement, rather than replace, the public forecast record. German
+case-study results do not require continuing all existing German production jobs.
 
-**Code quality:**
-- [x] Add ruff and mypy to project dev dependencies and CI
-- [x] Add pytest coverage reporting (pytest-cov)
+### 3. Transfer onshore wind to SE4
 
-### Direction I: VRE Generation Forecast Models (in progress)
+- [ ] Audit targets, fleet/capacity definitions and issue-time weather availability.
+- [ ] Adapt existing product restrictions and result-file and settings paths only
+  as needed for SE4; preserve existing SE3 and German releases.
+- [ ] Reuse the SE3 approach and references; freeze the comparison before evaluation.
+- [ ] Publish matched results, transfer limitations and the model decision.
+- [ ] Add validated SE4 forecasts to daily publication and the coverage matrix.
 
-Standalone ML development of probabilistic day-ahead wind and solar generation forecasts, in
-`research/` — deliberately **not integrated** with grid-signals; the integration deliverable is a
-written contract only. Renewable quantiles are the highest-value input to Direction H.
+**Done when:** visitors can compare SE3 and SE4 evidence and inspect SE4's own
+publication record. A positive improvement is not required for an honest case study.
 
-- Targets: **SE3 onshore wind** first, then **DE-LU solar** (Swedish PV is largely behind-the-meter,
-  so ENTSO-E sees only a small metered slice — see `research/docs/dataflow.md`)
-- Approach: physics fitted on ERA5, thin statistical correction fitted on matched-lead NWP archives;
-  quantile GBM with multi-model spread as the uncertainty signal
-- Benchmark: climatology, persistence and a physical power-curve baseline. **ENTSO-E A69 turned out
-  not to be a usable day-ahead bar** — it scores 1.77% nMAE against SE3 actuals where published
-  day-ahead wind skill is 3–6%, so the served revision postdates gate closure
-- [x] Phase 1 — dataflow diagram (`research/docs/dataflow.md`) and project scaffold
-- [x] Phase 2 — data audit (`research/reports/data_audit.md`) — GO for SE3 wind
-- [x] Phase 3 — targets, frozen protocol (`research/reports/protocol.md`), baselines
-- [x] Phase 4 — NWP feature pipeline (`research/reports/openmeteo_vintage.md`)
-- [x] Phase 5 — modelling (`research/reports/modelling.md`)
-- [x] Phase 6a — MEPS ensemble spike (`research/reports/meps_archive.md`) — conditional GO
-- [x] Phase 6c — improvement roadmap (`research/docs/roadmap.md`): run-addressed NWP (MEPS +
-  IFS HRES) and cross-fitted, spread-stratified calibration shipped — typical miss 143 → 122 MW,
-  80% coverage 0.74 → 0.78
-- [x] Phase 6b — initial DE-LU solar forecasts at 15-minute resolution; explicit fleet
-  and capacity approximations, with daylight-only development evaluation
-- [x] 15-minute wind output — hourly-trained model on interpolated weather, evaluated
-  against actual quarter-hours; native wind training remains open
-- [x] Phase 7a — integration contract (`research/docs/integration_contract.md`)
-- [ ] Phase 7b — operational dry-run
+### 4. Compare one deep-learning challenger
 
-### Direction G: Multi-Tenant SaaS
+- [ ] Use an established wind task; predeclare one challenger, compute budget,
+  evaluation protocol and promotion criteria before training.
+- [ ] Publish point/probabilistic skill, runtime and operating implications.
+- [ ] Retain the serving baseline unless the challenger earns promotion.
 
-Turn the tool into a product that multiple trading desks can use.
+**Done when:** the demo presents a reproducible comparison and an evidence-based
+adoption decision, including a negative result if the challenger loses.
 
-- User/org management, configurable zones and alert thresholds
-- Per-user conversation history and preferences
-- API access for integration with existing trading systems
-- Requires: auth, multi-tenancy, deployment infrastructure, significant additional engineering
+### 5–7. Complete regional coverage, one zone/target at a time
 
-### Direction H: Forecast Model
+| Milestone | Default delivery sequence | Completion criterion |
+|---|---|---|
+| **5. Onshore wind** | After SE3 and SE4: FI → DK1 → DK2 → EE → LV → LT → SE2 → SE1 → NO1 → NO2 → NO3 → NO4 → NO5 | All 15 zones have evaluated onshore forecasts and public publication records |
+| **6. Solar** | DK1 → DK2 → EE → LV → LT → FI → SE4 → SE3 → SE2 → SE1 → NO1 → NO2 → NO3 → NO4 → NO5 | All 15 zones have evaluated solar forecasts and public publication records |
+| **7. Day-ahead spot prices** | FI → EE → LV → LT → SE4 → SE3 → SE2 → SE1 → DK1 → DK2 → NO1 → NO2 → NO3 → NO4 → NO5 | All 15 zones have evaluated price forecasts, credible references and public publication records |
 
-Build a quantitative price forecasting model alongside the LLM agent.
+For **each increment**: audit data → freeze evaluation → compare models → publish
+results and limitations → add daily publication → update the demo and coverage
+matrix. A blocked zone remains incomplete; record the evidence and next action
+before moving to the next ready zone. Reorder only through a documented
+data-readiness decision, not by silently dropping difficult markets.
 
-- Feature engineering: wind forecast, temperature, outage MW offline, day-of-week, season, lagged prices, hydro reservoir levels
-- Model: gradient-boosted trees (LightGBM) or similar
-- The LLM agent can call a `get_price_forecast(zone, date)` tool that returns the model's prediction with confidence intervals
-- Compare model forecast vs actual day-ahead price as a quality metric
+Incremental expansion must also cover the source-zone mappings, fleet adapters,
+market-day/timezone convention, configuration, result-file paths, scorer, exporter
+and website inventory. Several current functions are explicitly SE3- or DE-LU-only;
+the application's 15-zone registry does not make them regional forecasting pipelines.
+
+Start solar with a DK1 pilot, using the existing German work as a reference. Start
+regional prices with a FI pilot using the existing price benchmark framework.
+Price-only benchmarks do not require every custom renewable model first. Add load,
+neighbouring-market or other inputs only for a specific experiment; promote them
+through matched out-of-sample evidence. Wind/solar skill does not establish price
+skill, and marginal quantiles do not automatically give residual-load uncertainty.
+
+### 8. Add offshore wind where applicable
+
+- [ ] Audit applicable zones and separate absent generation from missing data.
+- [ ] Add evaluated offshore forecasts and daily publication one zone at a time.
+- [ ] Expose component and total-wind views with consistent definitions; validate
+  any combined uncertainty rather than adding marginal quantiles.
+
+**Done when:** every applicable regional zone has an evaluated offshore product and
+publication record, with non-applicable and blocked cases explicitly distinguished.
+
+### 9. Evaluate useful agent/RAG integration
+
+- [ ] Identify a recurring visitor task using the working forecast demo.
+- [ ] Compare one bounded AI approach with the existing interface or a simpler alternative.
+- [ ] Measure correctness, evidence retrieval/citations, abstention, latency and cost.
+
+**Done when:** there is a justified public-feature proposal or a documented decision
+to defer. Select the use case at this milestone; do not add AI solely for breadth.
+
+## Delivery discipline and boundaries
+
+- One major milestone and one zone/target increment at a time. Improve the public
+  demo, update status and pass relevant checks before starting the next addition.
+- Fix usability/reliability problems in the delivered demo before expanding scope.
+- Keep development, final and forward evidence separate. Preserve frozen releases
+  and immutable first-eligible forecast identities; do not reopen holdouts for tuning.
+- Handle market-local delivery days, DST, units, source resolution and actual
+  publication timing explicitly. Do not replace missing issue-time inputs with later data.
+- Keep training outside page requests. Use one product package, Parquet and saved result
+  files and a result-reading app. Retire the original market database; no public
+  API or frontend rewrite is required for the selected features.
+- Preserve scientific evidence and irreplaceable data, not every implementation.
+  Remove superseded components after verifying their replacement; Git history
+  preserves obsolete code without keeping it in the active operating surface.
+- Define each later experiment's implementation when its milestone is reached;
+  this roadmap authorises no speculative scaffolding of future features.
+- Defer German chain completion, generic chat expansion, alerts, report formats,
+  multi-tenancy, authentication, billing, trading execution and further geography.
+
+See the [target architecture and implementation plan](docs/implementation-plan.md),
+[operations](docs/operations.md) and [research evidence](research/README.md).

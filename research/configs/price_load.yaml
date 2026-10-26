@@ -1,0 +1,14 @@
+# Declared before computing the price-with-load comparison.
+experiment: price_load_v1
+development_start: "2026-05-01"
+development_end_exclusive: "2026-09-01"
+upstream_start: "2025-10-01"
+upstream_end_exclusive: "2026-09-01"
+upstream: fixed load_quantile_gbm from load_2026_10_15
+load_inputs: [q0.10, q0.50, q0.90]
+price_methods: [price_only, custom_load_point, custom_load_quantiles]
+price_model: fixed native-quarter-hour quantile LightGBM from price v1
+refit: monthly for upstream and downstream; seven-day embargo at each fit
+comparison: identical native quarter-hour training and test intervals for all arms
+status: joint development experiment; no independent final price claim
+forward_validation: new issues from 2026-10-16 onward; do not reopen the completed price holdout

@@ -1,0 +1,13 @@
+{
+  "recorded_at": "2026-10-15T14:42:19.002817+00:00",
+  "release": "renewables_2026_10_15",
+  "reason": "Holdout harness omitted complete-day solar training filtering used by the corrected development evaluator. SolarPhysical calibration received missing physical weather and generated non-finite predictions. No scored solar checkpoint or final result existed; wind checkpoints are unchanged.",
+  "change": "Apply complete_days(solar.build(), [cf, physical_cf, clear_sky_cf]) before solar training, as in pipelines/backtest_products.py. No model, feature, calibration or hyperparameter changes.",
+  "prior_runner": "data/holdout_renewables_2026_10_15/runner_before_amendment_1.py",
+  "sources": {
+    "src/renewable_forecast/pipelines/holdout.py": {
+      "original_sha256": "4a56e475af89287c5ee94115da3e71ba127ec8683ba5793793c01b1f46a2f07f",
+      "amended_sha256": "eb606d89ab6e2f06c404a5e113fa2ddb969f277fb4f5fe05dfb4e186d25c833c"
+    }
+  }
+}

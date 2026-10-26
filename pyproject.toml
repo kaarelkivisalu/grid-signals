@@ -1,7 +1,7 @@
 [project]
 name = "grid-signals"
 version = "0.1.0"
-description = "Nordic-Baltic Energy Intelligence Agent"
+description = "European day-ahead power forecasts and reproducible benchmarks"
 requires-python = ">=3.12"
 dependencies = [
     "psycopg[binary]>=3.2, <4",
@@ -10,6 +10,7 @@ dependencies = [
     "anthropic>=0.86, <1",
     "pydantic>=2.12, <3",
     "pandas>=2.2, <3",
+    "pyarrow>=18, <24",
     "streamlit>=1.45, <2",
     "plotly>=6.0, <7",
     "prefect>=3.0, <4",

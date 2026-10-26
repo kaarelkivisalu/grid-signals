@@ -1,0 +1,181 @@
+{
+  "release": "renewables_2026_10_15",
+  "frozen_at": "2026-10-15T14:12:04.055034+00:00",
+  "holdout_start": "2026-03-20",
+  "holdout_end_exclusive": "2026-09-20",
+  "refit": "2026-03-20 then first of each month; train days strictly before origin minus seven days",
+  "wind": "hourly-trained quantile GBM repeated to genuine quarter-hour targets; physical reference on same rows",
+  "solar": "native quarter-hour quantile GBM; physical and smart-persistence references on same daylight rows",
+  "n_jobs": 4,
+  "decision": "No selection, calibration changes or tuning after results are opened.",
+  "sources": {
+    "configs/base.yaml": "ee085f9b0e603b62ec6064572f51d6e9c7ecb2ef0075d07dcdbb3c9ce693117d",
+    "configs/data_contract.yaml": "7bf70bc54614695aa3d61f387db6c78abbfd29c1f47d0fd9caab9ceea0dc99d4",
+    "configs/experiments/delu_solar.yaml": "9fa508fde97e0e5699c1b0b00f5427ba414d689e169c2eca8e52a5502aa47f32",
+    "configs/se_bidding_zones.geojson": "67335776eb81a481cf347df32436b07381dcc1c32b238578f5cd9ae9e24c541c",
+    "configs/solar_sites.csv": "db914943016e1130198de82ab777bea2118723cc36598871a965ea0884bf06cd",
+    "src/renewable_forecast/features/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/renewable_forecast/features/assemble.py": "17c69b7d459014007881e047d8ed635cbc7d482a0677854ab217de78e2a77cd3",
+    "src/renewable_forecast/features/era5_fleet.py": "7a35a0516e301182cdb09e5da9763f5b9972c7bf1063c5f92ecce857612a9286",
+    "src/renewable_forecast/features/resolution.py": "420300ce22b72a1b45d5e2ed26b73bffe2e26159fefa4fb138384d309d93a077",
+    "src/renewable_forecast/features/sites.py": "0faba23df5dde6f5d1b82f7fe332464f946b2008cdd71cfd8736f15faeb931b7",
+    "src/renewable_forecast/features/solar.py": "199a11631f20537d08b6453184cbf4dae7b324d01888d9050a158c7aaab92a81",
+    "src/renewable_forecast/features/wind.py": "f98a961abdffd07a048b3848f4e80e11390337358189f27c7bfe0ace4364b526",
+    "src/renewable_forecast/models/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/renewable_forecast/models/base.py": "de5506312616762f91a446d2b1fe5329e5286d3f3798a359fd3efaa328d6626e",
+    "src/renewable_forecast/models/conformal.py": "94c133c6f1e133a17a65b681af1eafaf7db82a7bb78a8a4f35b24346eb345620",
+    "src/renewable_forecast/models/gbm.py": "a098ca6cc867c84bd4bb46735c76ff0e9184db94dc9bd3126faba5fa80624a79",
+    "src/renewable_forecast/models/quantile.py": "f88d668136e7b8f38ef6ec33a006d018fefc1e945fcabfecef2d383326eabe16",
+    "src/renewable_forecast/models/sanity.py": "a83e8f6f9bf6313d0d83710f110154fddedf88c4eb0b1d78ebb9e02d3155d38a",
+    "src/renewable_forecast/models/scenarios.py": "9a251506ce767495302730212fa9f30b5de80cdbde68bb1b1b2719b7221f357c",
+    "src/renewable_forecast/models/solar.py": "b84caaffdfae2c5502f369f4cc612bce83b991304409ea3656bf9c34f9902397",
+    "src/renewable_forecast/pipelines/holdout.py": "4a56e475af89287c5ee94115da3e71ba127ec8683ba5793793c01b1f46a2f07f",
+    "src/renewable_forecast/sources/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/renewable_forecast/sources/capture.py": "2596578f27d4303bbf8f51933611abea6403ea41c06c202bcdd54128870df28d",
+    "src/renewable_forecast/sources/entsoe.py": "215b940b2eeae7a94671949498a018713a4c21adc692debc3cacb16492b97093",
+    "src/renewable_forecast/sources/era5.py": "5d585e159c61cec1e148542fa8c61187517c0652f6e76f2e894b9a54f8bec071",
+    "src/renewable_forecast/sources/fleet.py": "f93d7f4202bc5b1b00fbb50371368add469d4ab6b695af4b99518cb36891fb06",
+    "src/renewable_forecast/sources/ifs_runs.py": "0473058fd3f7357ff14b75f770568e0147b4676d78920cf06de7dd6704497566",
+    "src/renewable_forecast/sources/meps.py": "6dfa0a94272afc75bff4454d8e4542ef2ea205ad6b406899bb156e6d28e3e7f4",
+    "src/renewable_forecast/sources/openmeteo.py": "678157fc76806503c6aeb1d92a38fa5980f2571f564a6749d2a8025f56fdb600",
+    "src/renewable_forecast/targets/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/renewable_forecast/targets/actuals.py": "7b7ca54e3c347c97ca56cd69248c04140f16740c3aebf9a2ba6f785f6d1c2b0c",
+    "src/renewable_forecast/targets/capacity.py": "edb6a22ae6204d1895588dd69c90cfa678a4b40495a56bc48b880505edb40d3b",
+    "src/renewable_forecast/targets/labels.py": "e2427717942127c121af41c994f800742e25cefa7325c9e8bd72ea0ed2cd7b9e"
+  },
+  "config": {
+    "wind": {
+      "name": "base",
+      "task": {
+        "zone": "SE3",
+        "fuel_types": [
+          "wind_onshore"
+        ],
+        "resolution": "1h",
+        "issue_hour_utc": 9,
+        "nwp_run_hour_utc": 0,
+        "quantiles": [
+          0.05,
+          0.1,
+          0.15,
+          0.2,
+          0.25,
+          0.3,
+          0.35,
+          0.4,
+          0.45,
+          0.5,
+          0.55,
+          0.6,
+          0.65,
+          0.7,
+          0.75,
+          0.8,
+          0.85,
+          0.9,
+          0.95
+        ]
+      },
+      "splits": {
+        "embargo_days": 7,
+        "origin_freq": "MS",
+        "holdout_months": 6,
+        "holdout_start": "2026-03-20",
+        "holdout_end": "2026-09-19"
+      },
+      "sources": {
+        "entsoe": {
+          "zones": [
+            "SE1",
+            "SE2",
+            "SE3",
+            "SE4"
+          ],
+          "start": "2018-01-01"
+        },
+        "openmeteo": {
+          "models": []
+        }
+      },
+      "features": {
+        "trajectory_lookahead_hours": 3,
+        "run_addressed": [
+          "meps",
+          "ifs_runs"
+        ]
+      },
+      "model": {
+        "quantile": {
+          "calibration": "crossfit"
+        }
+      }
+    },
+    "solar": {
+      "name": "delu_solar",
+      "task": {
+        "zone": "DE_LU",
+        "fuel_types": [
+          "solar"
+        ],
+        "resolution": "15min",
+        "issue_hour_utc": 9,
+        "nwp_run_hour_utc": 0,
+        "quantiles": [
+          0.05,
+          0.1,
+          0.15,
+          0.2,
+          0.25,
+          0.3,
+          0.35,
+          0.4,
+          0.45,
+          0.5,
+          0.55,
+          0.6,
+          0.65,
+          0.7,
+          0.75,
+          0.8,
+          0.85,
+          0.9,
+          0.95
+        ]
+      },
+      "splits": {
+        "embargo_days": 7,
+        "origin_freq": "MS",
+        "holdout_months": 6,
+        "holdout_start": "2026-03-20",
+        "holdout_end": "2026-09-19"
+      },
+      "sources": {
+        "entsoe": {
+          "zones": [
+            "SE1",
+            "SE2",
+            "SE3",
+            "SE4"
+          ],
+          "start": "2018-01-01"
+        },
+        "openmeteo": {
+          "models": [
+            "ecmwf_ifs025"
+          ]
+        }
+      },
+      "features": {
+        "trajectory_lookahead_hours": 3,
+        "run_addressed": [],
+        "solar_sites": "solar_sites.csv",
+        "capacity_source": "entsoe_a68_annual_asof"
+      },
+      "model": {
+        "quantile": {
+          "calibration": "crossfit"
+        }
+      }
+    }
+  }
+}

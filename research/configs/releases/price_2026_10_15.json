@@ -1,0 +1,20 @@
+{
+  "release": "price_2026_10_15",
+  "frozen_at": "2026-10-15T14:33:51.220699+00:00",
+  "start": "2026-09-01",
+  "end_exclusive": "2026-10-15",
+  "methods": [
+    "seasonal_naive",
+    "lear_hourly",
+    "lightgbm_point",
+    "lightgbm_quantile"
+  ],
+  "decision": "Evaluate all four fixed methods once; no tuning or interval recalibration on this window.",
+  "sources": {
+    "configs/price.yaml": "50aecbb7aa03bfea651e2967789235d3d7a3d83f15b72cc934579a3266754ad4",
+    "src/renewable_forecast/pipelines/price.py": "dc92559829d644d82ef52649228053ae2a884006f4031bfed71a020c0364ec11",
+    "src/renewable_forecast/models/price.py": "17911fc58c3a8370c20a8dddf9cf3d53b96dc5b710457523e8c39af2eb15b926",
+    "src/renewable_forecast/sources/prices.py": "f03b0828cce2736c4bcf715fe6dc04569b507ebec820ebb58a3a5121fe401f88",
+    "src/renewable_forecast/pipelines/price_holdout.py": "23b85e101ae73615172803a7969ab19978dc077b029bd8d6f2f14c7c91aac46c"
+  }
+}

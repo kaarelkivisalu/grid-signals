@@ -1,0 +1,83 @@
+# Public-source inventory; unavailable sources remain visible rather than scored.
+checked_on: "2026-10-15"
+sources:
+  - id: entsoe_current
+    label: ENTSO-E current wind / solar
+    target: Wind and solar generation
+    coverage: SE3 and DE-LU capture; broader zones require audit
+    producer: National TSOs
+    mirrors: []
+    vintage: Raw A69/A18 response plus request and receipt timestamps
+    status: Collecting; missing responses retained
+    eligible: Only a complete curve received before the fixed cutoff
+    url: https://transparency.entsoe.eu/
+  - id: entsoe_day_ahead
+    label: ENTSO-E day-ahead wind / solar
+    target: Wind and solar generation
+    coverage: European bidding zones, variable availability
+    producer: National TSOs
+    mirrors: [SMARD, Energy-Charts]
+    vintage: A69/A01; documented reference fixed at 18:00 Brussels time
+    status: Historical reference; pre-cutoff eligibility not established
+    eligible: Capture before cutoff; never infer eligibility from the day-ahead label
+    url: https://eepublicdownloads.entsoe.eu/clean-documents/Transparency/MoP_Ref2_DDD_v3r4.pdf
+  - id: entsoe_load
+    label: ENTSO-E day-ahead load
+    target: Total load
+    coverage: DE-LU capture
+    producer: National TSOs
+    mirrors: [SMARD, Energy-Charts]
+    vintage: Raw A65/A01 response plus request and receipt timestamps
+    status: Collecting; initial curve received after cutoff
+    eligible: Capture before cutoff with the target definition preserved
+    url: https://transparency.entsoe.eu/
+  - id: fingrid_246
+    label: Fingrid 246
+    target: Finnish next-day wind
+    coverage: FI
+    producer: Fingrid
+    mirrors: []
+    vintage: Once-daily next-day product; historical issue retention to verify
+    status: Pending Fingrid API credentials and vintage audit
+    eligible: Verify daily issue time, DST and original historical versions
+    url: https://data.fingrid.fi/en/datasets/246
+  - id: smard
+    label: SMARD
+    target: German load, renewables and residual load
+    coverage: Germany and DE-LU, depending on series
+    producer: National TSOs via ENTSO-E
+    mirrors: [ENTSO-E]
+    vintage: Latest served series; historical publication time to audit
+    status: Inventory; duplicate underlying forecasts
+    eligible: Match cutoff and avoid treating mirrors as independent forecasts
+    url: https://www.smard.de/en
+  - id: rte
+    label: RTE eco2mix
+    target: French consumption forecasts
+    coverage: FR
+    producer: RTE
+    mirrors: []
+    vintage: Previous-day and same-day products; extractable vintages to audit
+    status: Planned France extension
+    eligible: Match target and issue time before scoring
+    url: https://www.rte-france.com/decouvrir-rte/missions/piloter-optimiser-reseau/equilibrer-offre-demande-electricite
+  - id: energy_charts
+    label: Energy-Charts
+    target: Public load and generation forecasts; actual auction prices
+    coverage: Series-dependent European zones
+    producer: Underlying TSO / market sources
+    mirrors: [ENTSO-E, SMARD]
+    vintage: Audit per endpoint
+    status: Inventory; price_next_day is an auction result, not a prediction
+    eligible: Identify the underlying producer and avoid source duplication
+    url: https://api.energy-charts.info/
+  - id: energyforecast_de
+    label: Energyforecast.de
+    target: Day-ahead spot prices
+    coverage: DE-LU and supported openly licensed market zones
+    producer: Energyforecast.de
+    mirrors: []
+    vintage: Twice daily; actual prices replace predictions when available
+    status: Pending provider API key and archive/display terms
+    eligible: Capture before the auction result is known; use raw market price units
+    url: https://www.energyforecast.de/faq

@@ -2,13 +2,13 @@
 
 import streamlit as st
 
-from grid_signals.app.main import get_db
+from grid_signals.db.connection import get_read_connection
 from grid_signals.db.queries import get_briefing, list_briefing_dates
 
 st.set_page_config(page_title="Briefings — Grid Signals", page_icon="⚡", layout="wide")
 st.title("Daily Briefings")
 
-con = get_db()
+con = st.cache_resource(get_read_connection)()
 dates = list_briefing_dates(con)
 
 if not dates:

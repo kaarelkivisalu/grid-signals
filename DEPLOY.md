@@ -1,4 +1,21 @@
-# Deploying Grid Signals on Dokploy
+# Historical Dokploy deployment notes
+
+This guide retains older deployment instructions. Its DuckDB/shared-volume
+architecture and some procedures do not match the current PostgreSQL Compose
+definitions. It is **not a verified current runbook**. Inspect `compose.yaml`,
+`compose.prefect.yaml`, `Dockerfile` and `prefect.yaml` and update the relevant
+instructions before operating the original stack. See the
+[whole-project assessment](docs/implementation-plan.md) for the mismatches and
+forecast-producer integration requirements.
+
+This document and obsolete market deployment definitions are scheduled for removal
+after required recovery information is extracted and the replacement is verified.
+They are not a second supported deployment path.
+
+For the standalone historical forecast demo, use the
+[demo hosting instructions](docs/operations.md#public-hosting) and follow the
+[current roadmap](ROADMAP.md). Deployment will be handled by the project owner
+after local demo review; the demo does not require the services below.
 
 ## Prerequisites
 

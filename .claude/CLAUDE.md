@@ -4,19 +4,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-grid-signals — Nordic-Baltic Energy Intelligence Agent. Automated market analysis powered by structured data pipelines and LLM reasoning with tool use.
+grid-signals — an employer-facing ML/data-science portfolio for Nordic/Baltic
+day-ahead wind, solar and spot-price forecasting and practical orchestration/MLOps,
+with reproducible comparisons and a public publication/performance record. Lead with SE3 wind; retain German
+results as supporting case studies. Agent/RAG integration is a later usefulness
+evaluation, not the product's core or an automatic feature requirement.
 
-See `ROADMAP.md` for the full project plan and future directions.
+`ROADMAP.md` is the authoritative direction and delivery order;
+`docs/implementation-plan.md` evaluates the whole repository and records subsystem
+ownership, integration gaps and milestone prerequisites. Read both before feature
+implementation, including their treatment of Prefect, notebooks, CLI tools and
+the planned combination and removal of separate data paths. Existing code has
+no automatic retention requirement. Standalone exercises belong outside the
+focused forecast product. Deliver one bounded demo improvement at a time. Do not
+implement later roadmap milestones as part of an earlier task. Older direction
+reviews and research backlogs are historical.
 
-### Architecture
+### Target architecture
 
-- **Data ingestion:** ENTSO-E, Open-Meteo, Elering/Fingrid APIs → PostgreSQL
-- **LLM agent:** Claude API with tool use, queries PostgreSQL through structured tools
-- **Output:** Automated daily briefing (delivery channel TBD)
+- **One installed product:** bring forecasting code together into `grid_signals`; one CLI and shared functions serve local runs, experiments and deployment. Current research code still lives under `research/` until migration.
+- **Public website:** Streamlit reads published JSON/Parquet. It does not train or require the original market database.
+- **MLOps:** Prefect orchestrates the forecast lifecycle; saved trained models with recorded versions, explicit promotion, experiment tracking and immutable forecast records provide the evidence.
+- **Retire:** original PostgreSQL market application, generic chat/briefings, stale CLI/scripts, duplicate pages and local forecast timers after verified cutover. Preserve frozen scientific evidence and required data before code removal.
+- **Publication:** local trial infrastructure exists; always-on public delivery and reliability remain work. `research/docs/integration_contract.md` defines publication semantics, not a requirement to build a database feed.
 
 ### Tech Stack
 
-- Python 3.12+, PostgreSQL, psycopg3, entsoe-py, Claude API, pytest, uv
+- Target: Python 3.12+, entsoe-py/weather clients, Parquet, Streamlit, Prefect, MLflow, pytest and uv; web/runner/experiment dependency profiles. PostgreSQL/psycopg and Anthropic are legacy dependencies planned for removal with their products.
 
 ## Build & Test Commands
 
@@ -25,7 +39,11 @@ uv sync          # install dependencies
 uv run pytest    # run tests
 ```
 
-## CLI Commands
+## Current CLI Commands — transitional
+
+These include legacy market commands scheduled for retirement. Do not build new
+features on that application by default. Actual forecast commands are currently
+documented in `research/README.md`; the target is a single product CLI.
 
 ```bash
 uv run grid-signals daily       # ingest ENTSO-E data

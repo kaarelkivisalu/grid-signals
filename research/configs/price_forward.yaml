@@ -1,0 +1,12 @@
+# Prospective serving decision after the historical evaluations; no retrospective selection claim.
+selected_at: "2026-10-15"
+first_forward_issue: "2026-10-16"
+model: lear_hourly
+reason: lowest MAE and CRPS in both recorded price evaluations; custom-load GBM gain unresolved
+inputs: known price profiles and calendar only
+history_days: 730
+uncertainty: out-of-sample residual quantiles from last 30 training days
+resolution: hourly distributions repeated to market quarter-hours
+cutoff_hour_utc: 9
+publication_deadline_utc: "09:30"
+validation: new immutable first issues; historical results do not establish live reliability

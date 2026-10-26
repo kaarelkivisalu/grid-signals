@@ -1,0 +1,37 @@
+# Declared before any load benchmark results are computed.
+zone: DE_LU
+target: ENTSO-E actual total load including losses, excluding absorbed storage energy
+unit: MW
+cutoff_hour_utc: 9
+resolution: 15min
+development_start: "2026-05-01"
+development_end_exclusive: "2026-09-01"
+holdout_start: "2026-09-01"
+holdout_end_exclusive: "2026-10-15"
+embargo_days: 7
+training_window_days: 730
+minimum_training_days: 180
+calibration_days: 30
+refit: monthly
+lags_hours: [72, 168]
+assumed_actual_latency_hours: 24
+weather:
+  model: ecmwf_ifs025
+  points: solar_sites.csv
+  weighting: equal-area; not population-weighted
+  variable: temperature_2m
+  vintage: smallest safe Previous Runs whole-day offset, including interpolation endpoint
+calendar:
+  holiday: German nationwide holidays; regional and Luxembourg-only holidays omitted
+ridge_alpha: 10.0
+gbm:
+  n_estimators: 300
+  num_leaves: 15
+  learning_rate: 0.05
+  min_child_samples: 80
+  reg_lambda: 1.0
+  n_jobs: 4
+  random_state: 42
+  verbose: -1
+normalisation: per-fold training mean load; not installed generation capacity
+public_forecasts: excluded until original pre-cutoff captures are available

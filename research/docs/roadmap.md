@@ -1,4 +1,18 @@
-# Roadmap
+# Historical research backlog
+
+**Archived priorities.** The [project roadmap](../../ROADMAP.md) owns the agreed
+Nordic/Baltic direction and delivery order. The options below preserve earlier
+experiment ideas and measured resource estimates; they are not parallel workstreams
+or current completion checklists. Some tasks, including local scheduling and final
+holdout evaluation, have since been implemented. See the
+[research README](../README.md) for results and
+[target architecture](../../docs/implementation-plan.md) for the current boundary
+and the planned retirement of components that no longer serve the forecast product.
+
+Any experiment selected later needs a protocol appropriate to the then-available
+data. The completed holdouts must not be reopened for model selection.
+
+## Original planning context
 
 Remaining work after the 2026-10-15 quarter-hour and solar implementation. Where the project stands today is in the
 README. The evidence behind finished work is in `reports/` (see the index at the end).

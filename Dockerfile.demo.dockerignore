@@ -1,0 +1,9 @@
+**
+!src/
+!src/**
+!deploy/
+!deploy/demo/
+!deploy/demo/requirements.txt
+!.streamlit/
+!.streamlit/config.toml
+!Dockerfile.demo

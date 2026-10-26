@@ -14,14 +14,13 @@ same functions the training path uses, so the two cannot drift apart.
 """
 
 import argparse
-import fcntl
 import logging
 from datetime import UTC, date, datetime, timedelta
 
 import numpy as np
 import pandas as pd
 
-from renewable_forecast import config, experiment, paths, windows
+from renewable_forecast import config, experiment, paths, publication, windows
 from renewable_forecast.features import assemble, sites, solar
 from renewable_forecast.features.resolution import validate
 from renewable_forecast.models.quantile import QuantileGBM
@@ -30,8 +29,8 @@ from renewable_forecast.sources import ifs_runs, meps, openmeteo
 
 logger = logging.getLogger(__name__)
 
-#: Forecast vintages are append-only. A row is never edited once written; a re-run of
-#: the same issue day appends a new vintage and the newest one wins on read.
+#: Forecast vintages are append-only. Display may choose the newest revision;
+#: operational scoring always uses the first eligible publication instead.
 VINTAGES = paths.PREDICTIONS / "forecast_vintages.parquet"
 
 #: Extra days of NWP to refresh either side of the delivery day, so the temporal
@@ -73,6 +72,7 @@ def run(
     wind_method: str = "repeat",
 ) -> pd.DataFrame:
     """Forecast one delivery day and append the vintage. Defaults to tomorrow."""
+    started = publication.now()
     delivery_day = delivery_day or (datetime.now(UTC).date() + timedelta(days=1))
     issue_day = delivery_day - timedelta(days=1)
     issued = windows.issue_time(issue_day)
@@ -169,19 +169,12 @@ def run(
     out["issue_time"] = issued
     out["model_version"] = experiment.version(cfg)
     out["created_at"] = datetime.now(UTC)
+    out["daylight"] = future.solar_elevation.to_numpy() > 5 if is_solar else True
     for level, column in zip(levels, quantiles.T, strict=True):
         out[f"cf_q{level:.2f}"] = column
         out[f"mw_q{level:.2f}"] = column * out.capacity_mw
 
-    paths.PREDICTIONS.mkdir(parents=True, exist_ok=True)
-    # Wind and solar jobs may finish together. Lock the append as well as replacing
-    # atomically, or the later writer could discard the other task's new vintage.
-    with VINTAGES.with_suffix(".lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        archive = pd.concat([_read_vintages(), out], ignore_index=True)
-        temporary = VINTAGES.with_suffix(".tmp.parquet")
-        archive.to_parquet(temporary, index=False)
-        temporary.replace(VINTAGES)
+    out = publication.append(out, VINTAGES, started, _read_vintages)
     logger.info("wrote %s new rows to %s", len(out), VINTAGES)
     return out
 
@@ -217,7 +210,7 @@ def _read_vintages() -> pd.DataFrame:
         if "temporal_method" in frame
         else inferred
     )
-    return frame
+    return publication.legacy_metadata(frame)
 
 
 def latest(

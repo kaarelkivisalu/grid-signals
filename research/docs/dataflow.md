@@ -3,9 +3,17 @@
 **Status:** living document. Amend whenever the pipeline shape changes; this is the shared mental
 model the rest of the project is written against.
 
-Scope: probabilistic day-ahead forecasting of variable renewable generation. Wind on **SE3** first,
-solar on **DE-LU** second. Standalone research project under `research/` — no integration with
-`grid-signals` beyond a written contract (`research/docs/integration_contract.md`, Phase 7).
+Scope: the initial probabilistic renewable-forecasting pipeline, with **SE3 wind**
+and **DE-LU solar** as the existing research cases. Research inputs/models remain
+under `research/`; completed results are now exported to the read-only Streamlit
+demo. The [publication contract](integration_contract.md) defines timing and
+reliability semantics; a database/API feed is not part of the target architecture.
+
+The [project roadmap](../../ROADMAP.md) owns regional expansion priorities. The
+[target architecture](../../docs/implementation-plan.md) consolidates reusable
+forecasting code and retires the original PostgreSQL market application. The diagrams
+and timing below describe the original task; broader market-day and product
+contracts need explicit treatment when their roadmap milestones are reached.
 
 ---
 

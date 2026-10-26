@@ -1,0 +1,22 @@
+# Declared before producing price evaluation results.
+zone: DE_LU
+cutoff_hour_utc: 9
+resolution: 15min
+development_start: "2026-05-01"
+development_end_exclusive: "2026-09-01"
+holdout_start: "2026-09-01"
+holdout_end_exclusive: "2026-10-15"
+embargo_days: 7
+refit: monthly
+lear: hourly price-only LASSO with AIC regularisation and training-only robust scaling
+naive: same UTC interval seven days earlier; train-only empirical residual quantiles
+gbm:
+  n_estimators: 300
+  num_leaves: 15
+  learning_rate: 0.05
+  min_child_samples: 60
+  reg_lambda: 1.0
+  n_jobs: 4
+  random_state: 42
+  verbose: -1
+fundamentals: excluded until verified issue-time vintages exist
