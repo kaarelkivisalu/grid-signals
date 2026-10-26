@@ -16,6 +16,23 @@ st.markdown(
     h1, h2, h3 { color: #183c3b; letter-spacing: -0.025em; }
     h1 { font-size: 2.6rem; }
     [data-testid="stSidebar"] { background: #edf3f0; }
+    .st-key-sidebar-navigation [class*="st-key-navigation-"] { gap: .375rem; }
+    .st-key-navigation-1, .st-key-navigation-2 {
+        border-top: 1px solid #c6d4ce; padding-top: 1rem;
+    }
+    .st-key-sidebar-navigation [data-testid="stElementContainer"]:has(> [data-testid="stPageLink"]) {
+        margin: 0;
+    }
+    .st-key-sidebar-navigation [data-testid="stPageLink"] > div {
+        height: auto; min-height: 3rem;
+    }
+    .st-key-sidebar-navigation [data-testid="stPageLink-NavLink"] {
+        box-sizing: border-box; min-height: 3rem; margin: 0;
+        padding: .5rem .75rem; border-radius: 6px;
+    }
+    .st-key-sidebar-navigation [data-testid="stPageLink"] p {
+        font-size: 1.125rem; line-height: 1.5;
+    }
     [data-testid="stMetricValue"] { color: #183c3b; }
     [data-testid="stMetricLabel"] { color: #536963; }
     [data-testid="stCaptionContainer"] { opacity: 1; }
@@ -69,9 +86,9 @@ pages = st.navigation(
 with st.sidebar:
     st.title("Grid Signals")
     st.caption("Nordic/Baltic electricity")
-    with st.container(gap="large", key="sidebar-navigation"):
+    with st.container(gap="small", key="sidebar-navigation"):
         for index, group in enumerate(link_groups):
-            with st.container(gap=None, key=f"navigation-{index}"):
+            with st.container(gap="small", key=f"navigation-{index}"):
                 for path, label in group:
                     st.page_link(f"pages/{path}.py", label=label, width="stretch")
     st.divider()
