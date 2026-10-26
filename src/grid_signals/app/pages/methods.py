@@ -12,7 +12,6 @@ zone = st.session_state.selected_zone
 target = st.session_state.selected_target
 info = manifest["zones"].get(zone, {})
 models = info.get("targets", {}).get(target, {}).get("models", [])
-st.title("What goes into the forecast")
 st.write(
     f"**{BY_CODE[zone].name} · {TARGETS[target]}** · model recipes and information boundaries"
 )

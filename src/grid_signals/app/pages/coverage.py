@@ -8,7 +8,6 @@ from grid_signals.app.markets import MARKETS, SDAC_SOURCE, TARGETS
 
 manifest = st.session_state.explorer_manifest
 zone = st.session_state.selected_zone
-st.title("One market at a time")
 st.write(
     "The destination is wind, solar and day-ahead spot-price forecasts across 15 Nordic/Baltic bidding zones: SE1-SE4, NO1-NO5, DK1-DK2, FI, EE, LV and LT. The wider European map provides context. Imported data, evaluated models and publication records are separate claims."
 )

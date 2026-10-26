@@ -20,12 +20,11 @@ market = BY_CODE[zone]
 day = st.session_state.delivery_date.isoformat()
 target = st.session_state.selected_target
 model = st.session_state.selected_model
-st.title(market.name)
 st.write(
     f"**{zone.replace('_', '-')} · delivery {day}** · {market.timezone} · day-ahead forecasting"
 )
 st.write(
-    "Nordic/Baltic day-ahead forecasting starts with SE3 wind. German solar, load and price case studies are available in the sidebar."
+    "Nordic/Baltic day-ahead forecasting starts with SE3 wind. Use the market and target controls above to explore German solar, load and price case studies."
 )
 if zone not in manifest["zones"]:
     st.info(

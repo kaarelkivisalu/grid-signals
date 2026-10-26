@@ -86,7 +86,7 @@ case studies accessible and database-dependent tools outside the public demo.
 
 Local review completed 2026-10-26: 401 tests passed, 2 skipped; lint and formatting
 passed; the built image passed offline browsing checks and desktop/tablet/phone
-review. See the [release review and deployment handoff](docs/demo-release.md).
+review. See the [release review and deployment handoff](docs/operations.md#public-hosting).
 The public-site acceptance check remains open until the owner deploys it.
 
 **Done when:** a visitor can inspect forecasts, evidence and methods on the public

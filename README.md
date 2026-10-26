@@ -30,7 +30,7 @@ docker run --rm -p 127.0.0.1:8502:8501 grid-signals-demo:local
 
 Open **http://localhost:8502**. The first view is **SE3 onshore wind on
 2026-09-19**, with the evaluated model, physical reference, uncertainty and actuals.
-Use the sidebar to inspect German solar, load and price case studies.
+Use the controls above the chart to inspect German solar, load and price case studies.
 
 For development with the existing full project environment:
 
@@ -62,7 +62,7 @@ Custom German wind and residual-load forecasts are deferred; observed residual
 load is available where all components exist. The website exposes only the four
 forecast views; the old database and chat tools are outside the demo.
 Public hosting is handled by the project owner. See the
-[local release review and deployment handoff](docs/demo-release.md).
+[local release review and deployment handoff](docs/operations.md#public-hosting).
 
 See the [historical direction and commercial comparison](docs/project-direction-review.md),
 [research results](research/README.md) and [operations guide](docs/operations.md).

@@ -49,6 +49,8 @@ class DemoReleaseTests(unittest.TestCase):
         assert not app.exception
         assert app.session_state["selected_zone"] == "SE3"
         assert app.session_state["selected_target"] == "wind_onshore"
+        assert not app.sidebar.selectbox
+        assert not app.sidebar.date_input
         assert any("Final holdout" in caption.value for caption in app.caption)
         for page in ("performance", "methods", "coverage", "overview"):
             app.switch_page(f"pages/{page}.py").run()

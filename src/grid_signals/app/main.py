@@ -54,18 +54,45 @@ navigation = {
 }
 pages = st.navigation(navigation)
 
+# Keep shared values when a page does not render the corresponding widget.
+# Streamlit otherwise clears widget state when that control leaves the page.
+for key in ("selected_zone", "delivery_date", "selected_target", "selected_model"):
+    if key in st.session_state:
+        st.session_state[key] = st.session_state[key]
 if "pending_zone" in st.session_state:
     st.session_state.selected_zone = st.session_state.pop("pending_zone")
 if "pending_date" in st.session_state:
     st.session_state.delivery_date = st.session_state.pop("pending_date")
 if "selected_zone" not in st.session_state:
     st.session_state.selected_zone = "SE3"
-st.sidebar.selectbox(
-    "Market area",
-    [m.code for m in MARKETS],
-    format_func=lambda code: f"{code.replace('_', '-')} · {BY_CODE[code].name}",
-    key="selected_zone",
+if "selected_target" not in st.session_state:
+    st.session_state.selected_target = "wind_onshore"
+
+st.title(
+    {
+        "Market explorer": "Market explorer",
+        "Performance": "Evidence behind each model",
+        "European coverage": "One market at a time",
+        "Models & data": "What goes into the forecast",
+    }[pages.title]
 )
+show_selection = pages.title != "European coverage"
+if show_selection:
+    selection = st.container(border=True)
+    with selection:
+        market_column, target_column, model_column = st.columns([3, 2, 3])
+        market_column.selectbox(
+            "Market area",
+            [m.code for m in MARKETS],
+            format_func=lambda code: f"{code.replace('_', '-')} · {BY_CODE[code].name}",
+            key="selected_zone",
+        )
+        target_column.selectbox(
+            "Forecast target",
+            list(TARGETS),
+            format_func=TARGETS.get,
+            key="selected_target",
+        )
 zone = st.session_state.selected_zone
 info = manifest["zones"].get(zone, {})
 if "delivery_date" not in st.session_state:
@@ -74,25 +101,6 @@ if "delivery_date" not in st.session_state:
         or (info.get("dates") or [manifest["exported_at"][:10]])[-1]
     )
     st.session_state.delivery_date = date.fromisoformat(initial)
-st.sidebar.date_input(
-    "Delivery date",
-    key="delivery_date",
-    help="Local market date. Choose any date; missing series are shown explicitly.",
-)
-if info.get("dates"):
-    st.sidebar.caption(f"Archive: {info['dates'][0]} → {info['dates'][-1]}")
-    if st.sidebar.button("Latest forecast / data", width="stretch"):
-        st.session_state.pending_date = date.fromisoformat(info["dates"][-1])
-        st.rerun()
-joint_day = suggested_backtest_day(info)
-if joint_day and st.sidebar.button("Latest joint backtest", width="stretch"):
-    st.session_state.pending_date = date.fromisoformat(joint_day)
-    st.rerun()
-if "selected_target" not in st.session_state:
-    st.session_state.selected_target = "wind_onshore"
-st.sidebar.selectbox(
-    "Forecast target", list(TARGETS), format_func=TARGETS.get, key="selected_target"
-)
 target = st.session_state.selected_target
 models = info.get("targets", {}).get(target, {}).get("models", [])
 if st.session_state.get("selected_model") not in models:
@@ -103,18 +111,46 @@ if st.session_state.get("selected_model") not in models:
         if models
         else None
     )
-st.sidebar.selectbox(
-    "Model",
-    models or [None],
-    format_func=lambda model: (
-        model_name(model) if model else "No custom model in this area"
-    ),
-    key="selected_model",
-    disabled=not models,
-)
-st.sidebar.caption(
-    "Market, target and model stay selected across views. Delivery date controls the explorer; Performance has a scored date range."
-)
+if show_selection:
+    model_column.selectbox(
+        "Headline model" if pages.title == "Performance" else "Model",
+        models or [None],
+        format_func=lambda model: (
+            model_name(model) if model else "No custom model in this area"
+        ),
+        key="selected_model",
+        disabled=not models,
+        help=(
+            "Select the model for headline metrics. Choose comparison models below."
+            if pages.title == "Performance"
+            else None
+        ),
+    )
+    if pages.title == "Market explorer":
+        with selection:
+            date_column, shortcuts = st.columns([1, 2])
+            date_column.date_input(
+                "Delivery date",
+                key="delivery_date",
+                help="Local market date. Missing series are shown explicitly.",
+            )
+            with shortcuts:
+                if info.get("dates"):
+                    st.caption(f"Archive: {info['dates'][0]} → {info['dates'][-1]}")
+                latest, backtest = st.columns(2)
+                if info.get("dates") and latest.button(
+                    "Latest forecast / data", width="stretch"
+                ):
+                    st.session_state.pending_date = date.fromisoformat(
+                        info["dates"][-1]
+                    )
+                    st.rerun()
+                joint_day = suggested_backtest_day(info)
+                if joint_day and backtest.button(
+                    "Latest joint backtest", width="stretch"
+                ):
+                    st.session_state.pending_date = date.fromisoformat(joint_day)
+                    st.rerun()
 st.sidebar.divider()
 st.sidebar.caption(
     f"Data bundle: {manifest['exported_at'][:10]} · historical replay + publication archive"

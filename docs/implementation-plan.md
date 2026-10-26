@@ -227,7 +227,7 @@ Milestone 1 local release preparation on 2026-10-26 resolves that changing-statu
 test and the release lint/format checks: **401 passed, 2 skipped**. The website now
 leads with SE3 wind, and the standalone image includes only the forecast pages and
 current checked result files. Offline image tests and local desktop/mobile review
-pass. See the [release review and owner handoff](demo-release.md); deployment and
+pass. See the [release review and owner handoff](operations.md#public-hosting); deployment and
 public HTTPS verification remain open. The package/CLI and workflow migration
 above remain milestone 2 work.
 

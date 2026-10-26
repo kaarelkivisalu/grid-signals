@@ -41,6 +41,7 @@ def test_shared_selection_survives_navigation_without_operational_services(
     app.selectbox(key="selected_zone").set_value("DE_LU").run()
     app.date_input(key="delivery_date").set_value(date(2026, 9, 2)).run()
     app.selectbox(key="selected_target").set_value("solar").run()
+    app.selectbox(key="selected_model").set_value("solar_physical").run()
     assert not app.exception
     for page in ["performance", "methods", "coverage", "overview"]:
         app.switch_page(f"pages/{page}.py").run()
@@ -48,7 +49,7 @@ def test_shared_selection_survives_navigation_without_operational_services(
         assert app.session_state["selected_zone"] == "DE_LU"
         assert app.session_state["delivery_date"] == date(2026, 9, 2)
         assert app.session_state["selected_target"] == "solar"
-        assert app.session_state["selected_model"] == "solar_quantile"
+        assert app.session_state["selected_model"] == "solar_physical"
     app.selectbox(key="selected_zone").set_value("SE3").run()
     app.selectbox(key="selected_target").set_value("wind_onshore").run()
     assert app.session_state["selected_model"] == "hourly_repeated"
@@ -211,7 +212,9 @@ def test_selected_date_can_score_one_day_and_keeps_missing_days_explicit():
     assert any(
         "No scored predictions in this date range" in info.value for info in app.info
     )
+    app.switch_page("pages/overview.py").run()
     app.date_input(key="delivery_date").set_value(date(2026, 9, 14)).run()
+    app.switch_page("pages/performance.py").run()
     next(
         button for button in app.button if button.label == "Use explorer delivery date"
     ).click().run()
@@ -268,3 +271,26 @@ def test_demo_opens_on_scored_se3_wind_and_never_exposes_old_tools():
     )
     assert "More tools" not in [item.label for item in app.expander]
     assert all(item.key != "show_market_tools" for item in app.toggle)
+
+
+def test_data_controls_are_in_content_and_only_show_where_they_apply():
+    app = AppTest.from_file(str(APP), default_timeout=20).run()
+    assert not app.exception
+    assert not app.sidebar.selectbox
+    assert not app.sidebar.date_input
+    assert app.main.selectbox(key="selected_zone").value == "SE3"
+    assert app.main.date_input(key="delivery_date").value == date(2026, 9, 19)
+    for page in ("performance", "methods"):
+        app.switch_page(f"pages/{page}.py").run()
+        assert not app.exception
+        assert not app.sidebar.selectbox
+        assert not any(item.key == "delivery_date" for item in app.date_input)
+        assert app.main.selectbox(key="selected_zone").value == "SE3"
+    app.switch_page("pages/coverage.py").run()
+    app.run()  # Hidden widgets must survive more than one map interaction.
+    assert not app.exception
+    assert not app.selectbox
+    assert not app.date_input
+    app.switch_page("pages/overview.py").run()
+    assert not app.exception
+    assert app.main.date_input(key="delivery_date").value == date(2026, 9, 19)
