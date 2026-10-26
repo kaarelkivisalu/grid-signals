@@ -1,81 +1,48 @@
-"""Market coverage and current capabilities, with an offline clickable map."""
+"""A focused country map with truthful zone and target availability."""
 
 import pandas as pd
 import streamlit as st
 
 from grid_signals.app.explorer_charts import coverage_map
-from grid_signals.app.markets import MARKETS, SDAC_SOURCE, TARGETS
+from grid_signals.app.markets import BY_CODE, PORTFOLIO_MARKETS
 
 manifest = st.session_state.explorer_manifest
-zone = st.session_state.selected_zone
-st.write(
-    "The destination is wind, solar and day-ahead spot-price forecasts across 15 Nordic/Baltic bidding zones: SE1-SE4, NO1-NO5, DK1-DK2, FI, EE, LV and LT. The wider European map provides context. Imported data, evaluated models and publication records are separate claims."
-)
-cols = st.columns(3)
-cols[0].metric("Areas with bundled data", str(len(manifest["zones"])))
-cols[1].metric(
-    "Areas with custom models",
-    str(sum(bool(info["targets"]) for info in manifest["zones"].values())),
-)
-cols[2].metric("SDAC zones in this registry", str(sum(m.sdac for m in MARKETS)))
-selection = st.plotly_chart(
-    coverage_map(manifest, zone),
+st.title("Where the data reaches")
+st.write("Nordic/Baltic markets, with Germany-Luxembourg as a supporting case study.")
+st.plotly_chart(
+    coverage_map(manifest),
     width="stretch",
-    key="european_coverage",
-    on_select="rerun",
-    selection_mode="points",
+    key="regional_coverage",
     config={"scrollZoom": False, "displayModeBar": False},
 )
-if selection and selection.selection.points:
-    code = selection.selection.points[-1].get("customdata")
-    if code in {m.code for m in MARKETS} and code != zone:
-        st.session_state.pending_zone = code
-        st.rerun()
 st.caption(
-    "Select a marker to change the shared market. Anchors are approximate zone locations; country outlines are geographic context, not bidding-zone boundaries. Zoom to inspect the smaller zones. The map works without an external map service."
+    "Country colour means at least one zone has that status. Sweden's evaluated forecast is SE3 onshore wind; the other Swedish zones are not yet evaluated. Colours do not claim full country or daily publication coverage."
 )
-st.markdown(
-    f"Membership reviewed 2026-10-15 against [ENTSO-E SDAC scope]({SDAC_SOURCE}). Ireland/Northern Ireland share SEM; Great Britain is outside SDAC. SDAC membership does not guarantee every dataset or its redistribution rights. [Natural Earth](https://www.naturalearthdata.com/about/terms-of-use/) country outlines are public domain."
-)
+st.subheader("Forecast availability by market")
 rows = []
-for market in MARKETS:
-    info = manifest["zones"].get(market.code, {})
-    observations = info.get("observations", {})
+for code in PORTFOLIO_MARKETS:
+    info = manifest["zones"].get(code, {})
     targets = info.get("targets", {})
     rows.append(
         {
-            "Area": market.code.replace("_", "-"),
-            "Market": market.name,
-            "Map category": "Outside SDAC"
-            if not market.sdac
-            else "Project data / forecasts"
-            if info
-            else "SDAC · not yet imported",
-            "Bundled observations": ", ".join(
-                TARGETS.get(key, "Offshore wind") for key in observations
-            )
-            or "Not imported",
-            "Custom models": ", ".join(TARGETS[key] for key in targets)
-            or "None evaluated",
-            "Data dates": f"{info['dates'][0]} → {info['dates'][-1]}"
-            if info.get("dates")
-            else "—",
+            "Market": code.replace("_", "-"),
+            "Area": BY_CODE[code].name,
+            "Observations": "Available" if info.get("observations") else "Not imported",
+            **{
+                label: "Evaluated" if target in targets else "Not yet evaluated"
+                for target, label in (
+                    ("wind_onshore", "Wind"),
+                    ("solar", "Solar"),
+                    ("price", "Prices"),
+                )
+            },
         }
     )
-show_all = st.toggle("Show areas without imported data", value=False)
-st.dataframe(
-    pd.DataFrame(
-        rows
-        if show_all
-        else [row for row in rows if row["Map category"] == "Project data / forecasts"]
-    ),
-    hide_index=True,
-    width="stretch",
-)
-st.subheader("Expansion priorities")
-st.write(
-    "Publish the historical demo with SE3 onshore wind first, then establish daily SE3 publication, transfer wind to SE4 and compare one deep-learning challenger. Extend onshore wind, solar and spot prices one zone and target at a time; offshore wind follows where applicable. German solar, load and price results remain supporting case studies."
-)
-st.caption(
-    "Additional market data covers a bounded September-October 2026 preview. It supports exploration and data-quality assessment; no custom skill has been established in those areas."
-)
+st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+with st.expander("Scope & map source"):
+    st.write(
+        "The destination is evaluated wind, solar and spot-price forecasts across SE1-SE4, NO1-NO5, DK1-DK2, FI, EE, LV and LT. SE3 leads; SE4 follows after daily SE3 delivery is established. Offshore wind follows separately."
+    )
+    st.markdown(
+        "[Natural Earth country outlines](https://www.naturalearthdata.com/about/terms-of-use/) are public domain. Country borders are geographic context, not bidding-zone boundaries. The map uses local geometry and needs no map service."
+    )

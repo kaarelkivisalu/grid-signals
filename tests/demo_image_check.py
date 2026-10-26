@@ -27,6 +27,10 @@ class DemoReleaseTests(unittest.TestCase):
         assert {path.name for path in APP.parent.iterdir()} == {"__init__.py", "app"}
         assert {path.name for path in (APP / "pages").glob("*.py")} == {
             "overview.py",
+            "wind.py",
+            "solar.py",
+            "price.py",
+            "load.py",
             "performance.py",
             "coverage.py",
             "methods.py",
@@ -51,21 +55,27 @@ class DemoReleaseTests(unittest.TestCase):
         assert app.session_state["selected_target"] == "wind_onshore"
         assert not app.sidebar.selectbox
         assert not app.sidebar.date_input
-        assert any("Final holdout" in caption.value for caption in app.caption)
-        for page in ("performance", "methods", "coverage", "overview"):
+        assert any("2026-09-19" in caption.value for caption in app.caption)
+        for page in (
+            "wind",
+            "solar",
+            "price",
+            "load",
+            "performance",
+            "methods",
+            "coverage",
+            "overview",
+        ):
             app.switch_page(f"pages/{page}.py").run()
             assert not app.exception, page
             assert not app.error, page
-        app.selectbox(key="selected_zone").set_value("DE_LU").run()
-        for target in ("solar", "load", "price"):
-            app.selectbox(key="selected_target").set_value(target).run()
-            assert not app.exception, target
-            assert any("Final holdout" in caption.value for caption in app.caption), (
-                target
-            )
-        app.selectbox(key="selected_zone").set_value("CH").run()
-        assert not app.exception
-        assert "no data bundled" in app.info[0].value
+        app.switch_page("pages/wind.py").run()
+        assert app.button(key="market_wind_onshore_NO1").disabled
+        assert not app.button(key="market_wind_onshore_SE3").disabled
+        app.switch_page("pages/solar.py").run()
+        assert app.session_state["selected_zone"] == "DE_LU"
+        assert app.button(key="market_solar_SE3").disabled
+        assert not app.button(key="market_solar_DE_LU").disabled
 
 
 if __name__ == "__main__":

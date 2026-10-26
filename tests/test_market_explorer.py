@@ -1,4 +1,4 @@
-"""Historical selection, matched scores, time resolution and market coverage."""
+"""Portfolio navigation, honest availability, matched scores and time semantics."""
 
 import json
 from datetime import date
@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from grid_signals.app.explorer_charts import coverage_map, forecast_chart
 from grid_signals.app.explorer_data import (
     choose_curve,
     complete_hourly,
@@ -20,73 +21,201 @@ from grid_signals.app.explorer_data import (
     market_quarters,
     matched_rows,
     read_market,
-    suggested_backtest_day,
 )
-from grid_signals.app.markets import BY_CODE
+from grid_signals.app.markets import BY_CODE, COUNTRY_MARKETS
+from grid_signals.app.model_catalogue import CATALOGUE, MODEL_DATA
+from grid_signals.app.presentation import available_markets
 
 APP = Path(__file__).parents[1] / "src/grid_signals/app/main.py"
 
 
-@pytest.mark.parametrize("demo_only", [False, True])
-def test_shared_selection_survives_navigation_without_operational_services(
-    monkeypatch, demo_only
-):
-    monkeypatch.setenv("GRID_SIGNALS_DEMO_ONLY", "1" if demo_only else "0")
-    connect = Mock(side_effect=AssertionError("demo opened a database"))
+def test_overview_is_populated_and_sidebar_is_just_navigation(monkeypatch):
+    connect = Mock(side_effect=AssertionError("website opened a database"))
     monkeypatch.setattr("psycopg.connect", connect)
     monkeypatch.delenv("ENTSOE_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    app = AppTest.from_file(str(APP), default_timeout=20).run()
+    app = AppTest.from_file(str(APP), default_timeout=30).run()
     assert not app.exception
-    app.selectbox(key="selected_zone").set_value("DE_LU").run()
-    app.date_input(key="delivery_date").set_value(date(2026, 9, 2)).run()
-    app.selectbox(key="selected_target").set_value("solar").run()
-    app.selectbox(key="selected_model").set_value("solar_physical").run()
-    assert not app.exception
-    for page in ["performance", "methods", "coverage", "overview"]:
+    assert not app.sidebar.selectbox
+    assert not app.sidebar.date_input
+    assert [item.value for item in app.sidebar.title] == ["Grid Signals"]
+    assert [item.value for item in app.sidebar.caption] == ["Nordic/Baltic electricity"]
+    assert any("2026-09-19" in item.value for item in app.caption)
+    assert not app.dataframe[0].value.empty
+    for page in (
+        "wind",
+        "solar",
+        "price",
+        "load",
+        "performance",
+        "methods",
+        "coverage",
+    ):
         app.switch_page(f"pages/{page}.py").run()
-        assert not app.exception
-        assert app.session_state["selected_zone"] == "DE_LU"
-        assert app.session_state["delivery_date"] == date(2026, 9, 2)
-        assert app.session_state["selected_target"] == "solar"
-        assert app.session_state["selected_model"] == "solar_physical"
-    app.selectbox(key="selected_zone").set_value("SE3").run()
-    app.selectbox(key="selected_target").set_value("wind_onshore").run()
-    assert app.session_state["selected_model"] == "hourly_repeated"
-    app.switch_page("pages/performance.py").run()
-    assert app.metric[0].value == "2.46"
-    for group in ["Year", "Season", "Month", "Weekday", "Market quarter"]:
-        app.selectbox(key="score_group").set_value(group).run()
-        assert not app.exception
-        assert not app.dataframe[0].value.empty
+        assert not app.exception, page
+        assert not app.error, page
     connect.assert_not_called()
 
 
-def test_missing_date_and_unmodelled_area_are_explicit():
-    app = AppTest.from_file(str(APP), default_timeout=20).run()
-    app.date_input(key="delivery_date").set_value(date(2020, 1, 1)).run()
+@pytest.mark.parametrize(
+    ("page", "target", "zone"),
+    [
+        ("wind", "wind_onshore", "SE3"),
+        ("solar", "solar", "DE_LU"),
+        ("price", "price", "DE_LU"),
+        ("load", "load", "DE_LU"),
+    ],
+)
+def test_product_pages_only_offer_real_forecasts(page, target, zone):
+    app = AppTest.from_file(str(APP), default_timeout=30).run()
+    app.switch_page(f"pages/{page}.py").run()
     assert not app.exception
-    assert any("No onshore wind model output" in info.value for info in app.info)
-    app.selectbox(key="selected_zone").set_value("FI").run()
-    app.date_input(key="delivery_date").set_value(date(2026, 9, 19)).run()
-    assert not app.exception
-    assert app.session_state["selected_model"] is None
-    app.switch_page("pages/performance.py").run()
-    assert "No model has been backtested" in app.info[0].value
-    app.selectbox(key="selected_zone").set_value("CH").run()
-    app.switch_page("pages/overview.py").run()
-    assert not app.exception
-    assert "no data bundled" in app.info[0].value
+    assert app.session_state["selected_zone"] == zone
+    assert app.session_state["selected_target"] == target
+    assert not app.button(key=f"market_{target}_{zone}").disabled
+    other = "SE3" if zone == "DE_LU" else "DE_LU"
+    assert app.button(key=f"market_{target}_{other}").disabled
+    assert app.button(key=f"market_{target}_NO1").disabled
+    day_control = next(item for item in app.selectbox if item.label == "Delivery date")
+    day = day_control.value
+    model = app.selectbox(key="selected_model").value
+    forecasts = read_market(load_manifest(), zone, "forecast")
+    pool = forecasts[
+        (forecasts.target == target)
+        & (forecasts.model == model)
+        & (forecasts.split == "Final holdout")
+    ]
+    assert set(day_control.options) == set(pool.delivery_date.unique())
+    assert day in day_control.options
+    assert any(
+        button.label == "Download this forecast · CSV"
+        for button in app.get("download_button")
+    )
+
+
+def test_nondefault_model_and_day_survive_informational_pages():
+    app = AppTest.from_file(str(APP), default_timeout=30).run()
+    app.switch_page("pages/wind.py").run()
+    app.selectbox(key="selected_model").set_value("physical_power_curve").run()
+    control = next(item for item in app.selectbox if item.label == "Delivery date")
+    chosen = control.options[2]
+    control.set_value(chosen).run()
+    for page in ("performance", "methods", "coverage", "overview", "wind"):
+        app.switch_page(f"pages/{page}.py").run()
+        assert not app.exception
+        assert app.session_state["selected_zone"] == "SE3"
+        assert app.session_state["selected_model"] == "physical_power_curve"
+        assert app.session_state["delivery_date"] == date.fromisoformat(chosen)
 
 
 @pytest.mark.parametrize("content", [None, {"schema_version": 99, "zones": {}}])
-def test_unavailable_explorer_has_readable_empty_state(tmp_path, monkeypatch, content):
+def test_unavailable_results_have_a_readable_state(tmp_path, monkeypatch, content):
     if content:
         (tmp_path / "manifest.json").write_text(json.dumps(content))
     monkeypatch.setenv("GRID_SIGNALS_EXPLORER_PATH", str(tmp_path))
     app = AppTest.from_file(str(APP)).run()
     assert not app.exception
-    assert app.error[0].value == "Market explorer unavailable"
+    assert app.error[0].value == "Forecast results unavailable"
+
+
+def test_publication_archive_displays_recorded_status_and_timestamp():
+    manifest = load_manifest()
+    pool = read_market(manifest, "SE3", "forecast")
+    pool = pool[
+        (pool.target == "wind_onshore")
+        & (pool.model == "hourly_repeated")
+        & (pool.split == "Published archive")
+    ]
+    expected = choose_curve(
+        pool, "wind_onshore", pool.delivery_date.max(), "hourly_repeated"
+    ).iloc[0]
+    app = AppTest.from_file(str(APP), default_timeout=30).run()
+    app.switch_page("pages/wind.py").run()
+    app.radio(key="archive_wind_onshore").set_value("Published archive").run()
+    assert not app.exception
+    assert any(
+        expected.publication_status in item.value
+        and str(expected.published_at) in item.value
+        for item in app.info
+    )
+    app.radio(key="archive_wind_onshore").set_value("Final holdout").run()
+    assert not app.exception
+    assert any("Final evaluation" in item.value for item in app.caption)
+
+
+def test_performance_keeps_matched_metrics_and_detailed_period_controls():
+    app = AppTest.from_file(str(APP), default_timeout=30).run()
+    app.switch_page("pages/performance.py").run()
+    assert not app.exception
+    assert app.metric[0].value == "2.46"
+    for group in ("Year", "Season", "Month", "Weekday", "Market quarter"):
+        app.selectbox(key="score_group").set_value(group).run()
+        assert not app.exception
+        assert not app.dataframe[-1].value.empty
+    app.button_group(key="selected_target").set_value("price").run()
+    assert not app.exception
+    assert app.session_state["selected_zone"] == "DE_LU"
+    app.date_input(key="score_range_DE_LU_price_Final holdout").set_value(
+        (date(2026, 9, 13), date(2026, 9, 13))
+    ).run()
+    assert any("No scored predictions" in item.value for item in app.info)
+    app.date_input(key="score_range_DE_LU_price_Final holdout").set_value(
+        (date(2026, 9, 14), date(2026, 9, 14))
+    ).run()
+    assert not app.exception
+    assert app.dataframe[0].value.Days.tolist() == [1, 1, 1, 1]
+
+
+def test_map_uses_country_fills_and_only_relevant_geography():
+    figure = coverage_map(load_manifest())
+    countries = {trace.meta["country"] for trace in figure.data if trace.meta}
+    assert countries == set(COUNTRY_MARKETS)
+    assert not countries & {"Russia", "Iceland", "France", "Turkey"}
+    for trace in figure.data:
+        assert "markers" not in trace.mode
+        if trace.meta:
+            assert trace.fill == "toself"
+            if trace.meta["country"] == "Sweden":
+                assert trace.meta["status"] == "Evaluated forecasts"
+            if trace.meta["country"] == "Norway":
+                assert trace.meta["status"] == "Planned"
+    assert len({trace.fillcolor for trace in figure.data if trace.meta}) == 3
+
+
+def test_observations_do_not_enable_unevaluated_forecasts():
+    manifest = load_manifest()
+    assert available_markets(manifest, "wind_onshore") == ["SE3"]
+    assert available_markets(manifest, "solar") == ["DE_LU"]
+    assert available_markets(manifest, "price") == ["DE_LU"]
+    assert "FI" in manifest["zones"]
+
+
+def test_every_model_has_explicit_sources_forecast_inputs_and_fitting_data():
+    assert set(MODEL_DATA) == set(CATALOGUE)
+    assert all(len(row) == 3 and all(row) for row in MODEL_DATA.values())
+    assert "No weather" in MODEL_DATA["lear_hourly"][1]
+    app = AppTest.from_file(str(APP), default_timeout=30).run()
+    app.switch_page("pages/methods.py").run()
+    for model in ("hourly_repeated", "interpolated_weather", "physical_power_curve"):
+        app.radio(key="method_model").set_value(model).run()
+        assert not app.exception
+        assert any(MODEL_DATA[model][1] in item.value for item in app.markdown)
+    app.button_group(key="selected_target").set_value("price").run()
+    app.radio(key="method_model").set_value("lear_hourly").run()
+    assert not app.exception
+    assert any("No weather, demand or renewable" in item.value for item in app.markdown)
+
+
+def test_default_chart_simplifies_uncertainty_without_losing_detailed_bands():
+    pool = read_market(load_manifest(), "SE3", "forecast")
+    rows = choose_curve(pool, "wind_onshore", "2026-09-19", "hourly_repeated")
+    default = forecast_chart(rows, "Europe/Stockholm", "wind_onshore")
+    full = forecast_chart(rows, "Europe/Stockholm", "wind_onshore", full_intervals=True)
+    assert "80% interval" in [trace.name for trace in default.data]
+    assert "90% interval" not in [trace.name for trace in default.data]
+    assert {"50% interval", "80% interval", "90% interval"} <= {
+        trace.name for trace in full.data
+    }
 
 
 @pytest.mark.parametrize(
@@ -197,100 +326,3 @@ def test_full_portable_archive_matches_released_headlines_and_real_market_covera
         actual.load - actual.solar - actual.wind_onshore - actual.wind_offshore,
         check_names=False,
     )
-
-
-def test_selected_date_can_score_one_day_and_keeps_missing_days_explicit():
-    app = AppTest.from_file(str(APP), default_timeout=20).run()
-    app.selectbox(key="selected_zone").set_value("DE_LU").run()
-    app.selectbox(key="selected_target").set_value("price").run()
-    app.date_input(key="delivery_date").set_value(date(2026, 9, 13)).run()
-    app.switch_page("pages/performance.py").run()
-    next(
-        button for button in app.button if button.label == "Use explorer delivery date"
-    ).click().run()
-    assert not app.exception
-    assert any(
-        "No scored predictions in this date range" in info.value for info in app.info
-    )
-    app.switch_page("pages/overview.py").run()
-    app.date_input(key="delivery_date").set_value(date(2026, 9, 14)).run()
-    app.switch_page("pages/performance.py").run()
-    next(
-        button for button in app.button if button.label == "Use explorer delivery date"
-    ).click().run()
-    assert not app.exception
-    assert app.metric[3].value == "1 / 96"
-
-
-def test_latest_publication_has_actual_status_and_can_return_to_shared_backtest():
-    manifest = load_manifest()
-    latest_day = manifest["zones"]["SE3"]["dates"][-1]
-    expected = choose_curve(
-        read_market(manifest, "SE3", "forecast"),
-        "wind_onshore",
-        latest_day,
-        "hourly_repeated",
-    ).iloc[0]
-    app = AppTest.from_file(str(APP), default_timeout=20).run()
-    next(
-        button for button in app.button if button.label == "Latest forecast / data"
-    ).click().run()
-    assert not app.exception
-    assert any(
-        f"Publication status: {expected.publication_status}." in info.value
-        and str(expected.published_at) in info.value
-        for info in app.info
-    )
-    next(
-        button for button in app.button if button.label == "Latest joint backtest"
-    ).click().run()
-    assert not app.exception
-    assert app.session_state["delivery_date"] == date.fromisoformat(
-        suggested_backtest_day(manifest["zones"]["SE3"])
-    )
-
-
-def test_demo_opens_on_scored_se3_wind_and_never_exposes_old_tools():
-    app = AppTest.from_file(str(APP), default_timeout=20)
-    app.session_state["show_market_tools"] = True
-    app.run()
-    assert not app.exception
-    assert app.session_state["selected_zone"] == "SE3"
-    assert app.session_state["selected_target"] == "wind_onshore"
-    assert app.session_state["selected_model"] == "hourly_repeated"
-    assert (
-        next(
-            item for item in app.selectbox if item.label == "Compare median with"
-        ).value
-        == "physical_power_curve"
-    )
-    assert any("Final holdout" in caption.value for caption in app.caption)
-    assert any(
-        button.label == "Download this forecast · CSV"
-        for button in app.get("download_button")
-    )
-    assert "More tools" not in [item.label for item in app.expander]
-    assert all(item.key != "show_market_tools" for item in app.toggle)
-
-
-def test_data_controls_are_in_content_and_only_show_where_they_apply():
-    app = AppTest.from_file(str(APP), default_timeout=20).run()
-    assert not app.exception
-    assert not app.sidebar.selectbox
-    assert not app.sidebar.date_input
-    assert app.main.selectbox(key="selected_zone").value == "SE3"
-    assert app.main.date_input(key="delivery_date").value == date(2026, 9, 19)
-    for page in ("performance", "methods"):
-        app.switch_page(f"pages/{page}.py").run()
-        assert not app.exception
-        assert not app.sidebar.selectbox
-        assert not any(item.key == "delivery_date" for item in app.date_input)
-        assert app.main.selectbox(key="selected_zone").value == "SE3"
-    app.switch_page("pages/coverage.py").run()
-    app.run()  # Hidden widgets must survive more than one map interaction.
-    assert not app.exception
-    assert not app.selectbox
-    assert not app.date_input
-    app.switch_page("pages/overview.py").run()
-    assert not app.exception
-    assert app.main.date_input(key="delivery_date").value == date(2026, 9, 19)

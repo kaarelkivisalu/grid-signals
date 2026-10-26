@@ -84,7 +84,7 @@ case studies accessible and database-dependent tools outside the public demo.
 - [x] Review the local demo, then hand deployment to the project owner.
 - [ ] Verify anonymous HTTPS access, desktop/mobile use and explicit historical dates.
 
-Local review completed 2026-10-26: 401 tests passed, 2 skipped; lint and formatting
+Local portfolio review completed 2026-10-26: 407 tests passed, 2 skipped; lint and formatting
 passed; the built image passed offline browsing checks and desktop/tablet/phone
 review. See the [release review and deployment handoff](docs/operations.md#public-hosting).
 The public-site acceptance check remains open until the owner deploys it.

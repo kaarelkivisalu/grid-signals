@@ -1,6 +1,6 @@
 # Grid Signals
 
-Nordic/Baltic day-ahead power forecasting, reproducible model comparisons and a
+Nordic/Baltic day-ahead electricity forecasting, reproducible model comparisons and a
 public performance record. An employer-facing portfolio for energy-sector ML and
 data science, demonstrating forecasting and practical orchestration/MLOps, with
 useful agent/RAG applications to be evaluated later.
@@ -28,9 +28,9 @@ docker build -f Dockerfile.demo -t grid-signals-demo:local .
 docker run --rm -p 127.0.0.1:8502:8501 grid-signals-demo:local
 ```
 
-Open **http://localhost:8502**. The first view is **SE3 onshore wind on
-2026-09-19**, with the evaluated model, physical reference, uncertainty and actuals.
-Use the controls above the chart to inspect German solar, load and price case studies.
+Open **http://localhost:8502**. Overview leads with **SE3 onshore wind on
+2026-09-19**, comparing the model, physical reference, uncertainty and actuals.
+The sidebar links directly to wind, solar, prices, performance, coverage and methods.
 
 For development with the existing full project environment:
 
@@ -42,14 +42,16 @@ uv run grid-signals ui
 Open **http://localhost:8501**. Bundled results need no database, API keys,
 research dependencies or model training.
 
-- **Market explorer:** one market/date/target/model selection; aligned wind, solar,
-  load, observed residual load and spot prices; forecast uncertainty and errors.
-- **Performance:** full development/final archives; matched metrics by year,
-  season, month, weekday and ordinal market quarter; CSV downloads.
-- **European coverage:** offline clickable map distinguishing project data,
-  unimported SDAC areas and adjacent markets outside SDAC.
-- **Models & data:** model recipes, input features, resolution, cutoffs and public
-  forecast comparison inventory.
+- **Overview:** a populated wind comparison and a short summary of final results.
+- **Wind, Solar and Prices:** visible market choices, with unavailable forecasts
+  greyed out. Date and model choices show saved results; optional detail includes
+  published issues, errors, market observations and CSV downloads.
+- **Performance:** a compact matched model comparison, with optional period,
+  grouping, uncertainty and bias diagnostics.
+- **Coverage:** a country-shaded Nordic/Baltic map plus the German case-study
+  area, with separate observation and evaluation status by market and target.
+- **Models & data:** explicit data sources, forecast-time features and fitting
+  data for each model, with exact recipes and timing rules available in detail.
 
 Observations cover **11 areas**. Evaluated custom forecasts cover **DE-LU
 solar/load/price and SE3 onshore wind**; imported data alone is not forecast skill.
@@ -59,8 +61,8 @@ always-on reliability has yet to be demonstrated. LEAR leads the German price be
 is the forward publication baseline; its price intervals still under-cover on holdout.
 Custom DE-LU load is implemented; its first price-input experiment shows no resolved gain.
 Custom German wind and residual-load forecasts are deferred; observed residual
-load is available where all components exist. The website exposes only the four
-forecast views; the old database and chat tools are outside the demo.
+load is available where all components exist. The German demand study remains
+accessible from Overview. The old database and chat tools are outside the demo.
 Public hosting is handled by the project owner. See the
 [local release review and deployment handoff](docs/operations.md#public-hosting).
 

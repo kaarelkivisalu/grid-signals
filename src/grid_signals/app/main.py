@@ -1,19 +1,17 @@
-"""Grid Signals — one market/date context across the research portfolio."""
+"""Grid Signals: quick portfolio browsing with optional forecast detail."""
 
 from datetime import date
 
 import streamlit as st
 
-from grid_signals.app.explorer_data import load_manifest, suggested_backtest_day
-from grid_signals.app.markets import BY_CODE, MARKETS, SELECTED_MODELS, TARGETS
-from grid_signals.app.model_catalogue import model_name
+from grid_signals.app.explorer_data import load_manifest
 from grid_signals.app.snapshot import SnapshotError
 
-st.set_page_config(page_title="Grid Signals · Nordic/Baltic forecasts", layout="wide")
+st.set_page_config(page_title="Grid Signals · Electricity forecasts", layout="wide")
 st.markdown(
     """<style>
     .stApp { background: #f8faf9; }
-    .block-container { max-width: 1320px; padding-top: 3.3rem; }
+    .block-container { max-width: 1320px; padding-top: 2.8rem; }
     h1, h2, h3 { color: #183c3b; letter-spacing: -0.025em; }
     h1 { font-size: 2.6rem; }
     [data-testid="stSidebar"] { background: #edf3f0; }
@@ -22,138 +20,68 @@ st.markdown(
     [data-testid="stCaptionContainer"] { opacity: 1; }
     [data-testid="stCaptionContainer"],
     [data-testid="stCaptionContainer"] p { color: #536963; }
-    [data-testid="stVerticalBlockBorderWrapper"] { border-radius: 12px; }
+    .github-link { display: inline-flex; align-items: center; gap: .55rem;
+        color: #183c3b; text-decoration: none; padding: .6rem 0; }
+    .github-link:hover { text-decoration: underline; text-underline-offset: .2em; }
+    .github-link:focus-visible { outline: 2px solid #147d77; outline-offset: 4px; }
+    ::selection { background: #c5e5dd; color: #183c3b; }
     </style>""",
     unsafe_allow_html=True,
 )
-st.sidebar.title("Grid Signals")
-st.sidebar.caption("Nordic/Baltic power forecasts · historical demo")
 try:
-    manifest = load_manifest()
+    st.session_state.explorer_manifest = load_manifest()
 except SnapshotError:
     st.title("Grid Signals")
-    st.error("Market explorer unavailable")
-    st.write("The exported research data is unavailable. Please try again later.")
+    st.error("Forecast results unavailable")
+    st.write("The saved results could not be loaded. Please try again later.")
     st.stop()
-st.session_state.explorer_manifest = manifest
 
-navigation = {
-    "Forecasts": [
-        st.Page(
-            "pages/overview.py",
-            title="Market explorer",
-            icon=":material/show_chart:",
-            default=True,
-        ),
-        st.Page(
-            "pages/performance.py", title="Performance", icon=":material/analytics:"
-        ),
-        st.Page("pages/coverage.py", title="European coverage", icon=":material/map:"),
-        st.Page("pages/methods.py", title="Models & data", icon=":material/science:"),
-    ]
-}
-pages = st.navigation(navigation)
-
-# Keep shared values when a page does not render the corresponding widget.
-# Streamlit otherwise clears widget state when that control leaves the page.
+# Keep choices when navigating to a page that does not use those widgets.
 for key in ("selected_zone", "delivery_date", "selected_target", "selected_model"):
     if key in st.session_state:
         st.session_state[key] = st.session_state[key]
-if "pending_zone" in st.session_state:
-    st.session_state.selected_zone = st.session_state.pop("pending_zone")
-if "pending_date" in st.session_state:
-    st.session_state.delivery_date = st.session_state.pop("pending_date")
-if "selected_zone" not in st.session_state:
-    st.session_state.selected_zone = "SE3"
-if "selected_target" not in st.session_state:
-    st.session_state.selected_target = "wind_onshore"
+st.session_state.setdefault("selected_zone", "SE3")
+st.session_state.setdefault("selected_target", "wind_onshore")
+st.session_state.setdefault("selected_model", "hourly_repeated")
+st.session_state.setdefault("delivery_date", date(2026, 9, 19))
 
-st.title(
-    {
-        "Market explorer": "Market explorer",
-        "Performance": "Evidence behind each model",
-        "European coverage": "One market at a time",
-        "Models & data": "What goes into the forecast",
-    }[pages.title]
+links = [
+    ("overview", "Overview"),
+    ("wind", "Wind"),
+    ("solar", "Solar"),
+    ("price", "Prices"),
+    ("performance", "Performance"),
+    ("coverage", "Coverage"),
+    ("methods", "Models & data"),
+]
+pages = st.navigation(
+    [
+        st.Page(f"pages/{path}.py", title=label, default=path == "overview")
+        for path, label in links
+    ]
+    + [st.Page("pages/load.py", title="Load case study")],
+    position="hidden",
 )
-show_selection = pages.title != "European coverage"
-if show_selection:
-    selection = st.container(border=True)
-    with selection:
-        market_column, target_column, model_column = st.columns([3, 2, 3])
-        market_column.selectbox(
-            "Market area",
-            [m.code for m in MARKETS],
-            format_func=lambda code: f"{code.replace('_', '-')} · {BY_CODE[code].name}",
-            key="selected_zone",
-        )
-        target_column.selectbox(
-            "Forecast target",
-            list(TARGETS),
-            format_func=TARGETS.get,
-            key="selected_target",
-        )
-zone = st.session_state.selected_zone
-info = manifest["zones"].get(zone, {})
-if "delivery_date" not in st.session_state:
-    initial = (
-        suggested_backtest_day(info)
-        or (info.get("dates") or [manifest["exported_at"][:10]])[-1]
+with st.sidebar:
+    st.title("Grid Signals")
+    st.caption("Nordic/Baltic electricity")
+    for path, label in links:
+        st.page_link(f"pages/{path}.py", label=label, width="stretch")
+    st.divider()
+    st.markdown(
+        '<a class="github-link" href="https://github.com/kaarelkivisalu/grid-signals" '
+        'target="_blank" rel="noopener noreferrer">'
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+        '<path d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.23'
+        "c-3.34.73-4.04-1.42-4.04-1.42-.55-1.39-1.33-1.76-1.33-1.76"
+        "-1.09-.75.08-.73.08-.73 1.21.08 1.85 1.24 1.85 1.24"
+        "1.07 1.83 2.81 1.3 3.49.99.11-.78.42-1.3.76-1.6"
+        "-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22"
+        "-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23"
+        "a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23"
+        ".66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22"
+        "0 4.61-2.81 5.63-5.49 5.93.43.37.81 1.1.81 2.22v3.29"
+        'c0 .32.22.7.83.58A12 12 0 0 0 12 .5Z"/></svg>Source code</a>',
+        unsafe_allow_html=True,
     )
-    st.session_state.delivery_date = date.fromisoformat(initial)
-target = st.session_state.selected_target
-models = info.get("targets", {}).get(target, {}).get("models", [])
-if st.session_state.get("selected_model") not in models:
-    st.session_state.selected_model = (
-        SELECTED_MODELS.get(target)
-        if SELECTED_MODELS.get(target) in models
-        else models[0]
-        if models
-        else None
-    )
-if show_selection:
-    model_column.selectbox(
-        "Headline model" if pages.title == "Performance" else "Model",
-        models or [None],
-        format_func=lambda model: (
-            model_name(model) if model else "No custom model in this area"
-        ),
-        key="selected_model",
-        disabled=not models,
-        help=(
-            "Select the model for headline metrics. Choose comparison models below."
-            if pages.title == "Performance"
-            else None
-        ),
-    )
-    if pages.title == "Market explorer":
-        with selection:
-            date_column, shortcuts = st.columns([1, 2])
-            date_column.date_input(
-                "Delivery date",
-                key="delivery_date",
-                help="Local market date. Missing series are shown explicitly.",
-            )
-            with shortcuts:
-                if info.get("dates"):
-                    st.caption(f"Archive: {info['dates'][0]} → {info['dates'][-1]}")
-                latest, backtest = st.columns(2)
-                if info.get("dates") and latest.button(
-                    "Latest forecast / data", width="stretch"
-                ):
-                    st.session_state.pending_date = date.fromisoformat(
-                        info["dates"][-1]
-                    )
-                    st.rerun()
-                joint_day = suggested_backtest_day(info)
-                if joint_day and backtest.button(
-                    "Latest joint backtest", width="stretch"
-                ):
-                    st.session_state.pending_date = date.fromisoformat(joint_day)
-                    st.rerun()
-st.sidebar.divider()
-st.sidebar.caption(
-    f"Data bundle: {manifest['exported_at'][:10]} · historical replay + publication archive"
-)
-st.sidebar.markdown("[Source code](https://github.com/kaarelkivisalu/grid-signals)")
 pages.run()

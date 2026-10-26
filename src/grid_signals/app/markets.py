@@ -88,3 +88,34 @@ SELECTED_MODELS = {
     "wind_onshore": "hourly_repeated",
 }
 SDAC_SOURCE = "https://www.entsoe.eu/network_codes/cacm/implementation/sdac/"
+
+# The product destination, with the retained German case study alongside it.
+PORTFOLIO_MARKETS = (
+    "SE1",
+    "SE2",
+    "SE3",
+    "SE4",
+    "NO1",
+    "NO2",
+    "NO3",
+    "NO4",
+    "NO5",
+    "DK1",
+    "DK2",
+    "FI",
+    "EE",
+    "LV",
+    "LT",
+    "DE_LU",
+)
+COUNTRY_MARKETS = {
+    "Sweden": ("SE1", "SE2", "SE3", "SE4"),
+    "Norway": ("NO1", "NO2", "NO3", "NO4", "NO5"),
+    "Denmark": ("DK1", "DK2"),
+    "Finland": ("FI",),
+    "Estonia": ("EE",),
+    "Latvia": ("LV",),
+    "Lithuania": ("LT",),
+    "Germany": ("DE_LU",),
+    "Luxembourg": ("DE_LU",),
+}

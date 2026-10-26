@@ -141,11 +141,18 @@ needed to deploy the saved historical release.
 
 ### Historical release and local review
 
-The demo opens on SE3 onshore wind for **2026-09-19**, comparing the evaluated
-model with the physical reference and actuals. Market, target, model and delivery
-date controls appear in the main content; the sidebar selects pages. Performance
-uses its own scored date range, and the coverage map selects markets directly.
-German solar, load and price case studies use the same main-content controls.
+Overview leads with SE3 onshore wind for **2026-09-19**, comparing the evaluated
+model with the physical reference and actuals. The sidebar contains direct links
+to Overview, Wind, Solar, Prices, Performance, Coverage and Models & data.
+Available forecast markets are visible buttons; unsupported markets are greyed
+out. Date/model choices are restricted to saved results. Detailed errors,
+publication records, market observations and downloads remain optional.
+
+Performance shows a short matched comparison before its period and diagnostic
+controls. Models & data separates each model's sources, forecast-time features
+and fitting data. Coverage uses local country polygons for Nordic/Baltic markets
+and the German case-study area, with a zone/target availability table. Country
+colour means at least one zone has that status, not complete country coverage.
 
 The bundled file index was exported at **2026-10-23T15:00:31.076936+00:00** and
 references 13 checked, Git-tracked Parquet files. SE3's final evaluation covers
@@ -154,16 +161,12 @@ their recorded publication times and statuses. The export date does not imply
 current forecasts or reliable daily updates. Original evaluated results, model
 version records and their source files are unchanged.
 
-The initial 2026-10-26 release checks passed: 401 tests, 2 skipped; Ruff lint and
-formatting; two offline image checks; a healthy container; and browser review at
-1440, 820 and 390 px, including CSV downloads. Browser requests outside the app
-were limited to Streamlit navigation icons. The publication-status test checks
-the selected saved issue rather than assuming the newest issue is late.
-
-The main-content control layout was then checked with 28 focused tests, two
-offline image checks, lint and formatting, and desktop/tablet/phone browser
-review. Selections persist across pages; delivery date controls appear only in
-the explorer, and the sidebar contains page navigation without data controls.
+The 2026-10-26 portfolio checks passed: **407 tests, 2 skipped**, Ruff lint and
+formatting, two offline image checks and desktop/tablet/phone browser review at
+1440, 820 and 390 px. Navigation and CSV downloads work without browser errors or
+external requests. Forecast date choices contain only saved model results; the
+publication-status test checks the actual selected issue rather than assuming it
+is late. Existing evaluated result files and model code were not changed.
 
 Ruff excludes standalone learning notebooks until their move in milestone 2a.
 Three style rules are narrowly exempted in two evaluated source files to keep
@@ -184,7 +187,7 @@ Dokploy capacity for one web service:
 4. Add the chosen domain and enable HTTPS in Dokploy, routing to container port
    8501. Port 8502 is only the local preview port.
 5. Use a signed-out browser to check HTTPS, the historical SE3 date and chart,
-   all four pages, German case studies, CSV downloads and phone navigation.
+   all product and evidence pages, German case studies, CSV downloads and phone navigation.
 6. Record the public URL, Git revision, image identity and deployment date in this
    guide, then complete the remaining roadmap checkbox. Keep the previous image
    available for rollback when updating the demo.

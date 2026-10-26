@@ -9,7 +9,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from grid_signals.app.explorer_data import complete_hourly
-from grid_signals.app.markets import MARKETS, TARGETS
+from grid_signals.app.markets import COUNTRY_MARKETS, TARGETS
 from grid_signals.app.model_catalogue import model_name
 
 COLORS = {
@@ -116,7 +116,7 @@ def fundamentals_chart(
             row=row,
             col=1,
         )
-    figure.update_yaxes(title_text="Power · GW", row=1, col=1)
+    figure.update_yaxes(title_text="Generation & demand · GW", row=1, col=1)
     figure.update_yaxes(title_text="Spot · EUR/MWh", row=2, col=1)
     style(figure, 590)
     local_axis(figure, frame.index, timezone)
@@ -129,6 +129,8 @@ def forecast_chart(
     timezone: str,
     target: str,
     comparison: pd.DataFrame | None = None,
+    *,
+    full_intervals: bool = False,
 ) -> go.Figure:
     figure = go.Figure()
     times = pd.DatetimeIndex(rows.valid_time)
@@ -137,6 +139,8 @@ def forecast_chart(
         ("0.10", "0.90", 0.13, "80% interval"),
         ("0.25", "0.75", 0.22, "50% interval"),
     ):
+        if not full_intervals and label != "80% interval":
+            continue
         figure.add_trace(
             go.Scatter(
                 x=times,
@@ -163,7 +167,7 @@ def forecast_chart(
         go.Scatter(
             x=times,
             y=rows["q0.50"],
-            name="Median",
+            name="Forecast",
             line={"color": "#168f87", "width": 2.5},
         )
     )
@@ -263,13 +267,39 @@ def _mercator(latitude):
     return np.degrees(np.log(np.tan(np.pi / 4 + np.radians(latitude) / 2)))
 
 
-def coverage_map(manifest: dict, selected: str) -> go.Figure:
-    """Bundled country outlines with clickable zone anchors; no remote map tiles."""
+def coverage_map(manifest: dict) -> go.Figure:
+    """Shade relevant countries using local polygons, without remote map tiles."""
     figure = go.Figure()
     payload = json.loads(
         (Path(__file__).parent / "assets/explorer/europe.geojson").read_text()
     )
+    colors = {
+        "Evaluated forecasts": "#4f9e92",
+        "Observations only": "#c7ddd5",
+        "Planned": "#e3e8e5",
+    }
+    shown = set()
     for feature in payload["features"]:
+        country = feature["properties"]["name"]
+        if country not in COUNTRY_MARKETS:
+            continue
+        zones = COUNTRY_MARKETS[country]
+        info = [manifest["zones"].get(zone, {}) for zone in zones]
+        status = (
+            "Evaluated forecasts"
+            if any(item.get("targets") for item in info)
+            else "Observations only"
+            if any(item.get("observations") for item in info)
+            else "Planned"
+        )
+        detail = ", ".join(
+            zone.replace("_", "-")
+            for zone, item in zip(zones, info, strict=True)
+            if item.get("targets")
+        )
+        hover = f"{country}<br>{status}"
+        if detail:
+            hover += f" in {detail}<br>Other zones/targets may still be unavailable"
         geometry = feature["geometry"]
         polygons = (
             geometry["coordinates"]
@@ -278,73 +308,61 @@ def coverage_map(manifest: dict, selected: str) -> go.Figure:
         )
         for polygon in polygons:
             coordinates = np.asarray(polygon[0])
+            # Omit far-northern islands outside the electricity-market view.
+            if coordinates[:, 1].min() > 72:
+                continue
             figure.add_trace(
                 go.Scatter(
                     x=coordinates[:, 0],
                     y=_mercator(coordinates[:, 1]),
                     mode="lines",
-                    line={"width": 0.5, "color": "#cbd5cf"},
+                    line={"width": 1, "color": "#f8faf9"},
                     fill="toself",
-                    fillcolor="#eef2ee",
-                    showlegend=False,
-                    hoverinfo="skip",
+                    fillcolor=colors[status],
+                    name=status,
+                    legendgroup=status,
+                    showlegend=status not in shown,
+                    text=hover,
+                    hovertemplate="%{text}<extra></extra>",
+                    hoveron="fills",
+                    meta={"country": country, "status": status},
                 )
             )
-    groups = {
-        "Project data / forecasts": ("#168f87", "circle"),
-        "SDAC · not yet imported": ("#c99538", "circle-open"),
-        "Outside SDAC": ("#82919a", "diamond"),
+            shown.add(status)
+    labels = {
+        "Sweden": (16, 63),
+        "Norway": (9, 61),
+        "Finland": (26, 65),
+        "Denmark": (9.5, 56.5),
+        "Estonia": (26, 59),
+        "Latvia": (25.5, 57),
+        "Lithuania": (25, 55.3),
+        "Germany": (10.5, 51.5),
     }
-    for label, (color, symbol) in groups.items():
-        chosen = [
-            m
-            for m in MARKETS
-            if (
-                "Outside SDAC"
-                if not m.sdac
-                else "Project data / forecasts"
-                if m.code in manifest["zones"]
-                else "SDAC · not yet imported"
-            )
-            == label
-        ]
-        figure.add_trace(
-            go.Scatter(
-                x=[m.lon for m in chosen],
-                y=[_mercator(m.lat) for m in chosen],
-                customdata=[m.code for m in chosen],
-                text=[m.code.replace("_", "-") for m in chosen],
-                mode="markers+text"
-                if label == "Project data / forecasts"
-                else "markers",
-                textposition="top center",
-                textfont={"size": 11},
-                marker={
-                    "size": [17 if m.code == selected else 10 for m in chosen],
-                    "color": color,
-                    "symbol": symbol,
-                    "line": {"width": 2},
-                },
-                name=label,
-                hovertext=[
-                    f"{m.code} · {m.name}<br>{'Custom models + observations' if manifest['zones'].get(m.code, {}).get('targets') else 'Bundled observations' if m.code in manifest['zones'] else label}"
-                    for m in chosen
-                ],
-                hovertemplate="%{hovertext}<extra></extra>",
-            )
+    figure.add_trace(
+        go.Scatter(
+            x=[point[0] for point in labels.values()],
+            y=[_mercator(point[1]) for point in labels.values()],
+            text=list(labels),
+            mode="text",
+            textfont={"size": 12, "color": "#24483f"},
+            showlegend=False,
+            hoverinfo="skip",
         )
-    style(figure, 620)
+    )
+    style(figure, 610)
     figure.update_layout(
         hovermode="closest",
-        dragmode="pan",
-        clickmode="event+select",
-        legend={"orientation": "h", "y": -0.04, "x": 0},
+        dragmode=False,
+        margin={"l": 0, "r": 0, "t": 10, "b": 40},
+        legend={"orientation": "h", "y": -0.02, "x": 0},
     )
-    figure.update_xaxes(range=[-23, 39], visible=False, fixedrange=False)
+    figure.update_xaxes(range=[3, 33], visible=False, fixedrange=True)
     figure.update_yaxes(
-        range=[_mercator(34), _mercator(71)],
+        range=[_mercator(47), _mercator(71.5)],
         visible=False,
         scaleanchor="x",
         scaleratio=1,
+        fixedrange=True,
     )
     return figure

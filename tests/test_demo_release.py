@@ -28,6 +28,10 @@ def test_release_copies_only_indexed_results_and_product_pages(tmp_path):
     assert report["result_files"] == len(expected)
     assert {path.name for path in (app / "pages").iterdir()} == {
         "overview.py",
+        "wind.py",
+        "solar.py",
+        "price.py",
+        "load.py",
         "performance.py",
         "coverage.py",
         "methods.py",

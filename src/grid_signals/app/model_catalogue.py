@@ -18,7 +18,7 @@ SOLAR_FEATURES = (
 )
 WIND_FEATURES = (
     "ECMWF IFS, GFS and ICON previous runs; run-addressed Nordic MEPS and IFS; eight fleet-weighted SE3 clusters.",
-    "Hub-height wind/power curves, density, shear, gusts, direction, temperature, snow/icing, spatial and model disagreement.",
+    "Hub-height wind and turbine generation curves, density, shear, gusts, direction, temperature, snow/icing, spatial and model disagreement.",
     "Capacity-factor lags at 48, 72 and 168 h; daily/annual cycles; archived weather trajectory shifts ±1/±3 h and 6 h rolling summaries.",
 )
 
@@ -97,7 +97,7 @@ CATALOGUE = {
         "No statistically resolved development CRPS gain over repeating hours. Development comparison only.",
     ),
     "physical_power_curve": (
-        "Fleet-weighted turbine power curves driven by archived wind forecasts, with a training-fitted affine bias correction.",
+        "Fleet-weighted turbine generation curves driven by archived wind forecasts, with a training-fitted affine bias correction.",
         (
             "Mapped SE3 fleet, hub-height weather and physical turbine response. No learned generation-lag model.",
         ),
@@ -143,4 +143,94 @@ CATALOGUE = {
 
 
 def model_name(model: str) -> str:
-    return MODEL_LABELS.get(model, model)
+    return DISPLAY_NAMES.get(model, MODEL_LABELS.get(model, model))
+
+
+# Short labels for browsing; the full recipes and exact feature families stay above.
+DISPLAY_NAMES = {
+    "hourly_repeated": "Wind model · LightGBM",
+    "interpolated_weather": "Wind model · interpolated weather",
+    "physical_power_curve": "Physical wind reference",
+    "solar_quantile": "Solar model · LightGBM",
+    "solar_physical": "Physical solar reference",
+    "smart_persistence": "Solar persistence · 48 hours",
+    "clear_sky_climatology": "Clear-sky climatology",
+    "lear_hourly": "LEAR · price history",
+    "seasonal_naive": "Weekly price reference",
+    "lightgbm_point": "Price model · median LightGBM",
+    "lightgbm_quantile": "Price model · quantile LightGBM",
+    "load_quantile_gbm": "Demand model · quantile LightGBM",
+    "load_point_gbm": "Demand model · median LightGBM",
+    "load_ridge": "Demand model · ridge regression",
+    "load_weekly": "Weekly demand reference",
+}
+
+# Forecast-time inputs and fitting data are deliberately separate.
+MODEL_DATA = {
+    "hourly_repeated": (
+        "Archived weather: IFS, GFS, ICON, Nordic MEPS; mapped SE3 turbines; ENTSO-E generation and capacity.",
+        "Wind at turbine height, direction, gusts, air density, icing indicators, fleet response, weather disagreement, generation 48/72/168 hours earlier, calendar cycles.",
+        "Past generation as a fraction of installed capacity; rolling training with a seven-day embargo. Calibration uses training-side predictions.",
+    ),
+    "interpolated_weather": (
+        "Same weather archives, SE3 turbine fleet and generation history as the wind model.",
+        "The wind model's feature families, with weather interpolated to quarter-hour times.",
+        "The same hourly training and calibration recipe; development comparison only.",
+    ),
+    "physical_power_curve": (
+        "Archived wind forecasts, mapped SE3 turbines, installed capacity and historical generation.",
+        "Wind at turbine height and each turbine's wind-speed-to-generation curve, weighted across the fleet. No learned generation-lag features.",
+        "Historical generation fits an affine bias correction and residual uncertainty around physical output.",
+    ),
+    "solar_quantile": (
+        "Archived ECMWF IFS irradiance, temperature and snow at six German sites; ENTSO-E solar generation and annual capacity.",
+        "Physical PV output, clear-sky output, irradiance, temperature, snow flag, sun elevation, forecast lead time and calendar cycles.",
+        "Past daylight generation divided by installed capacity; rolling training with a seven-day embargo and training-side quantile calibration.",
+    ),
+    "solar_physical": (
+        "Archived IFS irradiance and temperature; site locations, panel-orientation assumptions, solar geometry and annual capacity.",
+        "PVWatts conversion from irradiance and temperature to electricity generation; clear-sky profile sets the daily shape.",
+        "Past solar generation fits a derating factor and training-residual uncertainty. Night output is zero.",
+    ),
+    "smart_persistence": (
+        "ENTSO-E solar generation history, installed capacity and calculated clear-sky irradiance.",
+        "The observed clear-sky index 48 hours earlier, applied to the delivery day's clear-sky profile. No forecast weather.",
+        "Historical residuals set uncertainty. The forecast rule itself reuses the lagged observation.",
+    ),
+    "clear_sky_climatology": (
+        "Historical solar generation and calculated clear-sky profiles.",
+        "The historical clear-sky-index distribution and delivery-day solar geometry. No weather forecast.",
+        "Training-side climatology; development-only reference.",
+    ),
+    "lear_hourly": (
+        "ENTSO-E day-ahead electricity-price history for Germany-Luxembourg.",
+        "Four complete daily price profiles: 1, 2, 3 and 7 days earlier; weekday indicators. No weather, demand or renewable-generation inputs.",
+        "24 hourly LASSO regressions. The last 30 training days supply out-of-sample residuals for uncertainty.",
+    ),
+    "seasonal_naive": (
+        "ENTSO-E day-ahead electricity-price history.",
+        "Observed price 168 hours earlier on the UTC clock. No forecast weather or generation.",
+        "Training residuals provide an offset and uncertainty around the weekly lag.",
+    ),
+    "lightgbm_point": (
+        "ENTSO-E day-ahead electricity-price history.",
+        "24/48/72/168-hour price lags, complete daily price profiles from 1/2/3/7 days earlier, weekday, market quarter and month.",
+        "Past prices fit median LightGBM; held-out training residuals supply uncertainty. No weather or demand inputs in this baseline.",
+    ),
+    "lightgbm_quantile": (
+        "ENTSO-E day-ahead electricity-price history.",
+        "The same price lags, daily profiles and calendar features as median LightGBM. No weather or demand inputs.",
+        "Past prices fit 19 direct quantile models. Final-evaluation intervals substantially under-cover.",
+    ),
+    "load_weekly": (
+        "ENTSO-E total electricity-demand observations.",
+        "Observed demand 168 hours earlier on the UTC clock.",
+        "Training residuals provide an offset and uncertainty around weekly persistence.",
+    ),
+}
+for _model in ("load_ridge", "load_point_gbm", "load_quantile_gbm"):
+    MODEL_DATA[_model] = (
+        "ENTSO-E electricity-demand history; archived ECMWF IFS temperatures at six German sites; calendar and national holidays.",
+        "Demand 72/168 hours earlier, temperature, heating below 15°C, cooling above 22°C, local quarter-hour, weekday, annual/daily cycles and holidays.",
+        "Past demand fits the selected regression. Ridge and median LightGBM use the last 30 training days for residual uncertainty; quantile LightGBM predicts 19 quantiles directly.",
+    )
