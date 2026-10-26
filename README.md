@@ -43,15 +43,18 @@ Open **http://localhost:8501**. Bundled results need no database, API keys,
 research dependencies or model training.
 
 - **Overview:** a populated wind comparison and a short summary of final results.
-- **Wind, Solar and Prices:** visible market choices, with unavailable forecasts
-  greyed out. Date and model choices show saved results; optional detail includes
-  published issues, errors, market observations and CSV downloads.
-- **Performance:** a compact matched model comparison, with optional period,
+- **Wind, Solar and Prices:** one forecast chart with actuals, a reference and an
+  80% range. **Details** reveals market buttons (unavailable forecasts greyed
+  out), saved dates/models, aligned errors, published issues and CSV downloads.
+- **Performance:** one matched model comparison table. Details reveals period,
   grouping, uncertainty and bias diagnostics.
 - **Coverage:** a country-shaded Nordic/Baltic map plus the German case-study
   area, with separate observation and evaluation status by market and target.
-- **Models & data:** explicit data sources, forecast-time features and fitting
-  data for each model, with exact recipes and timing rules available in detail.
+- **Models & data:** a short source/input table. Details reveals model choices,
+  fitting data, exact recipes and timing rules.
+
+Every page uses the same Details switch. The default views have no dropdowns or
+expanders; deeper controls and source notes appear only when requested.
 
 Observations cover **11 areas**. Evaluated custom forecasts cover **DE-LU
 solar/load/price and SE3 onshore wind**; imported data alone is not forecast skill.

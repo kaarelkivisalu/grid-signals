@@ -5,10 +5,10 @@ import streamlit as st
 
 from grid_signals.app.explorer_charts import coverage_map
 from grid_signals.app.markets import BY_CODE, PORTFOLIO_MARKETS
+from grid_signals.app.presentation import page_heading
 
 manifest = st.session_state.explorer_manifest
-st.title("Where the data reaches")
-st.write("Nordic/Baltic markets, with Germany-Luxembourg as a supporting case study.")
+detailed = page_heading("Coverage", "coverage")
 st.plotly_chart(
     coverage_map(manifest),
     width="stretch",
@@ -16,30 +16,32 @@ st.plotly_chart(
     config={"scrollZoom": False, "displayModeBar": False},
 )
 st.caption(
-    "Country colour means at least one zone has that status. Sweden's evaluated forecast is SE3 onshore wind; the other Swedish zones are not yet evaluated. Colours do not claim full country or daily publication coverage."
+    "Colour shows the furthest stage reached in any zone. Sweden's evaluated forecast is SE3 wind."
 )
-st.subheader("Forecast availability by market")
-rows = []
-for code in PORTFOLIO_MARKETS:
-    info = manifest["zones"].get(code, {})
-    targets = info.get("targets", {})
-    rows.append(
-        {
-            "Market": code.replace("_", "-"),
-            "Area": BY_CODE[code].name,
-            "Observations": "Available" if info.get("observations") else "Not imported",
-            **{
-                label: "Evaluated" if target in targets else "Not yet evaluated"
-                for target, label in (
-                    ("wind_onshore", "Wind"),
-                    ("solar", "Solar"),
-                    ("price", "Prices"),
-                )
-            },
-        }
-    )
-st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
-with st.expander("Scope & map source"):
+if detailed:
+    st.subheader("Forecast availability by market")
+    rows = []
+    for code in PORTFOLIO_MARKETS:
+        info = manifest["zones"].get(code, {})
+        targets = info.get("targets", {})
+        rows.append(
+            {
+                "Market": code.replace("_", "-"),
+                "Area": BY_CODE[code].name,
+                "Observations": "Available"
+                if info.get("observations")
+                else "Not imported",
+                **{
+                    label: "Evaluated" if target in targets else "Not yet evaluated"
+                    for target, label in (
+                        ("wind_onshore", "Wind"),
+                        ("solar", "Solar"),
+                        ("price", "Prices"),
+                    )
+                },
+            }
+        )
+    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
     st.write(
         "The destination is evaluated wind, solar and spot-price forecasts across SE1-SE4, NO1-NO5, DK1-DK2, FI, EE, LV and LT. SE3 leads; SE4 follows after daily SE3 delivery is established. Offshore wind follows separately."
     )

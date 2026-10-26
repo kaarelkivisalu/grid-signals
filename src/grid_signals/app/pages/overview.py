@@ -6,13 +6,14 @@ import streamlit as st
 from grid_signals.app.explorer_charts import forecast_chart
 from grid_signals.app.explorer_data import choose_curve
 from grid_signals.app.markets import SELECTED_MODELS
-from grid_signals.app.presentation import evaluated_forecasts, final_scores
+from grid_signals.app.presentation import (
+    evaluated_forecasts,
+    final_scores,
+    page_heading,
+)
 
 manifest = st.session_state.explorer_manifest
-st.title("Electricity forecasts")
-st.write(
-    "Day-ahead wind, solar and electricity-price forecasts. Start with SE3 wind, then explore the models and their results."
-)
+detailed = page_heading("Electricity forecasts", "overview")
 wind = evaluated_forecasts(manifest, "SE3")
 wind = wind[(wind.target == "wind_onshore") & (wind.split == "Final holdout")]
 if wind.empty:
@@ -23,21 +24,16 @@ if wind.empty:
 day = wind.delivery_date.max()
 rows = choose_curve(wind, "wind_onshore", day, "hourly_repeated")
 reference = choose_curve(wind, "wind_onshore", day, "physical_power_curve")
-st.subheader("SE3 · Onshore wind")
-st.caption(f"Historical comparison · delivery {day} · Sweden, Central")
+st.caption(f"SE3 onshore wind · {day} · Final evaluation")
 st.plotly_chart(
-    forecast_chart(rows, "Europe/Stockholm", "wind_onshore", reference),
+    forecast_chart(
+        rows, "Europe/Stockholm", "wind_onshore", reference, show_error=detailed
+    ),
     width="stretch",
     key="featured_forecast",
+    config={"displayModeBar": detailed},
 )
-st.caption(
-    "Forecast and 80% prediction range against actual generation and a physical reference. Hourly forecasts are repeated over quarter-hours."
-)
-with st.container(horizontal=True):
-    st.page_link("pages/wind.py", label="Explore wind")
-    st.page_link("pages/solar.py", label="Explore solar")
-    st.page_link("pages/price.py", label="Explore prices")
-st.subheader("What has been evaluated")
+st.subheader("Final results")
 summary = []
 for zone, target, label in (
     ("SE3", "wind_onshore", "Onshore wind"),
@@ -58,15 +54,12 @@ for zone, target, label in (
             "Scored days": int(item.Days),
         }
     )
-st.dataframe(pd.DataFrame(summary), hide_index=True, width="stretch")
-st.caption(
-    "Final evaluation, separate from development. Error units differ across products; these rows are not a ranking. Saved results do not imply a reliable daily service."
-)
-with st.container(horizontal=True):
-    st.page_link("pages/performance.py", label="See the evidence")
-    st.page_link("pages/methods.py", label="Understand the inputs")
-with st.expander("Additional case study"):
-    st.page_link("pages/load.py", label="German electricity demand")
+st.table(pd.DataFrame(summary).set_index("Product"), border="horizontal")
+if detailed:
     st.write(
-        "A supporting load-forecast study and a test of whether its predictions improve price forecasting."
+        "Final evaluation is separate from development. Products use different units and periods. These saved results do not establish reliable daily publication."
     )
+    st.caption(
+        "Wind uses hourly-trained distributions repeated over quarter-hours; the shaded range covers the 10th to 90th quantile."
+    )
+    st.page_link("pages/load.py", label="German electricity demand case study")

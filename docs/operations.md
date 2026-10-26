@@ -144,15 +144,18 @@ needed to deploy the saved historical release.
 Overview leads with SE3 onshore wind for **2026-09-19**, comparing the evaluated
 model with the physical reference and actuals. The sidebar contains direct links
 to Overview, Wind, Solar, Prices, Performance, Coverage and Models & data.
-Available forecast markets are visible buttons; unsupported markets are greyed
-out. Date/model choices are restricted to saved results. Detailed errors,
-publication records, market observations and downloads remain optional.
+Each page has one Details switch. Default views have no dropdowns or expanders:
+forecast pages lead with one chart, Performance with one comparison table, and
+Models & data with a short source/input table. Details reveals market buttons
+(unsupported markets greyed out), saved dates/models, publication records,
+market observations and downloads. Forecast and error panels share a time axis.
+The shaded forecast range uses saved quantiles, not ensemble scenarios.
 
-Performance shows a short matched comparison before its period and diagnostic
-controls. Models & data separates each model's sources, forecast-time features
-and fitting data. Coverage uses local country polygons for Nordic/Baltic markets
-and the German case-study area, with a zone/target availability table. Country
-colour means at least one zone has that status, not complete country coverage.
+Performance's period and diagnostic controls and each model's full recipe and
+timing rules are available in Details. Coverage uses local country polygons for
+Nordic/Baltic markets and the German case-study area, with the zone/target table
+in Details. Country colour means at least one zone has that status, not complete
+country coverage.
 
 The bundled file index was exported at **2026-10-23T15:00:31.076936+00:00** and
 references 13 checked, Git-tracked Parquet files. SE3's final evaluation covers
@@ -161,12 +164,14 @@ their recorded publication times and statuses. The export date does not imply
 current forecasts or reliable daily updates. Original evaluated results, model
 version records and their source files are unchanged.
 
-The 2026-10-26 portfolio checks passed: **407 tests, 2 skipped**, Ruff lint and
+The 2026-10-26 portfolio checks passed: **407 tests, 2 skipped** before the latest
+UI simplification. The simplification passed **41 focused tests**, Ruff lint and
 formatting, two offline image checks and desktop/tablet/phone browser review at
-1440, 820 and 390 px. Navigation and CSV downloads work without browser errors or
-external requests. Forecast date choices contain only saved model results; the
-publication-status test checks the actual selected issue rather than assuming it
-is late. Existing evaluated result files and model code were not changed.
+1440, 820 and 390 px. Navigation and CSV downloads work without browser errors,
+external requests or horizontal page overflow. Tests cover Details visibility,
+preserved selections and aligned error values. Forecast date choices contain
+only saved model results; the publication-status test checks the selected issue.
+Existing evaluated result files and model code were not changed.
 
 Ruff excludes standalone learning notebooks until their move in milestone 2a.
 Three style rules are narrowly exempted in two evaluated source files to keep

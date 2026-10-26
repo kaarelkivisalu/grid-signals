@@ -131,15 +131,23 @@ def forecast_chart(
     comparison: pd.DataFrame | None = None,
     *,
     full_intervals: bool = False,
+    show_error: bool = False,
 ) -> go.Figure:
-    figure = go.Figure()
+    has_error = show_error and rows.actual.notna().any()
+    figure = make_subplots(
+        rows=2 if has_error else 1,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.08,
+        row_heights=[0.75, 0.25] if has_error else [1],
+    )
     times = pd.DatetimeIndex(rows.valid_time)
     for lo, hi, opacity, label in (
-        ("0.05", "0.95", 0.07, "90% interval"),
-        ("0.10", "0.90", 0.13, "80% interval"),
-        ("0.25", "0.75", 0.22, "50% interval"),
+        ("0.05", "0.95", 0.07, "90% range"),
+        ("0.10", "0.90", 0.13, "80% range"),
+        ("0.25", "0.75", 0.22, "50% range"),
     ):
-        if not full_intervals and label != "80% interval":
+        if not full_intervals and label != "80% range":
             continue
         figure.add_trace(
             go.Scatter(
@@ -158,7 +166,8 @@ def forecast_chart(
                 mode="lines",
                 line={"width": 0},
                 fill="tonexty",
-                fillcolor=f"rgba(22,143,135,{opacity})",
+                fillcolor=f"rgba(96,157,180,{opacity})",
+                legendrank=40,
                 name=label,
                 hoverinfo="skip",
             )
@@ -168,7 +177,8 @@ def forecast_chart(
             x=times,
             y=rows["q0.50"],
             name="Forecast",
-            line={"color": "#168f87", "width": 2.5},
+            line={"color": "#b65753", "width": 2.5},
+            legendrank=10,
         )
     )
     if rows.actual.notna().any():
@@ -177,7 +187,8 @@ def forecast_chart(
                 x=times,
                 y=rows.actual,
                 name="Actual",
-                line={"color": "#263c48", "width": 2},
+                line={"color": "#20292f", "width": 2},
+                legendrank=20,
             )
         )
     if comparison is not None and not comparison.empty:
@@ -186,13 +197,47 @@ def forecast_chart(
             go.Scatter(
                 x=times,
                 y=aligned["q0.50"],
-                name=model_name(comparison.model.iloc[0]),
-                line={"color": "#c58c30", "dash": "dot"},
+                name="Reference",
+                hovertemplate=model_name(comparison.model.iloc[0])
+                + ": %{y:.2f}<extra></extra>",
+                line={"color": "#85916c", "dash": "dot"},
+                legendrank=30,
             )
         )
     figure.update_yaxes(title_text="EUR/MWh" if target == "price" else "MW")
     local_axis(figure, times, timezone)
-    return style(figure, 470)
+    style(figure, 620 if has_error else 470)
+    figure.update_layout(
+        plot_bgcolor="#ffffff",
+        margin={"l": 12, "r": 12, "t": 12, "b": 70},
+        legend={"orientation": "h", "y": -0.13, "x": 0, "traceorder": "normal"},
+    )
+    figure.update_xaxes(
+        showgrid=True, gridcolor="#e4e8e8", showline=True, linecolor="#b8c4c4"
+    )
+    figure.update_yaxes(gridcolor="#e4e8e8", showline=True, linecolor="#b8c4c4")
+    if not has_error:
+        figure.update_xaxes(title_text=None)
+    if has_error:
+        figure.add_trace(
+            go.Scatter(
+                x=times,
+                y=rows["q0.50"] - rows.actual,
+                name="Forecast - actual",
+                showlegend=False,
+                line={"color": "#4e6b80", "width": 1.5},
+            ),
+            row=2,
+            col=1,
+        )
+        figure.add_hline(y=0, line_color="#8d9c9c", line_width=1, row=2, col=1)
+        figure.update_yaxes(
+            title_text="Error · " + ("EUR/MWh" if target == "price" else "MW"),
+            row=2,
+            col=1,
+        )
+        figure.update_xaxes(title_text=None, showticklabels=False, row=1, col=1)
+    return figure
 
 
 def error_chart(rows: pd.DataFrame, timezone: str, target: str) -> go.Figure:

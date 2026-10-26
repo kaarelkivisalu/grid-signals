@@ -234,3 +234,106 @@ for _model in ("load_ridge", "load_point_gbm", "load_quantile_gbm"):
         "Demand 72/168 hours earlier, temperature, heating below 15°C, cooling above 22°C, local quarter-hour, weekday, annual/daily cycles and holidays.",
         "Past demand fits the selected regression. Ridge and median LightGBM use the last 30 training days for residual uncertainty; quantile LightGBM predicts 19 quantiles directly.",
     )
+
+
+def input_rows(model: str) -> list[tuple[str, str]]:
+    """Short source-to-feature mapping for the default model view."""
+    if model in {"hourly_repeated", "interpolated_weather"}:
+        rows = [
+            (
+                "Weather archives · IFS, GFS, ICON, MEPS",
+                "Wind speed, direction, gusts, density, icing and model disagreement",
+            ),
+            ("SE3 turbine registry", "Turbine response and fleet-weighted weather"),
+            (
+                "ENTSO-E generation & capacity",
+                "Generation 48, 72 and 168 hours earlier; capacity-factor targets",
+            ),
+            ("Calendar", "Daily and annual cycles"),
+        ]
+    elif model == "physical_power_curve":
+        rows = [
+            (
+                "Wind forecasts & SE3 turbines",
+                "Wind-speed-to-generation response across the fleet",
+            ),
+            (
+                "Generation history & capacity",
+                "Bias correction, output scaling and residual uncertainty",
+            ),
+        ]
+    elif model in {"solar_quantile", "solar_physical"}:
+        rows = [
+            (
+                "ECMWF IFS weather archive",
+                "Irradiance and temperature at six German sites",
+            ),
+            (
+                "Solar geometry & panel assumptions",
+                "Clear-sky profile and physical PV output",
+            ),
+            (
+                "ENTSO-E generation & capacity",
+                "Historical output and installed-capacity scaling",
+            ),
+        ]
+        if model == "solar_quantile":
+            rows.append(
+                (
+                    "Snow, calendar & forecast timing",
+                    "Snow flag, sun elevation, lead time and daily/annual cycles",
+                )
+            )
+    elif model in {"smart_persistence", "clear_sky_climatology"}:
+        rows = [
+            (
+                "Solar generation history",
+                "Clear-sky index 48 hours earlier"
+                if model == "smart_persistence"
+                else "Historical clear-sky-index distribution",
+            ),
+            (
+                "Solar geometry & installed capacity",
+                "Delivery-day clear-sky profile and output scaling",
+            ),
+        ]
+    elif model == "lear_hourly":
+        rows = [
+            (
+                "ENTSO-E price history",
+                "Daily price profiles from 1, 2, 3 and 7 days earlier",
+            ),
+            ("Calendar", "Weekday indicators"),
+            ("Training errors", "Last 30 training days set the prediction range"),
+        ]
+    elif model in {"seasonal_naive", "load_weekly"}:
+        rows = [
+            (
+                "ENTSO-E price history"
+                if model == "seasonal_naive"
+                else "ENTSO-E demand history",
+                "Observed value 168 hours earlier",
+            ),
+            ("Training errors", "Offset and uncertainty around the weekly reference"),
+        ]
+    elif model in {"lightgbm_point", "lightgbm_quantile"}:
+        rows = [
+            (
+                "ENTSO-E price history",
+                "24/48/72/168-hour lags and daily profiles from 1/2/3/7 days earlier",
+            ),
+            ("Calendar", "Weekday, market quarter and month"),
+        ]
+    else:
+        rows = [
+            ("ENTSO-E demand history", "Demand 72 and 168 hours earlier"),
+            (
+                "ECMWF IFS temperature archive",
+                "Temperature, heating and cooling at six German sites",
+            ),
+            (
+                "Calendar",
+                "Quarter-hour, weekday, daily/annual cycles and national holidays",
+            ),
+        ]
+    return rows

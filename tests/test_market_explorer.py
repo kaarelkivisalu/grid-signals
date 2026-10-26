@@ -41,7 +41,7 @@ def test_overview_is_populated_and_sidebar_is_just_navigation(monkeypatch):
     assert [item.value for item in app.sidebar.title] == ["Grid Signals"]
     assert [item.value for item in app.sidebar.caption] == ["Nordic/Baltic electricity"]
     assert any("2026-09-19" in item.value for item in app.caption)
-    assert not app.dataframe[0].value.empty
+    assert not app.table[0].value.empty
     for page in (
         "wind",
         "solar",
@@ -72,6 +72,9 @@ def test_product_pages_only_offer_real_forecasts(page, target, zone):
     assert not app.exception
     assert app.session_state["selected_zone"] == zone
     assert app.session_state["selected_target"] == target
+    assert not app.selectbox
+    assert not app.expander
+    app.toggle(key=f"details_{target}").set_value(True).run()
     assert not app.button(key=f"market_{target}_{zone}").disabled
     other = "SE3" if zone == "DE_LU" else "DE_LU"
     assert app.button(key=f"market_{target}_{other}").disabled
@@ -88,7 +91,7 @@ def test_product_pages_only_offer_real_forecasts(page, target, zone):
     assert set(day_control.options) == set(pool.delivery_date.unique())
     assert day in day_control.options
     assert any(
-        button.label == "Download this forecast · CSV"
+        button.label == "Download forecast · CSV"
         for button in app.get("download_button")
     )
 
@@ -96,6 +99,7 @@ def test_product_pages_only_offer_real_forecasts(page, target, zone):
 def test_nondefault_model_and_day_survive_informational_pages():
     app = AppTest.from_file(str(APP), default_timeout=30).run()
     app.switch_page("pages/wind.py").run()
+    app.toggle(key="details_wind_onshore").set_value(True).run()
     app.selectbox(key="selected_model").set_value("physical_power_curve").run()
     control = next(item for item in app.selectbox if item.label == "Delivery date")
     chosen = control.options[2]
@@ -131,14 +135,19 @@ def test_publication_archive_displays_recorded_status_and_timestamp():
     ).iloc[0]
     app = AppTest.from_file(str(APP), default_timeout=30).run()
     app.switch_page("pages/wind.py").run()
-    app.radio(key="archive_wind_onshore").set_value("Published archive").run()
+    app.toggle(key="details_wind_onshore").set_value(True).run()
+    app.selectbox(key="archive_wind_onshore").set_value("Published archive").run()
     assert not app.exception
     assert any(
         expected.publication_status in item.value
         and str(expected.published_at) in item.value
-        for item in app.info
+        for item in app.caption
     )
-    app.radio(key="archive_wind_onshore").set_value("Final holdout").run()
+    app.toggle(key="details_wind_onshore").set_value(False).run()
+    app.run()
+    assert any(expected.publication_status in item.value for item in app.caption)
+    app.toggle(key="details_wind_onshore").set_value(True).run()
+    app.selectbox(key="archive_wind_onshore").set_value("Final holdout").run()
     assert not app.exception
     assert any("Final evaluation" in item.value for item in app.caption)
 
@@ -147,7 +156,11 @@ def test_performance_keeps_matched_metrics_and_detailed_period_controls():
     app = AppTest.from_file(str(APP), default_timeout=30).run()
     app.switch_page("pages/performance.py").run()
     assert not app.exception
-    assert app.metric[0].value == "2.46"
+    assert app.table[0].value["Average error (% capacity)"].min() == pytest.approx(
+        2.46, abs=0.01
+    )
+    assert not app.metric
+    app.toggle(key="details_performance").set_value(True).run()
     for group in ("Year", "Season", "Month", "Weekday", "Market quarter"):
         app.selectbox(key="score_group").set_value(group).run()
         assert not app.exception
@@ -163,7 +176,13 @@ def test_performance_keeps_matched_metrics_and_detailed_period_controls():
         (date(2026, 9, 14), date(2026, 9, 14))
     ).run()
     assert not app.exception
-    assert app.dataframe[0].value.Days.tolist() == [1, 1, 1, 1]
+    assert app.dataframe[-1].value.Days.eq(1).all()
+    assert app.dataframe[-1].value.model.nunique() == 4
+    before = app.table[0].value.copy()
+    app.toggle(key="details_performance").set_value(False).run()
+    app.run()
+    assert not app.exception
+    pd.testing.assert_frame_equal(before, app.table[0].value)
 
 
 def test_map_uses_country_fills_and_only_relevant_geography():
@@ -196,12 +215,13 @@ def test_every_model_has_explicit_sources_forecast_inputs_and_fitting_data():
     assert "No weather" in MODEL_DATA["lear_hourly"][1]
     app = AppTest.from_file(str(APP), default_timeout=30).run()
     app.switch_page("pages/methods.py").run()
+    app.toggle(key="details_methods").set_value(True).run()
     for model in ("hourly_repeated", "interpolated_weather", "physical_power_curve"):
-        app.radio(key="method_model").set_value(model).run()
+        app.selectbox(key="method_model").set_value(model).run()
         assert not app.exception
         assert any(MODEL_DATA[model][1] in item.value for item in app.markdown)
     app.button_group(key="selected_target").set_value("price").run()
-    app.radio(key="method_model").set_value("lear_hourly").run()
+    app.selectbox(key="method_model").set_value("lear_hourly").run()
     assert not app.exception
     assert any("No weather, demand or renewable" in item.value for item in app.markdown)
 
@@ -211,11 +231,38 @@ def test_default_chart_simplifies_uncertainty_without_losing_detailed_bands():
     rows = choose_curve(pool, "wind_onshore", "2026-09-19", "hourly_repeated")
     default = forecast_chart(rows, "Europe/Stockholm", "wind_onshore")
     full = forecast_chart(rows, "Europe/Stockholm", "wind_onshore", full_intervals=True)
-    assert "80% interval" in [trace.name for trace in default.data]
-    assert "90% interval" not in [trace.name for trace in default.data]
-    assert {"50% interval", "80% interval", "90% interval"} <= {
+    assert "80% range" in [trace.name for trace in default.data]
+    assert "90% range" not in [trace.name for trace in default.data]
+    assert {"50% range", "80% range", "90% range"} <= {
         trace.name for trace in full.data
     }
+
+
+@pytest.mark.parametrize(
+    "page", ["overview", "wind", "solar", "price", "performance", "methods", "coverage"]
+)
+def test_default_views_have_no_dropdowns_or_accordion_sections(page):
+    app = AppTest.from_file(str(APP), default_timeout=30).run()
+    app.switch_page(f"pages/{page}.py").run()
+    assert not app.exception
+    assert not app.selectbox
+    assert not app.multiselect
+    assert not app.date_input
+    assert not app.radio
+    assert not app.expander
+    assert len(app.toggle) == 1
+    assert app.toggle[0].label == "Details"
+
+
+def test_forecast_error_panel_uses_the_same_times_and_actuals():
+    pool = read_market(load_manifest(), "SE3", "forecast")
+    rows = choose_curve(pool, "wind_onshore", "2026-09-19", "hourly_repeated")
+    figure = forecast_chart(rows, "Europe/Stockholm", "wind_onshore", show_error=True)
+    error = next(trace for trace in figure.data if trace.name == "Forecast - actual")
+    np.testing.assert_allclose(error.y, rows["q0.50"] - rows.actual)
+    assert list(error.x) == list(rows.valid_time)
+    assert error.xaxis == "x2"
+    assert figure.layout.xaxis.matches == "x2"
 
 
 @pytest.mark.parametrize(
