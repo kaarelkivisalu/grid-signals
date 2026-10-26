@@ -8,10 +8,9 @@ from grid_signals.app.markets import MARKETS, SDAC_SOURCE, TARGETS
 
 manifest = st.session_state.explorer_manifest
 zone = st.session_state.selected_zone
-st.caption("GRID SIGNALS / EUROPEAN COVERAGE")
 st.title("One market at a time")
 st.write(
-    "Europe is the scope. Imported data, evaluated custom models and market membership are separate claims."
+    "The destination is wind, solar and day-ahead spot-price forecasts across 15 Nordic/Baltic bidding zones: SE1-SE4, NO1-NO5, DK1-DK2, FI, EE, LV and LT. The wider European map provides context. Imported data, evaluated models and publication records are separate claims."
 )
 cols = st.columns(3)
 cols[0].metric("Areas with bundled data", str(len(manifest["zones"])))
@@ -76,7 +75,7 @@ st.dataframe(
 )
 st.subheader("Expansion priorities")
 st.write(
-    "DE-LU is the first connected forecasting chain: add custom onshore/offshore wind, then residual-load forecasts and a matched price-input comparison. SE3 remains the wind case study. Transfer the validated recipe to FI or another Swedish area before claiming Europe-wide custom coverage."
+    "Publish the historical demo with SE3 onshore wind first, then establish daily SE3 publication, transfer wind to SE4 and compare one deep-learning challenger. Extend onshore wind, solar and spot prices one zone and target at a time; offshore wind follows where applicable. German solar, load and price results remain supporting case studies."
 )
 st.caption(
     "Additional market data covers a bounded September-October 2026 preview. It supports exploration and data-quality assessment; no custom skill has been established in those areas."

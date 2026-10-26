@@ -120,7 +120,26 @@ docker run --rm -p 127.0.0.1:8502:8501 grid-signals-demo:local
 
 Open http://localhost:8502. The image includes the historical explorer and three summary bundles and omits the
 legacy database/agent tools. Its build context excludes research data, secrets and
-the virtualenv. Refresh result bundles before rebuilding an image.
+the virtualenv. The build checks every indexed Parquet file's checksum and copies
+only those files into the final image. Old local exports remain untouched.
+The base image is pinned by digest; `deploy/demo/requirements.txt` locks all web
+dependencies with hashes. To intentionally update that dependency lock:
+
+```bash
+uv pip compile deploy/demo/requirements.in --python-version 3.12 --python-platform linux --generate-hashes --output-file deploy/demo/requirements.txt
+```
+
+Check the built image without networking or credentials:
+
+```bash
+docker run --rm -i --network none --entrypoint python grid-signals-demo:local < tests/demo_image_check.py
+```
+
+The same build and offline check run in CI. Refresh result bundles only when
+intentionally publishing newer results, then rebuild. No refresh or training is
+needed to deploy the saved historical release. See the
+[release review and owner handoff](demo-release.md) for the reviewed dates and
+Dokploy settings.
 
 The initial historical release needs only the web service. The target daily
 deployment adds a Prefect server and forecast runner on the same host, with

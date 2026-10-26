@@ -19,7 +19,6 @@ from grid_signals.app.snapshot import SnapshotError
 zone = st.session_state.selected_zone
 target = st.session_state.selected_target
 market = BY_CODE[zone]
-st.caption("GRID SIGNALS / PERFORMANCE")
 st.title("Evidence behind each model")
 st.write(
     f"**{market.name} · {TARGETS[target]}** · grouped scores from original evaluated intervals"

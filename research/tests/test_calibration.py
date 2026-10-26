@@ -6,6 +6,8 @@ capacity the model has the worse it gets. The first run of the leaderboard showe
 coverage at a nominal 80% for the boosted point model.
 """
 
+import itertools
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -132,9 +134,12 @@ def test_stratified_conformal_cannot_see_spread() -> None:
     test, raw_test = _heteroscedastic(60, seed=5)
     corrected = StratifiedCQR(LEVELS).fit(calib, raw).apply(test, raw_test)
     disagree = test.power_curve_model_std.to_numpy() > 2 / 3
-    assert metrics.coverage(
-        test.cf.to_numpy()[disagree], corrected[disagree], LEVELS, 0.80
-    ) < 0.72
+    assert (
+        metrics.coverage(
+            test.cf.to_numpy()[disagree], corrected[disagree], LEVELS, 0.80
+        )
+        < 0.72
+    )
 
 
 def test_spread_conformal_survives_a_missing_spread_column() -> None:
@@ -151,7 +156,7 @@ def test_day_blocks_partition_whole_days_in_order() -> None:
     blocks = splits.day_blocks(train, 4)
     assert sum(len(b) for b in blocks) == len(train)
     days = [set(train.loc[b, "delivery_day"]) for b in blocks]
-    for earlier, later in zip(days, days[1:], strict=False):
+    for earlier, later in itertools.pairwise(days):
         assert not earlier & later, "a day must not straddle two blocks"
         assert max(earlier) < min(later), "blocks must be contiguous and ordered"
 

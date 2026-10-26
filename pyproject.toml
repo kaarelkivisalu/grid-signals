@@ -77,6 +77,9 @@ pythonpath = ["research/src"]
 
 [tool.ruff]
 target-version = "py312"
+# Standalone learning notebooks are outside the forecast product. They move out
+# of this repository in milestone 2a; research product code remains checked.
+extend-exclude = ["notebooks"]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -140,6 +143,10 @@ ignore = [
 # PD010: `.pivot` is deliberate -- `.pivot_table` would silently average duplicate
 #        (valid_time, model) rows instead of raising, hiding a data bug.
 "research/src/**" = ["N803", "N806", "PD901", "PD011", "PD013", "PD010", "TRY003", "EM101", "EM102", "S311"]
+# Keep these evaluated files byte-for-byte identical to their model version
+# records. These three style suggestions do not affect correctness.
+"research/src/renewable_forecast/evaluation/splits.py" = ["RUF007"]
+"research/src/renewable_forecast/models/conformal.py" = ["PLR6104", "RUF031"]
 # Exploratory notebooks are not linted; anything promoted out of one lands in
 # research/src/ where full lint applies.
 "research/notebooks/**" = ["ALL"]

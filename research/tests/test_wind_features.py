@@ -144,4 +144,6 @@ def test_aggregate_never_turns_missing_clusters_into_calm() -> None:
     weights = pd.DataFrame({"point_id": ["a", "b"], "weight": [0.25, 0.75]})
     zonal = wind.aggregate(points, weights).set_index("valid_time")
     assert np.isnan(zonal.wind_speed_100m.iloc[0]), "no data must not read as calm"
-    assert zonal.wind_speed_100m.iloc[1] == 8.0, "weights renormalise over present clusters"
+    assert zonal.wind_speed_100m.iloc[1] == 8.0, (
+        "weights renormalise over present clusters"
+    )

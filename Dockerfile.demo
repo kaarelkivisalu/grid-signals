@@ -1,14 +1,21 @@
-FROM python:3.12-slim
+FROM python:3.12-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704 AS bundle
+
+WORKDIR /source
+COPY scripts/prepare_demo.py /source/scripts/prepare_demo.py
+COPY src/grid_signals/__init__.py /source/src/grid_signals/__init__.py
+COPY src/grid_signals/app/ /source/src/grid_signals/app/
+COPY .streamlit/config.toml /source/.streamlit/config.toml
+RUN python scripts/prepare_demo.py --output /prepared
+
+FROM python:3.12-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704
 
 WORKDIR /app
 COPY deploy/demo/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt \
+RUN pip install --no-cache-dir --require-hashes -r requirements.txt \
     && useradd --create-home --uid 10001 app
 
-COPY src/ /app/src/
-COPY .streamlit/config.toml /app/.streamlit/config.toml
+COPY --from=bundle /prepared/ /app/
 ENV PYTHONPATH=/app/src \
-    GRID_SIGNALS_DEMO_ONLY=1 \
     STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
 USER app
 EXPOSE 8501

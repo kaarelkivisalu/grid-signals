@@ -1,4 +1,4 @@
-"""Do the issue-time feature blocks earn their place? (roadmap D1, D2)
+"""Do the issue-time feature blocks earn their place? (roadmap D1, D2).
 
 An exact A/B, like `compare_meps`: every arm is the shipping quantile model on the same
 rows and folds, and the arms differ only in which feature blocks are appended.
@@ -68,8 +68,10 @@ def run(*, with_meps: bool = False, with_ifs: bool = False) -> pd.DataFrame:
             subset, development, {QuantileGBM.name: lambda: QuantileGBM(levels)}, cfg
         )
         quantiles = predictions[QuantileGBM.name]
-        rows.append({"arm": arm, "rows": "all", **metrics.summarise(actual, quantiles, levels)})
-        mask = context.valid_time.map(negative).fillna(False).to_numpy(dtype=bool)
+        rows.append(
+            {"arm": arm, "rows": "all", **metrics.summarise(actual, quantiles, levels)}
+        )
+        mask = context.valid_time.map(negative).fillna(value=False).to_numpy(dtype=bool)
         rows.append(
             {
                 "arm": arm,
@@ -130,7 +132,9 @@ def run_lagged_ifs() -> pd.DataFrame:
             }
         )
     overall = pd.DataFrame(rows)
-    overall.to_parquet(paths.INTERIM / "compare_lagged_ifs_overall.parquet", index=False)
+    overall.to_parquet(
+        paths.INTERIM / "compare_lagged_ifs_overall.parquet", index=False
+    )
     logger.info("\n%s", overall.round(4).to_string(index=False))
     return overall
 
@@ -154,12 +158,21 @@ def run_drop(columns: tuple[str, ...]) -> pd.DataFrame:
         raise ValueError(msg)
 
     rows = []
-    for arm, subset in (("base", frame), ("dropped", frame.drop(columns=list(columns)))):
+    for arm, subset in (
+        ("base", frame),
+        ("dropped", frame.drop(columns=list(columns))),
+    ):
         actual, context, predictions = evaluate.run_folds(
             subset, development, {QuantileGBM.name: lambda: QuantileGBM(levels)}, cfg
         )
         quantiles = predictions[QuantileGBM.name]
-        rows.append({"arm": arm, "season": "all", **metrics.summarise(actual, quantiles, levels)})
+        rows.append(
+            {
+                "arm": arm,
+                "season": "all",
+                **metrics.summarise(actual, quantiles, levels),
+            }
+        )
         for season in ("DJF", "MAM", "JJA", "SON"):
             mask = (context.season == season).to_numpy()
             rows.append(
@@ -180,7 +193,9 @@ def main() -> None:
     parser.add_argument("--meps", action="store_true")
     parser.add_argument("--ifs", action="store_true")
     parser.add_argument("--lagged-ifs", action="store_true")
-    parser.add_argument("--drop", nargs="*", help="A/B the matrix without these columns")
+    parser.add_argument(
+        "--drop", nargs="*", help="A/B the matrix without these columns"
+    )
     args = parser.parse_args()
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"

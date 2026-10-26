@@ -10,16 +10,29 @@ regional bidding zones**: SE1–SE4, NO1–NO5, DK1–DK2, FI, EE, LV and LT. On
 comes first; offshore follows separately. This is the roadmap destination, not a
 claim of current forecast coverage.
 
-**Next:** prepare the historical demo for public release, leading with SE3 wind
+**Current milestone:** prepare the historical demo for public release, leading with SE3 wind
 and retaining German forecasts as supporting case studies. Then expose daily
 publication and performance through a consolidated forecasting product, transfer
 wind to SE4 and improve the demo one feature at a time. The target uses one package
-and CLI across local use and deployment, Prefect orchestration and an
+and CLI across local use and deployment, Prefect orchestration and a
 website that reads saved forecast results. The original PostgreSQL/briefing/chat application will
 be retired; standalone exercises move elsewhere. See the authoritative [roadmap](ROADMAP.md) and
 [whole-project assessment and implementation plan](docs/implementation-plan.md).
 
 ## Run the local demo
+
+The standalone image installs only the web dependencies and needs no credentials:
+
+```bash
+docker build -f Dockerfile.demo -t grid-signals-demo:local .
+docker run --rm -p 127.0.0.1:8502:8501 grid-signals-demo:local
+```
+
+Open **http://localhost:8502**. The first view is **SE3 onshore wind on
+2026-09-19**, with the evaluated model, physical reference, uncertainty and actuals.
+Use the sidebar to inspect German solar, load and price case studies.
+
+For development with the existing full project environment:
 
 ```bash
 uv sync --frozen
@@ -46,9 +59,10 @@ always-on reliability has yet to be demonstrated. LEAR leads the German price be
 is the forward publication baseline; its price intervals still under-cover on holdout.
 Custom DE-LU load is implemented; its first price-input experiment shows no resolved gain.
 Custom German wind and residual-load forecasts are deferred; observed residual
-load is available where all components exist. The current UI still defaults to
-DE-LU; changing the presentation to lead with SE3 is part of the next milestone.
-Public hosting follows local review, with deployment handled by the project owner.
+load is available where all components exist. The website exposes only the four
+forecast views; the old database and chat tools are outside the demo.
+Public hosting is handled by the project owner. See the
+[local release review and deployment handoff](docs/demo-release.md).
 
 See the [historical direction and commercial comparison](docs/project-direction-review.md),
 [research results](research/README.md) and [operations guide](docs/operations.md).

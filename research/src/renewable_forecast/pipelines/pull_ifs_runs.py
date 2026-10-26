@@ -30,9 +30,7 @@ def main() -> None:
     )
     logging.getLogger("httpx").setLevel(logging.WARNING)
     paths.ensure_data_dirs()
-    written = ifs_runs.pull(
-        sites.build(args.zone), args.start, args.end, args.run_hour
-    )
+    written = ifs_runs.pull(sites.build(args.zone), args.start, args.end, args.run_hour)
     logging.getLogger(__name__).info("done: %s runs written", written)
 
 

@@ -20,10 +20,12 @@ market = BY_CODE[zone]
 day = st.session_state.delivery_date.isoformat()
 target = st.session_state.selected_target
 model = st.session_state.selected_model
-st.caption("GRID SIGNALS / MARKET EXPLORER")
 st.title(market.name)
 st.write(
     f"**{zone.replace('_', '-')} · delivery {day}** · {market.timezone} · day-ahead forecasting"
+)
+st.write(
+    "Nordic/Baltic day-ahead forecasting starts with SE3 wind. German solar, load and price case studies are available in the sidebar."
 )
 if zone not in manifest["zones"]:
     st.info(
@@ -44,11 +46,102 @@ curves = {
     key: choose_curve(forecasts, key, day, model if key == target else value)
     for key, value in SELECTED_MODELS.items()
 }
-latest_date = manifest["zones"][zone]["dates"][-1]
-if day < latest_date:
-    st.caption(
-        "Historical comparison · backtest forecasts are replays, not proof of on-time publication."
+st.caption(
+    "Historical demo · saved forecasts and actuals. Replays do not prove on-time publication; daily updates are not yet an always-on service."
+)
+st.subheader(f"{TARGETS[target]} · forecast detail")
+rows = curves.get(target, pd.DataFrame())
+if rows.empty:
+    available = (
+        manifest["zones"][zone].get("targets", {}).get(target, {}).get("dates", [])
     )
+    st.info(
+        f"No {TARGETS[target].lower()} model output for {zone.replace('_', '-')} on {day}."
+        + (
+            f" Available forecast dates: {available[0]} to {available[-1]}, with gaps."
+            if available
+            else " This target has not been modelled in this area."
+        )
+    )
+else:
+    if rows.split.iloc[0] == "Published archive":
+        all_rows = forecasts[
+            (forecasts.target == target)
+            & (forecasts.model == model)
+            & (forecasts.delivery_date == day)
+            & (forecasts.split == "Published archive")
+        ]
+        ids = all_rows.sort_values("published_at").forecast_id.unique().tolist()
+        chosen = st.selectbox(
+            "Forecast issue / revision",
+            ids,
+            index=len(ids) - 1,
+            format_func=lambda key: (
+                f"{all_rows[all_rows.forecast_id == key].published_at.iloc[0]} · {all_rows[all_rows.forecast_id == key].publication_status.iloc[0]} · {str(key)[:8]}"
+            ),
+        )
+        rows = all_rows[all_rows.forecast_id == chosen].sort_values("valid_time")
+        first = rows.iloc[0]
+        st.info(
+            f"Publication status: {first.publication_status}. Information cutoff {first.information_cutoff_at}; published {first.published_at}. This view does not count late forecasts as an on-time record."
+        )
+        if target in frame:
+            rows = rows.copy()
+            rows["actual"] = (
+                frame[target].reindex(pd.DatetimeIndex(rows.valid_time)).to_numpy()
+            )
+    else:
+        st.caption(
+            f"{rows.split.iloc[0]} · {len(rows)} delivery intervals · information cutoff 09:00 UTC on the preceding day. Original 19-quantile scores are available in Performance."
+        )
+    others = [
+        name
+        for name in forecasts[
+            (forecasts.target == target)
+            & (forecasts.delivery_date == day)
+            & (forecasts.split == rows.split.iloc[0])
+        ].model.unique()
+        if name != model
+    ]
+    comparison = st.selectbox(
+        "Compare median with",
+        [None, *others],
+        index=(
+            [None, *others].index("physical_power_curve")
+            if "physical_power_curve" in others
+            else 0
+        ),
+        format_func=lambda key: model_name(key) if key else "None",
+    )
+    reference = choose_curve(forecasts, target, day, comparison) if comparison else None
+    st.plotly_chart(
+        forecast_chart(rows, market.timezone, target, reference),
+        width="stretch",
+        key="forecast_detail",
+    )
+    if rows.actual.notna().any():
+        st.plotly_chart(
+            error_chart(rows, market.timezone, target),
+            width="stretch",
+            key="forecast_errors",
+        )
+        st.caption(
+            "Positive error = overprediction. Solar performance scores use daylight only; this plot includes the whole delivery day."
+        )
+    if model in CATALOGUE:
+        recipe, features, uncertainty, resolution, limits = CATALOGUE[model]
+        with st.expander("Model & input features", expanded=True):
+            st.write(f"**{model_name(model)}** · {recipe}")
+            for feature in features:
+                st.markdown(f"- {feature}")
+            st.caption(f"{uncertainty} {resolution} {limits}")
+    st.download_button(
+        "Download this forecast · CSV",
+        rows.to_csv(index=False).encode(),
+        file_name=f"{zone}-{target}-{day}.csv",
+        mime="text/csv",
+    )
+
 metrics = st.columns(3)
 if "price" in frame and frame.price.notna().any():
     metrics[0].metric("Mean spot price", f"€{frame.price.mean():.2f}/MWh")
@@ -131,94 +224,6 @@ with st.expander(
     )
     st.caption(
         "Market curves use the latest cached ENTSO-E observations. Forecast detail uses each backtest's original targets; revisions can differ. No page load contacts an energy API."
-    )
-
-st.subheader(f"{TARGETS[target]} · forecast detail")
-rows = curves.get(target, pd.DataFrame())
-if rows.empty:
-    available = (
-        manifest["zones"][zone].get("targets", {}).get(target, {}).get("dates", [])
-    )
-    st.info(
-        f"No {TARGETS[target].lower()} model output for {zone.replace('_', '-')} on {day}."
-        + (
-            f" Available forecast dates: {available[0]} to {available[-1]}, with gaps."
-            if available
-            else " This target has not been modelled in this area."
-        )
-    )
-else:
-    if rows.split.iloc[0] == "Published archive":
-        all_rows = forecasts[
-            (forecasts.target == target)
-            & (forecasts.model == model)
-            & (forecasts.delivery_date == day)
-            & (forecasts.split == "Published archive")
-        ]
-        ids = all_rows.sort_values("published_at").forecast_id.unique().tolist()
-        chosen = st.selectbox(
-            "Forecast issue / revision",
-            ids,
-            index=len(ids) - 1,
-            format_func=lambda key: (
-                f"{all_rows[all_rows.forecast_id == key].published_at.iloc[0]} · {all_rows[all_rows.forecast_id == key].publication_status.iloc[0]} · {str(key)[:8]}"
-            ),
-        )
-        rows = all_rows[all_rows.forecast_id == chosen].sort_values("valid_time")
-        first = rows.iloc[0]
-        st.info(
-            f"Publication status: {first.publication_status}. Information cutoff {first.information_cutoff_at}; published {first.published_at}. This view does not count late forecasts as an on-time record."
-        )
-        if target in frame:
-            rows = rows.copy()
-            rows["actual"] = (
-                frame[target].reindex(pd.DatetimeIndex(rows.valid_time)).to_numpy()
-            )
-    else:
-        st.caption(
-            f"{rows.split.iloc[0]} · {len(rows)} delivery intervals · information cutoff 09:00 UTC on the preceding day. Original 19-quantile scores are available in Performance."
-        )
-    others = [
-        name
-        for name in forecasts[
-            (forecasts.target == target)
-            & (forecasts.delivery_date == day)
-            & (forecasts.split == rows.split.iloc[0])
-        ].model.unique()
-        if name != model
-    ]
-    comparison = st.selectbox(
-        "Compare median with",
-        [None, *others],
-        format_func=lambda key: model_name(key) if key else "None",
-    )
-    reference = choose_curve(forecasts, target, day, comparison) if comparison else None
-    st.plotly_chart(
-        forecast_chart(rows, market.timezone, target, reference),
-        width="stretch",
-        key="forecast_detail",
-    )
-    if rows.actual.notna().any():
-        st.plotly_chart(
-            error_chart(rows, market.timezone, target),
-            width="stretch",
-            key="forecast_errors",
-        )
-        st.caption(
-            "Positive error = overprediction. Solar performance scores use daylight only; this plot includes the whole delivery day."
-        )
-    if model in CATALOGUE:
-        recipe, features, uncertainty, resolution, limits = CATALOGUE[model]
-        with st.expander("Model & input features", expanded=True):
-            st.write(f"**{model_name(model)}** · {recipe}")
-            for feature in features:
-                st.markdown(f"- {feature}")
-            st.caption(f"{uncertainty} {resolution} {limits}")
-    st.download_button(
-        "Download this forecast · CSV",
-        rows.to_csv(index=False).encode(),
-        file_name=f"{zone}-{target}-{day}.csv",
-        mime="text/csv",
     )
 
 if all(key in frame for key in ["residual_load", "price", "solar"]):

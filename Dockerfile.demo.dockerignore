@@ -1,6 +1,11 @@
 **
 !src/
-!src/**
+!src/grid_signals/
+!src/grid_signals/__init__.py
+!src/grid_signals/app/
+!src/grid_signals/app/**
+!scripts/
+!scripts/prepare_demo.py
 !deploy/
 !deploy/demo/
 !deploy/demo/requirements.txt

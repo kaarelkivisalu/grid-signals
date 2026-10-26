@@ -1,6 +1,5 @@
 """Grid Signals — one market/date context across the research portfolio."""
 
-import os
 from datetime import date
 
 import streamlit as st
@@ -10,9 +9,7 @@ from grid_signals.app.markets import BY_CODE, MARKETS, SELECTED_MODELS, TARGETS
 from grid_signals.app.model_catalogue import model_name
 from grid_signals.app.snapshot import SnapshotError
 
-st.set_page_config(
-    page_title="Grid Signals · European power", page_icon="⚡", layout="wide"
-)
+st.set_page_config(page_title="Grid Signals · Nordic/Baltic forecasts", layout="wide")
 st.markdown(
     """<style>
     .stApp { background: #f8faf9; }
@@ -22,13 +19,15 @@ st.markdown(
     [data-testid="stSidebar"] { background: #edf3f0; }
     [data-testid="stMetricValue"] { color: #183c3b; }
     [data-testid="stMetricLabel"] { color: #536963; }
-    [data-testid="stCaptionContainer"] { color: #60736e; }
+    [data-testid="stCaptionContainer"] { opacity: 1; }
+    [data-testid="stCaptionContainer"],
+    [data-testid="stCaptionContainer"] p { color: #536963; }
     [data-testid="stVerticalBlockBorderWrapper"] { border-radius: 12px; }
     </style>""",
     unsafe_allow_html=True,
 )
 st.sidebar.title("Grid Signals")
-st.sidebar.caption("EUROPEAN POWER · FORECAST RESEARCH")
+st.sidebar.caption("Nordic/Baltic power forecasts · historical demo")
 try:
     manifest = load_manifest()
 except SnapshotError:
@@ -38,9 +37,8 @@ except SnapshotError:
     st.stop()
 st.session_state.explorer_manifest = manifest
 
-demo_only = os.environ.get("GRID_SIGNALS_DEMO_ONLY") == "1"
 navigation = {
-    "Research": [
+    "Forecasts": [
         st.Page(
             "pages/overview.py",
             title="Market explorer",
@@ -54,16 +52,6 @@ navigation = {
         st.Page("pages/methods.py", title="Models & data", icon=":material/science:"),
     ]
 }
-if not demo_only and st.session_state.get("show_market_tools", False):
-    navigation["Market tools"] = [
-        st.Page(
-            "pages/3_dashboard.py",
-            title="Market dashboard",
-            icon=":material/bar_chart:",
-        ),
-        st.Page("pages/1_briefings.py", title="Briefings", icon=":material/article:"),
-        st.Page("pages/2_chat.py", title="Chat", icon=":material/chat:"),
-    ]
 pages = st.navigation(navigation)
 
 if "pending_zone" in st.session_state:
@@ -71,7 +59,7 @@ if "pending_zone" in st.session_state:
 if "pending_date" in st.session_state:
     st.session_state.delivery_date = st.session_state.pop("pending_date")
 if "selected_zone" not in st.session_state:
-    st.session_state.selected_zone = "DE_LU"
+    st.session_state.selected_zone = "SE3"
 st.sidebar.selectbox(
     "Market area",
     [m.code for m in MARKETS],
@@ -100,6 +88,8 @@ joint_day = suggested_backtest_day(info)
 if joint_day and st.sidebar.button("Latest joint backtest", width="stretch"):
     st.session_state.pending_date = date.fromisoformat(joint_day)
     st.rerun()
+if "selected_target" not in st.session_state:
+    st.session_state.selected_target = "wind_onshore"
 st.sidebar.selectbox(
     "Forecast target", list(TARGETS), format_func=TARGETS.get, key="selected_target"
 )
@@ -125,12 +115,6 @@ st.sidebar.selectbox(
 st.sidebar.caption(
     "Market, target and model stay selected across views. Delivery date controls the explorer; Performance has a scored date range."
 )
-if not demo_only:
-    with st.sidebar.expander("More tools"):
-        st.toggle("Show market tools", value=False, key="show_market_tools")
-        st.caption(
-            "The original operational tools require their database and API setup."
-        )
 st.sidebar.divider()
 st.sidebar.caption(
     f"Data bundle: {manifest['exported_at'][:10]} · historical replay + publication archive"

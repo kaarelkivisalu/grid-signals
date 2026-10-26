@@ -215,13 +215,21 @@ an indefinite legacy mode. Do not add new modelling tasks while bringing the cod
   work. Assess the existing approximately 30-consecutive-issue reliability gate.
 - Focus: one package/CLI, one production scheduler, no required original market
   database, duplicate product navigation, obsolete scaffolds or standalone exercises.
-- This assessment is based on repository code and local saved files. The full test
+- The original assessment is based on repository code and local saved files. The full test
   suite run before committing returned **394 passed, 1 failed and 2 skipped**.
   The existing failure is in `test_latest_publication_has_actual_status_and_can_return_to_shared_backtest`:
   it expects the newest forecast to be late, which changes when saved results are
   updated. Ruff also reports 21 existing lint issues and 6 files needing formatting.
-  These checks record the current state; this review does not fix application
+  These checks record the pre-release state; that review did not fix application
   code, train models, change infrastructure or remove components.
+
+Milestone 1 local release preparation on 2026-10-26 resolves that changing-status
+test and the release lint/format checks: **401 passed, 2 skipped**. The website now
+leads with SE3 wind, and the standalone image includes only the forecast pages and
+current checked result files. Offline image tests and local desktop/mobile review
+pass. See the [release review and owner handoff](demo-release.md); deployment and
+public HTTPS verification remain open. The package/CLI and workflow migration
+above remain milestone 2 work.
 
 The observed October 23 SE3 record was 6/8 on-time issues with two timeout failures.
 That is useful initial evidence, not a demonstrated reliable service. Existing

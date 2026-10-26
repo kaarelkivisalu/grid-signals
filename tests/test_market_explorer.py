@@ -11,6 +11,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from grid_signals.app.explorer_data import (
+    choose_curve,
     complete_hourly,
     group_labels,
     grouped_scores,
@@ -19,6 +20,7 @@ from grid_signals.app.explorer_data import (
     market_quarters,
     matched_rows,
     read_market,
+    suggested_backtest_day,
 )
 from grid_signals.app.markets import BY_CODE
 
@@ -36,6 +38,7 @@ def test_shared_selection_survives_navigation_without_operational_services(
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     app = AppTest.from_file(str(APP), default_timeout=20).run()
     assert not app.exception
+    app.selectbox(key="selected_zone").set_value("DE_LU").run()
     app.date_input(key="delivery_date").set_value(date(2026, 9, 2)).run()
     app.selectbox(key="selected_target").set_value("solar").run()
     assert not app.exception
@@ -62,7 +65,7 @@ def test_missing_date_and_unmodelled_area_are_explicit():
     app = AppTest.from_file(str(APP), default_timeout=20).run()
     app.date_input(key="delivery_date").set_value(date(2020, 1, 1)).run()
     assert not app.exception
-    assert any("No spot price model output" in info.value for info in app.info)
+    assert any("No onshore wind model output" in info.value for info in app.info)
     app.selectbox(key="selected_zone").set_value("FI").run()
     app.date_input(key="delivery_date").set_value(date(2026, 9, 19)).run()
     assert not app.exception
@@ -197,6 +200,8 @@ def test_full_portable_archive_matches_released_headlines_and_real_market_covera
 
 def test_selected_date_can_score_one_day_and_keeps_missing_days_explicit():
     app = AppTest.from_file(str(APP), default_timeout=20).run()
+    app.selectbox(key="selected_zone").set_value("DE_LU").run()
+    app.selectbox(key="selected_target").set_value("price").run()
     app.date_input(key="delivery_date").set_value(date(2026, 9, 13)).run()
     app.switch_page("pages/performance.py").run()
     next(
@@ -215,14 +220,51 @@ def test_selected_date_can_score_one_day_and_keeps_missing_days_explicit():
 
 
 def test_latest_publication_has_actual_status_and_can_return_to_shared_backtest():
+    manifest = load_manifest()
+    latest_day = manifest["zones"]["SE3"]["dates"][-1]
+    expected = choose_curve(
+        read_market(manifest, "SE3", "forecast"),
+        "wind_onshore",
+        latest_day,
+        "hourly_repeated",
+    ).iloc[0]
     app = AppTest.from_file(str(APP), default_timeout=20).run()
     next(
         button for button in app.button if button.label == "Latest forecast / data"
     ).click().run()
     assert not app.exception
-    assert any("Publication status: late" in info.value for info in app.info)
+    assert any(
+        f"Publication status: {expected.publication_status}." in info.value
+        and str(expected.published_at) in info.value
+        for info in app.info
+    )
     next(
         button for button in app.button if button.label == "Latest joint backtest"
     ).click().run()
     assert not app.exception
-    assert app.session_state["delivery_date"] == date(2026, 9, 19)
+    assert app.session_state["delivery_date"] == date.fromisoformat(
+        suggested_backtest_day(manifest["zones"]["SE3"])
+    )
+
+
+def test_demo_opens_on_scored_se3_wind_and_never_exposes_old_tools():
+    app = AppTest.from_file(str(APP), default_timeout=20)
+    app.session_state["show_market_tools"] = True
+    app.run()
+    assert not app.exception
+    assert app.session_state["selected_zone"] == "SE3"
+    assert app.session_state["selected_target"] == "wind_onshore"
+    assert app.session_state["selected_model"] == "hourly_repeated"
+    assert (
+        next(
+            item for item in app.selectbox if item.label == "Compare median with"
+        ).value
+        == "physical_power_curve"
+    )
+    assert any("Final holdout" in caption.value for caption in app.caption)
+    assert any(
+        button.label == "Download this forecast · CSV"
+        for button in app.get("download_button")
+    )
+    assert "More tools" not in [item.label for item in app.expander]
+    assert all(item.key != "show_market_tools" for item in app.toggle)

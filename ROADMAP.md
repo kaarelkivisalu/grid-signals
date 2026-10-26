@@ -67,22 +67,27 @@ documented; the code has not yet been combined or removed.
 This session establishes direction and documentation only. Application changes,
 new model experiments and deployment belong to later sessions.
 
-### 1. Publish the historical demo — next
+### 1. Publish the historical demo — local release prepared; deployment pending
 
 Reuse the existing Streamlit explorer, saved results and standalone demo image.
 Open on **SE3 onshore wind with a populated historical comparison**. Keep German
 case studies accessible and database-dependent tools outside the public demo.
 
-- [ ] Align the default selection and introductory copy with this direction.
-- [ ] Check that all result files are present; include only the versions listed in the current file index.
-- [ ] Resolve release checks, including the test that assumes the latest issue is late.
-- [ ] Confirm the release's commands, dependencies and result files against the
+- [x] Align the default selection and introductory copy with this direction.
+- [x] Check that all result files are present; include only the versions listed in the current file index.
+- [x] Resolve release checks, including the test that assumes the latest issue is late.
+- [x] Confirm the release's commands, dependencies and result files against the
   whole-project assessment; review uncommitted implementation into a reproducible revision.
-- [ ] Expose only the forecast product. Plan removal of old navigation and runtime
+- [x] Expose only the forecast product. Plan removal of old navigation and runtime
   dependencies without making all backend changes a demo-launch prerequisite.
-- [ ] Verify the standalone image without database access or API credentials.
-- [ ] Review the local demo, then hand deployment to the project owner.
+- [x] Verify the standalone image without database access or API credentials.
+- [x] Review the local demo, then hand deployment to the project owner.
 - [ ] Verify anonymous HTTPS access, desktop/mobile use and explicit historical dates.
+
+Local review completed 2026-10-26: 401 tests passed, 2 skipped; lint and formatting
+passed; the built image passed offline browsing checks and desktop/tablet/phone
+review. See the [release review and deployment handoff](docs/demo-release.md).
+The public-site acceptance check remains open until the owner deploys it.
 
 **Done when:** a visitor can inspect forecasts, evidence and methods on the public
 site even when forecast production is unavailable. Daily freshness is not a launch

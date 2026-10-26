@@ -12,7 +12,6 @@ zone = st.session_state.selected_zone
 target = st.session_state.selected_target
 info = manifest["zones"].get(zone, {})
 models = info.get("targets", {}).get(target, {}).get("models", [])
-st.caption("GRID SIGNALS / MODELS & DATA")
 st.title("What goes into the forecast")
 st.write(
     f"**{BY_CODE[zone].name} · {TARGETS[target]}** · model recipes and information boundaries"
@@ -41,7 +40,7 @@ st.markdown(
     "**Weather + fleet → wind / solar** · **temperature + calendar + load history → total load** · **load - wind - solar → residual load** · **fundamentals + market history → price**"
 )
 st.write(
-    "The current price baseline uses price history only. German solar and load models exist; custom German wind and a valid joint residual-load distribution are the next missing steps. Subtracting separate marginal quantiles does not produce residual-load quantiles: the components need matched scenarios or a dependence model."
+    "SE3 onshore wind leads the Nordic/Baltic work; transfer to SE4 is the next research step. German solar, load and price models remain supporting case studies. The current price baseline uses price history only. Custom German wind and residual-load forecasts are deferred. Subtracting separate marginal quantiles does not produce residual-load quantiles: the components need matched scenarios or a dependence model."
 )
 st.subheader("Which information was available?")
 st.write(
