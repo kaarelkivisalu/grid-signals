@@ -50,7 +50,18 @@ def test_overview_is_populated_and_sidebar_is_just_navigation(monkeypatch):
     assert not app.sidebar.date_input
     assert [item.value for item in app.sidebar.title] == ["Grid Signals"]
     assert [item.value for item in app.sidebar.caption] == ["Nordic/Baltic electricity"]
-    assert any("2026-09-19" in item.value for item in app.caption)
+    assert app.date_input(key="overview_day_SE3").value == date(2026, 9, 19)
+    assert not app.main.caption
+    assert not app.main.get("page_link")
+    assert [link.proto.label for link in app.sidebar.get("page_link")] == [
+        "Overview",
+        "Map",
+        "Prices",
+        "Wind",
+        "Solar",
+        "Models & data",
+        "Performance",
+    ]
     assert len(app.get("plotly_chart")) == 2
     for page in (
         "wind",
@@ -214,6 +225,17 @@ def test_map_links_every_sdac_area_and_keeps_the_full_matrix_visible():
     app.switch_page("pages/map.py").run()
     assert not app.exception
     assert len(app.table[0].value) == len(SDAC_MARKETS)
+    assert app.table[0].value.index[:5].tolist() == [
+        "[SE1](/?area=SE1)",
+        "[SE2](/?area=SE2)",
+        "[SE3](/?area=SE3)",
+        "[SE4](/?area=SE4)",
+        "[DE-LU](/?area=DE_LU)",
+    ]
+    assert app.table[0].value.index.get_loc("[DK1](/?area=DK1)") < app.table[
+        0
+    ].value.index.get_loc("[NO1](/?area=NO1)")
+
     assert not app.dataframe
     assert (
         app.table[0].value.loc["[SE3](/?area=SE3)", "Wind"]
@@ -419,7 +441,11 @@ def test_overview_area_selection_shows_observations_without_claiming_forecasts()
     assert not app.exception
     assert app.session_state["selected_zone"] == "EE"
     assert len(app.get("plotly_chart")) == 2
-    assert any("Observations only" in caption.value for caption in app.caption)
+    for chart in app.get("plotly_chart"):
+        assert all(
+            trace.get("meta", {}).get("kind") != "forecast"
+            for trace in json.loads(chart.proto.spec)["data"]
+        )
     app.button(key="market_overview_DE_LU").click().run()
     assert not app.exception
     for chart in app.get("plotly_chart"):
@@ -445,9 +471,11 @@ def test_overview_charts_use_common_units_and_one_forecast_per_product():
         observed, {"solar": curve}, "Europe/Berlin", ["load", "solar"]
     )
     assert len(combined.data) == 3
-    np.testing.assert_array_equal(combined.data[0].y, [4] * 4)
-    np.testing.assert_array_equal(combined.data[-1].y, [2] * 4)
-    assert combined.layout.yaxis.title.text == "GW"
+    np.testing.assert_array_equal(combined.data[0].y, [4000] * 4)
+    np.testing.assert_array_equal(combined.data[-1].y, [2000] * 4)
+    assert combined.layout.yaxis.title.text == "MW"
+    assert combined.layout.yaxis.hoverformat == ",.0f"
+    assert combined.layout.yaxis.tickformat == ",.0f"
     price = overview_chart(observed, {}, "Europe/Berlin", ["price"])
     assert price.layout.yaxis.title.text == "EUR/MWh"
     np.testing.assert_array_equal(price.data[0].y, [50] * 4)
@@ -484,3 +512,18 @@ def test_map_area_links_select_saved_data_or_a_clear_empty_area():
     assert not app.exception
     assert app.session_state["selected_zone"] == "NO1"
     assert any("No saved data for NO1" in message.value for message in app.info)
+
+
+@pytest.mark.parametrize("page", ["overview", "wind"])
+def test_clearing_delivery_calendar_keeps_the_selected_day(page):
+    app = AppTest.from_file(str(APP), default_timeout=30).run()
+    app.switch_page(f"pages/{page}.py").run()
+    calendar = next(item for item in app.date_input if item.label == "Delivery date")
+    calendar.set_value(date(2026, 9, 17)).run()
+    key = calendar.key
+    app.date_input(key=key).set_value(None).run()
+    assert not app.exception
+    assert app.date_input(key=key).value == date(2026, 9, 17)
+    assert app.session_state["delivery_date"] == date(2026, 9, 17)
+    app.run()
+    assert not app.exception

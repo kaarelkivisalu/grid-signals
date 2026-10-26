@@ -55,7 +55,7 @@ class DemoReleaseTests(unittest.TestCase):
         assert app.session_state["selected_target"] == "wind_onshore"
         assert not app.sidebar.selectbox
         assert not app.sidebar.date_input
-        assert any("2026-09-19" in caption.value for caption in app.caption)
+        assert app.session_state["delivery_date"].isoformat() == "2026-09-19"
         for page in (
             "wind",
             "solar",

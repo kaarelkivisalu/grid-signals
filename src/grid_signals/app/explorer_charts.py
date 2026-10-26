@@ -67,12 +67,11 @@ def overview_chart(
     for product in products:
         label = LABELS[product]
         color = COLORS[product]
-        scale = 1 if price else 1000
         if product in observed and observed[product].notna().any():
             figure.add_trace(
                 go.Scatter(
                     x=observed.index,
-                    y=observed[product] / scale,
+                    y=observed[product],
                     name=f"{label} · actual",
                     legendgroup=product,
                     line={"color": color, "width": 2},
@@ -85,7 +84,7 @@ def overview_chart(
             figure.add_trace(
                 go.Scatter(
                     x=curve.valid_time,
-                    y=curve["q0.50"] / scale,
+                    y=curve["q0.50"],
                     name=f"{label} · forecast",
                     legendgroup=product,
                     line={"color": color, "width": 2.5, "dash": "dash"},
@@ -99,7 +98,11 @@ def overview_chart(
     style(figure, 310 if price else 380)
     local_axis(figure, observed.index, timezone)
     figure.update_xaxes(title_text=None, showgrid=True, gridcolor="#e4e8e8")
-    figure.update_yaxes(title_text="EUR/MWh" if price else "GW")
+    figure.update_yaxes(
+        title_text="EUR/MWh" if price else "MW",
+        tickformat=None if price else ",.0f",
+        hoverformat=".2f" if price else ",.0f",
+    )
     figure.update_layout(
         margin={"l": 12, "r": 12, "t": 8, "b": 100},
         legend={"orientation": "h", "y": -0.25, "x": 0},
@@ -183,7 +186,8 @@ def forecast_chart(
                 y=aligned["q0.50"],
                 name="Reference",
                 hovertemplate=model_name(comparison.model.iloc[0])
-                + ": %{y:.2f}<extra></extra>",
+                + (": %{y:.2f}" if target == "price" else ": %{y:,.0f} MW")
+                + "<extra></extra>",
                 line={"color": "#85916c", "dash": "dot"},
                 legendrank=30,
             )
@@ -221,6 +225,8 @@ def forecast_chart(
             col=1,
         )
         figure.update_xaxes(title_text=None, showticklabels=False, row=1, col=1)
+    if target != "price":
+        figure.update_yaxes(tickformat=",.0f", hoverformat=",.0f")
     return figure
 
 
@@ -269,13 +275,14 @@ def coverage_map(manifest: dict) -> str:
     west, north, scale = -12, float(_mercator(72)), 8.5
     parts = [
         (
-            '<svg class="market-map" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 650" '
+            '<svg class="market-map" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 600" '
             'role="group" aria-label="SDAC market areas; open an area to view its data" '
-            'style="display:block;width:100%;height:auto;max-height:650px">'
+            'style="display:block;width:100%;height:auto;max-height:780px">'
         ),
         (
             "<style>.market-map a:hover path,.market-map a:focus path{stroke:#183c3b;stroke-width:2} "
-            ".market-map text{font:10px Arial,sans-serif;fill:#24483f} "
+            ".market-map a,.market-map text{text-decoration:none!important} "
+            ".market-map text{font:11px Arial,sans-serif;fill:#24483f} "
             ".market-map path{stroke:#6e8481;stroke-width:.7;vector-effect:non-scaling-stroke}</style>"
         ),
     ]

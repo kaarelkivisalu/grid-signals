@@ -119,19 +119,46 @@ def delivery_day(days: list[str], key: str) -> str:
     """A compact calendar with navigation between saved delivery days."""
     available = sorted(date.fromisoformat(day) for day in days)
     current = st.session_state.delivery_date
-    selected = st.session_state.get(
-        key, current if current in available else available[-1]
-    )
+    selected = st.session_state.get(key) or current
+    if not isinstance(selected, date):
+        selected = available[-1]
     if not available[0] <= selected <= available[-1]:
         selected = available[-1]
     st.session_state[key] = selected
     before = [day for day in available if day < selected]
     after = [day for day in available if day > selected]
+    st.markdown(
+        """<style>
+        .st-key-delivery-day-control {
+            border: 1px solid #b8c4c4; border-radius: 3px;
+        }
+        .st-key-delivery-day-control:focus-within {
+            outline: 2px solid #147d77; outline-offset: 2px;
+        }
+        .st-key-delivery-day-control [data-testid="stButton"] button {
+            border: 0; border-radius: 0; min-height: 2.5rem; padding: 0;
+        }
+        .st-key-delivery-day-control [data-testid="stButton"] p {
+            position: absolute; width: 1px; height: 1px; padding: 0;
+            margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+        }
+        .st-key-delivery-day-control [data-baseweb="input"] {
+            border: 0; border-radius: 0;
+        }
+        </style>""",
+        unsafe_allow_html=True,
+    )
     with st.container(
-        horizontal=True, width="content", vertical_alignment="bottom", gap="small"
+        horizontal=True,
+        width="content",
+        vertical_alignment="center",
+        gap=None,
+        key="delivery-day-control",
     ):
         st.button(
-            "Previous",
+            "Previous day",
+            icon=":material/chevron_left:",
+            width=36,
             key=f"previous_{key}",
             disabled=not before,
             help="Previous saved day",
@@ -141,14 +168,16 @@ def delivery_day(days: list[str], key: str) -> str:
         with st.container(width=160):
             selected = st.date_input(
                 "Delivery date",
-                value=None,
                 min_value=available[0],
                 max_value=available[-1],
                 key=key,
                 format="YYYY-MM-DD",
+                label_visibility="collapsed",
             )
         st.button(
-            "Next",
+            "Next day",
+            icon=":material/chevron_right:",
+            width=36,
             key=f"next_{key}",
             disabled=not after,
             help="Next saved day",
@@ -235,7 +264,7 @@ def render_forecast(target: str) -> None:
     day = delivery_day(days, f"forecast_day_{zone}_{target}_{scope}_{model}")
     if day not in days:
         st.info(
-            "No saved forecast for this day. Use Previous or Next to find a saved result."
+            "No saved forecast for this day. Use the arrows to find a saved result."
         )
         st.stop()
     scope_label = {

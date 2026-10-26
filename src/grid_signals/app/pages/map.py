@@ -11,7 +11,17 @@ st.title("Map")
 st.markdown(coverage_map(manifest), unsafe_allow_html=True)
 st.subheader("Availability")
 rows = []
-for group, codes in MARKET_GROUPS.items():
+
+
+def group_priority(group):
+    areas = [manifest["zones"].get(code, {}) for code in group[1]]
+    return (
+        not any(area.get("targets") for area in areas),
+        not any(area.get("observations") for area in areas),
+    )
+
+
+for group, codes in sorted(MARKET_GROUPS.items(), key=group_priority):
     for code in codes:
         info = manifest["zones"].get(code, {})
         targets = info.get("targets", {})
@@ -57,7 +67,7 @@ st.markdown(
     .st-key-market-matrix table { width: 100%; table-layout: fixed; }
     .st-key-market-matrix a { color: inherit; text-underline-offset: .15em; }
     .st-key-market-matrix th, .st-key-market-matrix td {
-        padding: .45rem .35rem; overflow-wrap: anywhere;
+        padding: .2rem .35rem; overflow-wrap: anywhere;
     }
     @media (max-width: 600px) {
         .st-key-market-matrix th, .st-key-market-matrix td,
@@ -67,7 +77,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 matrix = pd.DataFrame(rows).drop(columns="Region").set_index("Area")
-with st.container(key="market-matrix"):
+with st.container(key="market-matrix", width=640):
     st.table(matrix.style.map(status_style), border="horizontal")
 st.markdown(
     "[Market boundaries: entsoe-py](https://github.com/EnergieID/entsoe-py/tree/master/entsoe/geo) "

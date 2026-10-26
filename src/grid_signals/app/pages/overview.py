@@ -38,7 +38,6 @@ days = (
 if not forecasts.empty:
     days.update(forecasts.delivery_date)
 day = delivery_day(list(days), f"overview_day_{zone}")
-st.caption(f"{zone.replace('_', '-')} · {market.name} · {day} · Historical data")
 frame = market_day(observed, day, market.timezone)
 curves = {}
 for target, model in SELECTED_MODELS.items():
@@ -69,15 +68,3 @@ for title, products, key in (
         key=key,
         config={"displayModeBar": False},
     )
-if curves:
-    st.caption(
-        "Forecasts: "
-        + " · ".join(
-            f"{target.replace('_onshore', '').replace('_', ' ').title()} ({curve.split.iloc[0].replace('Final holdout', 'final evaluation').lower()})"
-            for target, curve in curves.items()
-        )
-        + ". Solid lines: observations. Dashed lines: forecasts."
-    )
-else:
-    st.caption("Observations only. No evaluated forecasts for this area and date.")
-st.page_link("pages/load.py", label="German electricity demand case study")

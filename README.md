@@ -59,8 +59,9 @@ and EE/LV/LT together. Country names are available on hover. Selectors show the
 regional project areas plus other areas with saved data; Map shows every SDAC area.
 Unavailable areas are greyed out for each page. Controls are visible directly;
 there is no separate Details mode.
-Delivery dates use a compact calendar with Previous/Next buttons that step
-between saved days. A date without a saved forecast shows an empty state.
+Delivery dates use one compact control: a calendar between two arrow buttons
+that step between saved days. A date without a saved forecast shows an empty
+state. Fundamentals use MW, with labels and tooltips rounded to whole MW.
 
 Observations cover **11 areas**. Evaluated custom forecasts cover **DE-LU
 solar/load/price and SE3 onshore wind**; imported data alone is not forecast skill.

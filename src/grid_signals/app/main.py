@@ -52,15 +52,12 @@ st.session_state.setdefault("selected_target", "wind_onshore")
 st.session_state.setdefault("selected_model", "hourly_repeated")
 st.session_state.setdefault("delivery_date", date(2026, 9, 19))
 
-links = [
-    ("overview", "Overview"),
-    ("wind", "Wind"),
-    ("solar", "Solar"),
-    ("price", "Prices"),
-    ("performance", "Performance"),
-    ("map", "Map"),
-    ("methods", "Models & data"),
-]
+link_groups = (
+    (("overview", "Overview"), ("map", "Map")),
+    (("price", "Prices"), ("wind", "Wind"), ("solar", "Solar")),
+    (("methods", "Models & data"), ("performance", "Performance")),
+)
+links = [link for group in link_groups for link in group]
 pages = st.navigation(
     [
         st.Page(f"pages/{path}.py", title=label, default=path == "overview")
@@ -72,8 +69,11 @@ pages = st.navigation(
 with st.sidebar:
     st.title("Grid Signals")
     st.caption("Nordic/Baltic electricity")
-    for path, label in links:
-        st.page_link(f"pages/{path}.py", label=label, width="stretch")
+    with st.container(gap="large", key="sidebar-navigation"):
+        for index, group in enumerate(link_groups):
+            with st.container(gap=None, key=f"navigation-{index}"):
+                for path, label in group:
+                    st.page_link(f"pages/{path}.py", label=label, width="stretch")
     st.divider()
     st.markdown(
         '<a class="github-link" href="https://github.com/kaarelkivisalu/grid-signals" '

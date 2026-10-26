@@ -146,9 +146,11 @@ needed to deploy the saved historical release.
 Overview opens on **SE3, 2026-09-19** with a price graph and a combined fundamentals
 graph. Area and date controls are visible. The saved selected model supplies at
 most one forecast per product; products without a forecast show observations
-only. Price uses EUR/MWh and the combined wind, solar and demand graph uses GW.
-The sidebar links to Overview, Wind, Solar, Prices, Performance, Map and Models &
-data. Area choices group country zones and nearby single-area markets, with
+only. Price uses EUR/MWh; fundamentals use MW with whole-MW axis labels and
+tooltips. Overview omits repeated selection captions and the demand case-study
+link; demand remains a separate page linked from Map. The sidebar has three
+groups: Overview/Map, Prices/Wind/Solar, and Models & data/Performance.
+Area choices group country zones and nearby single-area markets, with
 EE/LV/LT together. Buttons join edge to edge with square corners, small gaps
 between groups and no country headings. Unsupported choices are greyed out for
 each page.
@@ -156,10 +158,14 @@ each page.
 Every page has one view, with its controls directly available and no Details
 switch. Product pages retain aligned forecast/error panels and CSV downloads.
 Performance exposes period and diagnostic controls; Models & data shows inputs,
-fitting rules and limits. Delivery dates use a 160 px calendar field and Previous/
-Next buttons that move between saved days; missing dates show an explicit empty
-state. Map keeps all 39 SDAC areas visible and displays a full colour-coded table
-that scrolls with the page. Areas link to Overview, evaluated cells to product
+fitting rules and limits. Delivery dates use a 160 px calendar field joined to
+two arrow buttons that move between saved days; missing dates show an explicit
+empty state. The clear control is disabled; an empty value sent by an older
+browser restores the last selected day before date-range checks. Map keeps all
+39 SDAC areas visible in a larger map with plain labels. Its compact table puts
+groups with evaluated forecasts first, followed by groups with observations,
+then unavailable groups. All rows scroll with the page.
+Areas link to Overview, evaluated cells to product
 pages, and observation-only cells to Overview. Unavailable cells have no data link.
 Forecast shading uses saved quantiles, not ensemble scenarios.
 
@@ -171,13 +177,14 @@ current forecasts or reliable daily updates. Original evaluated results, model
 version records and their source files are unchanged.
 
 The 2026-10-26 portfolio checks passed: **407 tests, 2 skipped** before the latest
-UI revisions. The grouped-area and Overview revision passed **45 focused tests**, Ruff lint and
+UI revisions. The calendar and layout revision passed **47 focused tests**, Ruff lint and
 formatting, two offline image checks and desktop/tablet/phone browser review at
 1440, 820 and 390 px. Navigation and CSV downloads work without browser errors,
 external requests or horizontal page overflow. Tests cover grouped choices,
 one forecast per product, observation-only areas, all map links, the full zone
-table, calendar navigation across missing days, preserved selections and aligned
-error values. The publication-status test checks the selected issue.
+table, calendar navigation across missing days, cleared-date recovery on Overview
+and Wind, preserved selections and aligned error values. The publication-status
+test checks the selected issue.
 Existing evaluated result files and model code were not changed.
 
 Ruff excludes standalone learning notebooks until their move in milestone 2a.
