@@ -85,6 +85,11 @@ file index (`manifest.json`) changes last, so a failed refresh leaves the previo
 Old generations can be removed when no running reader needs them. The web image
 contains the exported result files, not the raw cache.
 
+Generated Parquet exports are ignored by Git; the files already committed remain
+tracked. When updating the bundled demo, commit the updated file index together
+with its referenced result files. Use `git add -f` for newly generated files listed
+in that index, rather than adding every older export in the directory.
+
 Additional market observations are a bounded preview, separate from forecast inputs:
 
 ```bash

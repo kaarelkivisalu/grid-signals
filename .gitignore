@@ -11,3 +11,7 @@ briefings/
 !.env.example
 research/mlruns/
 research/runs/
+
+# Generated demo exports. Current demo files are already tracked; explicitly add
+# new files referenced by the demo's file index when updating the bundled results.
+src/grid_signals/app/assets/explorer/*.parquet
