@@ -1,10 +1,11 @@
-"""Grid Signals: quick portfolio browsing with optional forecast detail."""
+"""Grid Signals: electricity forecasts, fundamentals and model evidence."""
 
 from datetime import date
 
 import streamlit as st
 
 from grid_signals.app.explorer_data import load_manifest
+from grid_signals.app.markets import SDAC_MARKETS
 from grid_signals.app.snapshot import SnapshotError
 
 st.set_page_config(page_title="Grid Signals · Electricity forecasts", layout="wide")
@@ -40,6 +41,12 @@ except SnapshotError:
 for key in ("selected_zone", "delivery_date", "selected_target", "selected_model"):
     if key in st.session_state:
         st.session_state[key] = st.session_state[key]
+# Map and availability links carry their area into a fresh page request.
+linked_area = st.query_params.get("area")
+if linked_area in SDAC_MARKETS:
+    st.session_state.selected_zone = linked_area
+    st.session_state.selected_model = None
+    del st.query_params["area"]
 st.session_state.setdefault("selected_zone", "SE3")
 st.session_state.setdefault("selected_target", "wind_onshore")
 st.session_state.setdefault("selected_model", "hourly_repeated")
@@ -51,7 +58,7 @@ links = [
     ("solar", "Solar"),
     ("price", "Prices"),
     ("performance", "Performance"),
-    ("coverage", "Coverage"),
+    ("map", "Map"),
     ("methods", "Models & data"),
 ]
 pages = st.navigation(

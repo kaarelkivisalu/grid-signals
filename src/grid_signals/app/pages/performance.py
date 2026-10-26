@@ -1,4 +1,4 @@
-"""One matched result table, with specialist controls behind Details."""
+"""Matched model results and visible diagnostic controls."""
 
 from datetime import date
 
@@ -16,14 +16,13 @@ from grid_signals.app.model_catalogue import model_name
 from grid_signals.app.presentation import (
     evaluated_forecasts,
     market_choices,
-    page_heading,
     target_choices,
 )
 
 manifest = st.session_state.explorer_manifest
-detailed = page_heading("Performance", "performance")
+st.title("Performance")
 target = target_choices()
-zone = market_choices(manifest, target, show_unavailable=detailed)
+zone = market_choices(manifest, target)
 market = BY_CODE[zone]
 forecasts = evaluated_forecasts(manifest, zone)
 frame = forecasts[(forecasts.target == target) & forecasts.split.isin(SCORED_SPLITS)]
@@ -32,16 +31,16 @@ settings = st.session_state.setdefault(f"comparison_{zone}_{target}", {})
 scope = settings.get("scope", scopes[0])
 if scope not in scopes:
     scope = scopes[0]
-if detailed:
-    scope = st.selectbox(
-        "Evaluation",
-        scopes,
-        index=scopes.index(scope),
-        key=f"scope_{zone}_{target}",
-        format_func=lambda value: (
-            "Final evaluation" if value == "Final holdout" else "Development"
-        ),
-    )
+evaluation_column, period_column, comparison_column = st.columns([1, 2, 2])
+scope = evaluation_column.selectbox(
+    "Evaluation",
+    scopes,
+    index=scopes.index(scope),
+    key=f"scope_{zone}_{target}",
+    format_func=lambda value: (
+        "Final evaluation" if value == "Final holdout" else "Development"
+    ),
+)
 frame = frame[frame.split == scope]
 start, stop = frame.delivery_date.min(), frame.delivery_date.max()
 limits = (date.fromisoformat(start), date.fromisoformat(stop))
@@ -50,31 +49,26 @@ models = sorted(frame.model.unique(), key=model_name)
 selected = settings.get(f"models_{scope}", models)
 capacity = settings.get("capacity", target in {"solar", "wind_onshore"})
 group = settings.get("group", "Overall")
-if detailed:
-    period_column, comparison_column = st.columns(2)
-    selected_dates = period_column.date_input(
-        "Scored delivery range",
-        value=selected_dates,
-        min_value=limits[0],
-        max_value=limits[1],
-        key=f"score_range_{zone}_{target}_{scope}",
+selected_dates = period_column.date_input(
+    "Scored delivery range",
+    value=selected_dates,
+    min_value=limits[0],
+    max_value=limits[1],
+    key=f"score_range_{zone}_{target}_{scope}",
+)
+selected = comparison_column.multiselect(
+    "Compare models",
+    models,
+    default=selected,
+    format_func=model_name,
+    key=f"score_models_{zone}_{target}_{scope}",
+)
+if target in {"solar", "wind_onshore"}:
+    capacity = st.checkbox(
+        "Normalise by installed capacity",
+        value=capacity,
+        key=f"capacity_{zone}_{target}",
     )
-    selected = comparison_column.multiselect(
-        "Compare models",
-        models,
-        default=selected,
-        format_func=model_name,
-        key=f"score_models_{zone}_{target}_{scope}",
-    )
-    group = st.selectbox(
-        "Group scores by", GROUPS, index=GROUPS.index(group), key="score_group"
-    )
-    if target in {"solar", "wind_onshore"}:
-        capacity = st.checkbox(
-            "Normalise by installed capacity",
-            value=capacity,
-            key=f"capacity_{zone}_{target}",
-        )
 settings.update(
     {
         "scope": scope,
@@ -126,47 +120,50 @@ st.table(
     ),
     border="horizontal",
 )
-if detailed:
-    scores = grouped_scores(rows, group, market.timezone, capacity=capacity)
-    metric = st.selectbox(
-        "Diagnostic",
-        ["MAE", "CRPS", "Bias", "Coverage80", "Coverage90"],
-        format_func=lambda value: {
-            "MAE": "Average error",
-            "CRPS": "Distribution error",
-            "Coverage80": "80% range coverage",
-            "Coverage90": "90% range coverage",
-        }.get(value, value),
-    )
-    st.plotly_chart(
-        diagnostic_chart(scores, metric), width="stretch", key="grouped_performance"
-    )
-    details = scores.copy()
-    details["model"] = details.model.map(model_name)
+group_column, metric_column = st.columns(2)
+group = group_column.selectbox(
+    "Group scores by", GROUPS, index=GROUPS.index(group), key="score_group"
+)
+settings["group"] = group
+scores = grouped_scores(rows, group, market.timezone, capacity=capacity)
+metric = metric_column.selectbox(
+    "Diagnostic",
+    ["MAE", "CRPS", "Bias", "Coverage80", "Coverage90"],
+    format_func=lambda value: {
+        "MAE": "Average error",
+        "CRPS": "Distribution error",
+        "Coverage80": "80% range coverage",
+        "Coverage90": "90% range coverage",
+    }.get(value, value),
+)
+st.plotly_chart(
+    diagnostic_chart(scores, metric), width="stretch", key="grouped_performance"
+)
+details = scores.copy()
+details["model"] = details.model.map(model_name)
+if group != "Overall":
     st.dataframe(details.round(3), hide_index=True, width="stretch")
-    st.download_button(
-        "Download metrics · CSV",
-        details.to_csv(index=False).encode(),
-        file_name=f"{zone}-{target}-{group.lower().replace(' ', '-')}-metrics.csv",
-        mime="text/csv",
-    )
-    st.subheader("Scoring")
+st.download_button(
+    "Download metrics · CSV",
+    details.to_csv(index=False).encode(),
+    file_name=f"{zone}-{target}-{group.lower().replace(' ', '-')}-metrics.csv",
+    mime="text/csv",
+)
+st.subheader("Scoring")
+st.write(
+    "MAE measures median error. CRPS scores all 19 original quantiles. Positive bias means overprediction. All models use the same eligible timestamps and original targets; scores are interval-weighted."
+)
+st.write(
+    "Solar scores use daylight only. Renewable errors can be normalised by installed capacity. Final evaluation is separate from development model selection; replays do not prove on-time publication."
+)
+if scope == "Development":
+    st.write("This development window was used for model selection.")
+elif target == "wind_onshore":
+    st.write("Full release: 182 of 184 days. June 24 and September 3 are missing.")
+elif target == "price":
     st.write(
-        "MAE measures median error. CRPS scores all 19 original quantiles. Positive bias means overprediction. All models use the same eligible timestamps and original targets; scores are interval-weighted."
+        "Full release: 42 of 44 days. Missing quarter-hours and an unavailable weekly lag exclude two days."
     )
-    st.write(
-        "Solar scores use daylight only. Renewable errors can be normalised by installed capacity. Final evaluation is separate from development model selection; replays do not prove on-time publication."
-    )
-    if scope == "Development":
-        st.write("This development window was used for model selection.")
-    elif target == "wind_onshore":
-        st.write("Full release: 182 of 184 days. June 24 and September 3 are missing.")
-    elif target == "price":
-        st.write(
-            "Full release: 42 of 44 days. Missing quarter-hours and an unavailable weekly lag exclude two days."
-        )
-    st.caption(
-        "Market quarters follow elapsed order after local midnight. DST days retain 92 or 100 intervals; winter groups December with the following January and February."
-    )
-    st.write("Scored dates")
-    st.write(", ".join(sorted(rows.delivery_date.unique())))
+st.caption(
+    "Market quarters follow elapsed order after local midnight. DST days retain 92 or 100 intervals; winter groups December with the following January and February."
+)

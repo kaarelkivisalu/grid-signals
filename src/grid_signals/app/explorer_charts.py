@@ -1,6 +1,7 @@
-"""Linked fundamentals, uncertainty, errors and an offline European coverage map."""
+"""Overview time series, forecast errors and an offline market-area map."""
 
 import json
+from html import escape
 from pathlib import Path
 
 import numpy as np
@@ -8,8 +9,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from grid_signals.app.explorer_data import complete_hourly
-from grid_signals.app.markets import COUNTRY_MARKETS, TARGETS
+from grid_signals.app.markets import BY_CODE, TARGETS
 from grid_signals.app.model_catalogue import model_name
 
 COLORS = {
@@ -55,72 +55,56 @@ def local_axis(figure: go.Figure, index: pd.DatetimeIndex, timezone: str) -> Non
     )
 
 
-def fundamentals_chart(
+def overview_chart(
     observed: pd.DataFrame,
     curves: dict[str, pd.DataFrame],
     timezone: str,
-    series: list[str],
-    *,
-    hourly: bool = False,
+    products: list[str],
 ) -> go.Figure:
-    frame = complete_hourly(observed) if hourly else observed
-    figure = make_subplots(
-        rows=2,
-        cols=1,
-        shared_xaxes=True,
-        vertical_spacing=0.12,
-        row_heights=[0.62, 0.38],
-    )
-    for target in series:
-        if target in frame and frame[target].notna().any():
+    """Combine products on one unit axis, retaining at most one forecast each."""
+    figure = go.Figure()
+    price = products == ["price"]
+    for product in products:
+        label = LABELS[product]
+        color = COLORS[product]
+        scale = 1 if price else 1000
+        if product in observed and observed[product].notna().any():
             figure.add_trace(
                 go.Scatter(
-                    x=frame.index,
-                    y=frame[target] / 1000,
-                    name=LABELS[target],
-                    legendgroup=target,
-                    line={"color": COLORS[target], "width": 2},
+                    x=observed.index,
+                    y=observed[product] / scale,
+                    name=f"{label} · actual",
+                    legendgroup=product,
+                    line={"color": color, "width": 2},
                     connectgaps=False,
-                ),
-                row=1,
-                col=1,
+                    meta={"product": product, "kind": "actual"},
+                )
             )
-    if "price" in frame and frame.price.notna().any():
-        figure.add_trace(
-            go.Scatter(
-                x=frame.index,
-                y=frame.price,
-                name="Spot price",
-                legendgroup="price",
-                line={"color": COLORS["price"], "width": 2},
-            ),
-            row=2,
-            col=1,
-        )
-    for target, curve in curves.items():
-        if curve.empty or (target != "price" and target not in series):
-            continue
-        median = curve.set_index("valid_time")[["q0.50"]]
-        median = complete_hourly(median) if hourly else median
-        row = 2 if target == "price" else 1
-        scale = 1 if target == "price" else 1000
-        figure.add_trace(
-            go.Scatter(
-                x=median.index,
-                y=median["q0.50"] / scale,
-                name=f"{LABELS[target]} · forecast",
-                legendgroup=target,
-                showlegend=target not in frame or not frame[target].notna().any(),
-                line={"color": COLORS[target], "dash": "dash", "width": 2},
-            ),
-            row=row,
-            col=1,
-        )
-    figure.update_yaxes(title_text="Generation & demand · GW", row=1, col=1)
-    figure.update_yaxes(title_text="Spot · EUR/MWh", row=2, col=1)
-    style(figure, 590)
-    local_axis(figure, frame.index, timezone)
-    figure.update_xaxes(title_text=None, row=1, col=1)
+        curve = curves.get(product)
+        if curve is not None and not curve.empty:
+            figure.add_trace(
+                go.Scatter(
+                    x=curve.valid_time,
+                    y=curve["q0.50"] / scale,
+                    name=f"{label} · forecast",
+                    legendgroup=product,
+                    line={"color": color, "width": 2.5, "dash": "dash"},
+                    meta={
+                        "product": product,
+                        "kind": "forecast",
+                        "model": curve.model.iloc[0],
+                    },
+                )
+            )
+    style(figure, 310 if price else 380)
+    local_axis(figure, observed.index, timezone)
+    figure.update_xaxes(title_text=None, showgrid=True, gridcolor="#e4e8e8")
+    figure.update_yaxes(title_text="EUR/MWh" if price else "GW")
+    figure.update_layout(
+        margin={"l": 12, "r": 12, "t": 8, "b": 100},
+        legend={"orientation": "h", "y": -0.25, "x": 0},
+        showlegend=True,
+    )
     return figure
 
 
@@ -240,22 +224,6 @@ def forecast_chart(
     return figure
 
 
-def error_chart(rows: pd.DataFrame, timezone: str, target: str) -> go.Figure:
-    figure = go.Figure(
-        go.Bar(
-            x=rows.valid_time,
-            y=rows["q0.50"] - rows.actual,
-            marker_color="#c85d43",
-            name="Forecast - actual",
-        )
-    )
-    local_axis(figure, pd.DatetimeIndex(rows.valid_time), timezone)
-    figure.update_yaxes(
-        title_text="Error · EUR/MWh" if target == "price" else "Error · MW"
-    )
-    return style(figure, 230)
-
-
 def diagnostic_chart(scores: pd.DataFrame, metric: str) -> go.Figure:
     figure = go.Figure()
     if scores.Group.eq(scores.Group.iloc[0]).all():
@@ -284,130 +252,75 @@ def diagnostic_chart(scores: pd.DataFrame, metric: str) -> go.Figure:
     return style(figure, 390)
 
 
-def price_relationship(frame: pd.DataFrame) -> go.Figure:
-    figure = go.Figure(
-        go.Scatter(
-            x=frame.residual_load / 1000,
-            y=frame.price,
-            mode="markers",
-            name="Observed intervals",
-            marker={
-                "size": 6,
-                "color": frame.solar / 1000,
-                "colorscale": "YlOrBr",
-                "showscale": True,
-                "colorbar": {"title": "Solar GW"},
-                "opacity": 0.65,
-            },
-            text=frame.index.strftime("%Y-%m-%d %H:%M UTC"),
-            hovertemplate="%{text}<br>Residual %{x:.2f} GW<br>Spot %{y:.2f} EUR/MWh<extra></extra>",
-        )
-    )
-    figure.update_xaxes(title_text="Observed residual load · GW")
-    figure.update_yaxes(title_text="Day-ahead spot · EUR/MWh")
-    return style(figure, 360).update_layout(hovermode="closest", showlegend=False)
-
-
 def _mercator(latitude):
     return np.degrees(np.log(np.tan(np.pi / 4 + np.radians(latitude) / 2)))
 
 
-def coverage_map(manifest: dict) -> go.Figure:
-    """Shade relevant countries using local polygons, without remote map tiles."""
-    figure = go.Figure()
+def coverage_map(manifest: dict) -> str:
+    """A fixed, linked SVG map: every SDAC area stays visible."""
     payload = json.loads(
-        (Path(__file__).parent / "assets/explorer/europe.geojson").read_text()
+        (Path(__file__).parent / "assets/explorer/market-areas.geojson").read_text()
     )
     colors = {
-        "Evaluated forecasts": "#4f9e92",
-        "Observations only": "#c7ddd5",
-        "Planned": "#e3e8e5",
+        "Evaluated forecasts": "#76b5a3",
+        "Observations only": "#b5ccde",
+        "Not available": "#e3e8e5",
     }
-    shown = set()
+    west, north, scale = -12, float(_mercator(72)), 8.5
+    parts = [
+        (
+            '<svg class="market-map" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 650" '
+            'role="group" aria-label="SDAC market areas; open an area to view its data" '
+            'style="display:block;width:100%;height:auto;max-height:650px">'
+        ),
+        (
+            "<style>.market-map a:hover path,.market-map a:focus path{stroke:#183c3b;stroke-width:2} "
+            ".market-map text{font:10px Arial,sans-serif;fill:#24483f} "
+            ".market-map path{stroke:#6e8481;stroke-width:.7;vector-effect:non-scaling-stroke}</style>"
+        ),
+    ]
     for feature in payload["features"]:
-        country = feature["properties"]["name"]
-        if country not in COUNTRY_MARKETS:
-            continue
-        zones = COUNTRY_MARKETS[country]
-        info = [manifest["zones"].get(zone, {}) for zone in zones]
+        zone = feature["properties"]["zone"]
+        info = manifest["zones"].get(zone, {})
         status = (
             "Evaluated forecasts"
-            if any(item.get("targets") for item in info)
+            if info.get("targets")
             else "Observations only"
-            if any(item.get("observations") for item in info)
-            else "Planned"
+            if info.get("observations")
+            else "Not available"
         )
-        detail = ", ".join(
-            zone.replace("_", "-")
-            for zone, item in zip(zones, info, strict=True)
-            if item.get("targets")
-        )
-        hover = f"{country}<br>{status}"
-        if detail:
-            hover += f" in {detail}<br>Other zones/targets may still be unavailable"
         geometry = feature["geometry"]
         polygons = (
             geometry["coordinates"]
             if geometry["type"] == "MultiPolygon"
             else [geometry["coordinates"]]
         )
+        rings = []
         for polygon in polygons:
-            coordinates = np.asarray(polygon[0])
-            # Omit far-northern islands outside the electricity-market view.
-            if coordinates[:, 1].min() > 72:
-                continue
-            figure.add_trace(
-                go.Scatter(
-                    x=coordinates[:, 0],
-                    y=_mercator(coordinates[:, 1]),
-                    mode="lines",
-                    line={"width": 1, "color": "#f8faf9"},
-                    fill="toself",
-                    fillcolor=colors[status],
-                    name=status,
-                    legendgroup=status,
-                    showlegend=status not in shown,
-                    text=hover,
-                    hovertemplate="%{text}<extra></extra>",
-                    hoveron="fills",
-                    meta={"country": country, "status": status},
-                )
-            )
-            shown.add(status)
-    labels = {
-        "Sweden": (16, 63),
-        "Norway": (9, 61),
-        "Finland": (26, 65),
-        "Denmark": (9.5, 56.5),
-        "Estonia": (26, 59),
-        "Latvia": (25.5, 57),
-        "Lithuania": (25, 55.3),
-        "Germany": (10.5, 51.5),
-    }
-    figure.add_trace(
-        go.Scatter(
-            x=[point[0] for point in labels.values()],
-            y=[_mercator(point[1]) for point in labels.values()],
-            text=list(labels),
-            mode="text",
-            textfont={"size": 12, "color": "#24483f"},
-            showlegend=False,
-            hoverinfo="skip",
+            for ring in polygon:
+                points = [
+                    f"{(lon - west) * scale:.2f},{(north - float(_mercator(lat))) * scale:.2f}"
+                    for lon, lat in ring
+                ]
+                rings.append("M" + "L".join(points) + "Z")
+        label = zone.replace("_", "-")
+        title = escape(f"{label} · {BY_CODE[zone].name} · {status}")
+        lon, lat = feature["properties"]["label"]
+        # The Italian zone suffixes stay readable within their smaller shapes.
+        text = label.removeprefix("IT-")
+        parts.append(
+            f'<a href="/?area={zone}" target="_self" tabindex="0" aria-label="{title}">'
+            f'<title>{title}</title><path data-zone="{zone}" data-status="{status}" '
+            f'd="{"".join(rings)}" fill="{colors[status]}" fill-rule="evenodd"/>'
+            f'<text x="{(lon - west) * scale:.2f}" y="{(north - float(_mercator(lat))) * scale:.2f}" '
+            f'text-anchor="middle" dominant-baseline="middle">{text}</text></a>'
         )
+    parts.append(
+        '</svg><div style="display:flex;flex-wrap:wrap;gap:1rem;font:13px Arial,sans-serif;color:#344957">'
     )
-    style(figure, 610)
-    figure.update_layout(
-        hovermode="closest",
-        dragmode=False,
-        margin={"l": 0, "r": 0, "t": 10, "b": 40},
-        legend={"orientation": "h", "y": -0.02, "x": 0},
-    )
-    figure.update_xaxes(range=[3, 33], visible=False, fixedrange=True)
-    figure.update_yaxes(
-        range=[_mercator(47), _mercator(71.5)],
-        visible=False,
-        scaleanchor="x",
-        scaleratio=1,
-        fixedrange=True,
-    )
-    return figure
+    for status, color in colors.items():
+        parts.append(
+            f'<span><span style="display:inline-block;width:.8rem;height:.8rem;background:{color};margin-right:.4rem"></span>{status}</span>'
+        )
+    parts.append("</div>")
+    return "".join(parts)

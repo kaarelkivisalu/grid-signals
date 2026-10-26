@@ -25,13 +25,13 @@ APP_FILES = (
     "pages/price.py",
     "pages/load.py",
     "pages/performance.py",
-    "pages/coverage.py",
+    "pages/map.py",
     "pages/methods.py",
     "assets/forecast_snapshot.json",
     "assets/price_snapshot.json",
     "assets/load_snapshot.json",
     "assets/explorer/manifest.json",
-    "assets/explorer/europe.geojson",
+    "assets/explorer/market-areas.geojson",
 )
 
 

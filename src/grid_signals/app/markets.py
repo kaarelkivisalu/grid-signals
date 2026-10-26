@@ -74,6 +74,7 @@ MARKETS = [
     Market("IS", "Iceland", 64.8, -18.5, "Atlantic/Reykjavik", sdac=False),
 ]
 BY_CODE = {market.code: market for market in MARKETS}
+SDAC_MARKETS = tuple(market.code for market in MARKETS if market.sdac)
 TARGETS = {
     "price": "Spot price",
     "load": "Total load",
@@ -108,14 +109,25 @@ PORTFOLIO_MARKETS = (
     "LT",
     "DE_LU",
 )
-COUNTRY_MARKETS = {
+MARKET_GROUPS = {
     "Sweden": ("SE1", "SE2", "SE3", "SE4"),
     "Norway": ("NO1", "NO2", "NO3", "NO4", "NO5"),
     "Denmark": ("DK1", "DK2"),
     "Finland": ("FI",),
-    "Estonia": ("EE",),
-    "Latvia": ("LV",),
-    "Lithuania": ("LT",),
-    "Germany": ("DE_LU",),
-    "Luxembourg": ("DE_LU",),
+    "Baltics": ("EE", "LV", "LT"),
+    "Germany-Luxembourg": ("DE_LU",),
+    "Western Europe": ("FR", "NL", "BE", "AT"),
+    "Central Europe": ("PL", "CZ", "SK", "HU"),
+    "Southeastern Europe": ("SI", "HR", "RO", "BG", "GR"),
+    "Iberia": ("ES", "PT"),
+    "Italy": (
+        "IT_NORD",
+        "IT_CNOR",
+        "IT_CSUD",
+        "IT_SUD",
+        "IT_CALA",
+        "IT_SICI",
+        "IT_SARD",
+    ),
+    "Ireland": ("IE_SEM",),
 }

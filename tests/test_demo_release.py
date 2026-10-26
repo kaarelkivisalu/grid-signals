@@ -33,7 +33,7 @@ def test_release_copies_only_indexed_results_and_product_pages(tmp_path):
         "price.py",
         "load.py",
         "performance.py",
-        "coverage.py",
+        "map.py",
         "methods.py",
     }
     assert {path.name for path in (output / "src/grid_signals").iterdir()} == {

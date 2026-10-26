@@ -42,19 +42,25 @@ uv run grid-signals ui
 Open **http://localhost:8501**. Bundled results need no database, API keys,
 research dependencies or model training.
 
-- **Overview:** a populated wind comparison and a short summary of final results.
-- **Wind, Solar and Prices:** one forecast chart with actuals, a reference and an
-  80% range. **Details** reveals market buttons (unavailable forecasts greyed
-  out), saved dates/models, aligned errors, published issues and CSV downloads.
-- **Performance:** one matched model comparison table. Details reveals period,
-  grouping, uncertainty and bias diagnostics.
-- **Coverage:** a country-shaded Nordic/Baltic map plus the German case-study
-  area, with separate observation and evaluation status by market and target.
-- **Models & data:** a short source/input table. Details reveals model choices,
-  fitting data, exact recipes and timing rules.
+- **Overview:** area/date selection, one electricity-price graph and one combined
+  wind, solar and demand graph. Each product has at most one saved model forecast;
+  observations remain visible where no evaluated forecast exists.
+- **Wind, Solar and Prices:** saved dates/models, actuals, a reference, an 80%
+  range, aligned errors, published issues and CSV downloads in one view.
+- **Performance:** matched model comparisons with period, grouping, uncertainty
+  and bias diagnostics.
+- **Map:** all 39 SDAC bidding zones and a full colour-coded availability table.
+  Map areas and cells link directly to their saved data; unsupported areas remain visible.
+- **Models & data:** source/input tables, model choices, fitting data, recipes
+  and timing rules.
 
-Every page uses the same Details switch. The default views have no dropdowns or
-expanders; deeper controls and source notes appear only when requested.
+Area buttons join edge to edge within groups, with small gaps between countries
+and EE/LV/LT together. Country names are available on hover. Selectors show the
+regional project areas plus other areas with saved data; Map shows every SDAC area.
+Unavailable areas are greyed out for each page. Controls are visible directly;
+there is no separate Details mode.
+Delivery dates use a compact calendar with Previous/Next buttons that step
+between saved days. A date without a saved forecast shows an empty state.
 
 Observations cover **11 areas**. Evaluated custom forecasts cover **DE-LU
 solar/load/price and SE3 onshore wind**; imported data alone is not forecast skill.

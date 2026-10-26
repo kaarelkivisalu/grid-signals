@@ -32,7 +32,7 @@ class DemoReleaseTests(unittest.TestCase):
             "price.py",
             "load.py",
             "performance.py",
-            "coverage.py",
+            "map.py",
             "methods.py",
         }
         root = APP / "assets/explorer"
@@ -63,19 +63,16 @@ class DemoReleaseTests(unittest.TestCase):
             "load",
             "performance",
             "methods",
-            "coverage",
+            "map",
             "overview",
         ):
             app.switch_page(f"pages/{page}.py").run()
             assert not app.exception, page
             assert not app.error, page
         app.switch_page("pages/wind.py").run()
-        assert not app.selectbox
-        app.toggle(key="details_wind_onshore").set_value(True).run()
         assert app.button(key="market_wind_onshore_NO1").disabled
         assert not app.button(key="market_wind_onshore_SE3").disabled
         app.switch_page("pages/solar.py").run()
-        app.toggle(key="details_solar").set_value(True).run()
         assert app.session_state["selected_zone"] == "DE_LU"
         assert app.button(key="market_solar_SE3").disabled
         assert not app.button(key="market_solar_DE_LU").disabled

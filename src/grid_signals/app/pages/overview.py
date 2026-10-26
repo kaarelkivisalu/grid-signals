@@ -1,65 +1,83 @@
-"""A short portfolio introduction with a populated SE3 comparison."""
+"""One area's prices and combined fundamentals, with one forecast per product."""
 
-import pandas as pd
 import streamlit as st
 
-from grid_signals.app.explorer_charts import forecast_chart
-from grid_signals.app.explorer_data import choose_curve
-from grid_signals.app.markets import SELECTED_MODELS
-from grid_signals.app.presentation import (
-    evaluated_forecasts,
-    final_scores,
-    page_heading,
+from grid_signals.app.explorer_charts import overview_chart
+from grid_signals.app.explorer_data import (
+    SCORED_SPLITS,
+    choose_curve,
+    local_dates,
+    market_day,
+    read_market,
 )
+from grid_signals.app.markets import BY_CODE, SELECTED_MODELS
+from grid_signals.app.presentation import delivery_day, market_choices
 
 manifest = st.session_state.explorer_manifest
-detailed = page_heading("Electricity forecasts", "overview")
-wind = evaluated_forecasts(manifest, "SE3")
-wind = wind[(wind.target == "wind_onshore") & (wind.split == "Final holdout")]
-if wind.empty:
+st.title("Electricity markets")
+zone = market_choices(manifest)
+market = BY_CODE[zone]
+observed = read_market(manifest, zone, "observation")
+forecasts = read_market(manifest, zone, "forecast")
+# Overview shows the chosen product models, never multiple alternatives or issues.
+if not forecasts.empty:
+    forecasts = forecasts[
+        forecasts.split.isin(SCORED_SPLITS)
+        & forecasts.model.eq(forecasts.target.map(SELECTED_MODELS))
+    ]
+if observed.empty and forecasts.empty:
     st.info(
-        "The SE3 comparison is unavailable in this result bundle. Explore another product using the navigation."
+        f"No saved data for {zone.replace('_', '-')} yet. Choose another area above."
     )
     st.stop()
-day = wind.delivery_date.max()
-rows = choose_curve(wind, "wind_onshore", day, "hourly_repeated")
-reference = choose_curve(wind, "wind_onshore", day, "physical_power_curve")
-st.caption(f"SE3 onshore wind · {day} · Final evaluation")
-st.plotly_chart(
-    forecast_chart(
-        rows, "Europe/Stockholm", "wind_onshore", reference, show_error=detailed
-    ),
-    width="stretch",
-    key="featured_forecast",
-    config={"displayModeBar": detailed},
+days = (
+    set(local_dates(observed.valid_time, market.timezone))
+    if not observed.empty
+    else set()
 )
-st.subheader("Final results")
-summary = []
-for zone, target, label in (
-    ("SE3", "wind_onshore", "Onshore wind"),
-    ("DE_LU", "solar", "Solar"),
-    ("DE_LU", "price", "Spot prices"),
-):
-    scores = final_scores(manifest, zone, target)
-    selected = scores[scores.model == SELECTED_MODELS[target]]
-    if selected.empty:
+if not forecasts.empty:
+    days.update(forecasts.delivery_date)
+day = delivery_day(list(days), f"overview_day_{zone}")
+st.caption(f"{zone.replace('_', '-')} · {market.name} · {day} · Historical data")
+frame = market_day(observed, day, market.timezone)
+curves = {}
+for target, model in SELECTED_MODELS.items():
+    curve = choose_curve(forecasts, target, day, model)
+    if curve.empty:
         continue
-    item = selected.iloc[0]
-    unit = "EUR/MWh" if target == "price" else "% of capacity"
-    summary.append(
-        {
-            "Product": label,
-            "Market": zone.replace("_", "-"),
-            "Average error": f"{item.MAE:.2f} {unit}",
-            "Scored days": int(item.Days),
-        }
+    curves[target] = curve
+    # Original evaluation actuals remain available when observation imports end early.
+    actual = curve.set_index("valid_time").actual.reindex(frame.index)
+    frame[target] = frame[target].combine_first(actual) if target in frame else actual
+for title, products, key in (
+    ("Electricity price", ["price"], "overview_prices"),
+    (
+        "Fundamentals",
+        ["wind_onshore", "wind_offshore", "solar", "load", "residual_load"],
+        "overview_fundamentals",
+    ),
+):
+    st.subheader(title)
+    if not any(
+        (product in frame and frame[product].notna().any()) or product in curves
+        for product in products
+    ):
+        st.caption("No saved data for this area and date.")
+    st.plotly_chart(
+        overview_chart(frame, curves, market.timezone, products),
+        width="stretch",
+        key=key,
+        config={"displayModeBar": False},
     )
-st.table(pd.DataFrame(summary).set_index("Product"), border="horizontal")
-if detailed:
-    st.write(
-        "Final evaluation is separate from development. Products use different units and periods. These saved results do not establish reliable daily publication."
-    )
+if curves:
     st.caption(
-        "Wind uses hourly-trained distributions repeated over quarter-hours; the shaded range covers the 10th to 90th quantile."
+        "Forecasts: "
+        + " · ".join(
+            f"{target.replace('_onshore', '').replace('_', ' ').title()} ({curve.split.iloc[0].replace('Final holdout', 'final evaluation').lower()})"
+            for target, curve in curves.items()
+        )
+        + ". Solid lines: observations. Dashed lines: forecasts."
     )
-    st.page_link("pages/load.py", label="German electricity demand case study")
+else:
+    st.caption("Observations only. No evaluated forecasts for this area and date.")
+st.page_link("pages/load.py", label="German electricity demand case study")

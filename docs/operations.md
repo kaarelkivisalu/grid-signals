@@ -104,10 +104,12 @@ and metrics preserve source resolution, daylight eligibility and DST interval or
 
 [Volue examples](https://docs.volue.com/data-and-forecasts/volue-insight-timeseries/guides/examples)
 informed the aligned fundamentals and forecast/actual comparison. The map uses
-public-domain [Natural Earth](https://www.naturalearthdata.com/about/terms-of-use/)
-country outlines; markers identify bidding zones, not exact boundaries. Membership
-follows [ENTSO-E SDAC scope](https://www.entsoe.eu/network_codes/cacm/implementation/sdac/)
-reviewed 2026-10-15. SEM is included; GB and Switzerland are outside SDAC.
+[entsoe-py bidding-zone geometry](https://github.com/EnergieID/entsoe-py/tree/master/entsoe/geo),
+simplified for display. The local `market-areas.geojson` records the source package
+version, per-file checksums and MIT license. Ireland/Northern Ireland use the
+prior local Natural Earth outlines (public domain). Geometry is display context
+rather than an operational boundary definition. The map includes all 39 areas in
+the project's [SDAC registry](https://www.entsoe.eu/network_codes/cacm/implementation/sdac/).
 
 ## Public hosting
 
@@ -141,21 +143,25 @@ needed to deploy the saved historical release.
 
 ### Historical release and local review
 
-Overview leads with SE3 onshore wind for **2026-09-19**, comparing the evaluated
-model with the physical reference and actuals. The sidebar contains direct links
-to Overview, Wind, Solar, Prices, Performance, Coverage and Models & data.
-Each page has one Details switch. Default views have no dropdowns or expanders:
-forecast pages lead with one chart, Performance with one comparison table, and
-Models & data with a short source/input table. Details reveals market buttons
-(unsupported markets greyed out), saved dates/models, publication records,
-market observations and downloads. Forecast and error panels share a time axis.
-The shaded forecast range uses saved quantiles, not ensemble scenarios.
+Overview opens on **SE3, 2026-09-19** with a price graph and a combined fundamentals
+graph. Area and date controls are visible. The saved selected model supplies at
+most one forecast per product; products without a forecast show observations
+only. Price uses EUR/MWh and the combined wind, solar and demand graph uses GW.
+The sidebar links to Overview, Wind, Solar, Prices, Performance, Map and Models &
+data. Area choices group country zones and nearby single-area markets, with
+EE/LV/LT together. Buttons join edge to edge with square corners, small gaps
+between groups and no country headings. Unsupported choices are greyed out for
+each page.
 
-Performance's period and diagnostic controls and each model's full recipe and
-timing rules are available in Details. Coverage uses local country polygons for
-Nordic/Baltic markets and the German case-study area, with the zone/target table
-in Details. Country colour means at least one zone has that status, not complete
-country coverage.
+Every page has one view, with its controls directly available and no Details
+switch. Product pages retain aligned forecast/error panels and CSV downloads.
+Performance exposes period and diagnostic controls; Models & data shows inputs,
+fitting rules and limits. Delivery dates use a 160 px calendar field and Previous/
+Next buttons that move between saved days; missing dates show an explicit empty
+state. Map keeps all 39 SDAC areas visible and displays a full colour-coded table
+that scrolls with the page. Areas link to Overview, evaluated cells to product
+pages, and observation-only cells to Overview. Unavailable cells have no data link.
+Forecast shading uses saved quantiles, not ensemble scenarios.
 
 The bundled file index was exported at **2026-10-23T15:00:31.076936+00:00** and
 references 13 checked, Git-tracked Parquet files. SE3's final evaluation covers
@@ -165,12 +171,13 @@ current forecasts or reliable daily updates. Original evaluated results, model
 version records and their source files are unchanged.
 
 The 2026-10-26 portfolio checks passed: **407 tests, 2 skipped** before the latest
-UI simplification. The simplification passed **41 focused tests**, Ruff lint and
+UI revisions. The grouped-area and Overview revision passed **45 focused tests**, Ruff lint and
 formatting, two offline image checks and desktop/tablet/phone browser review at
 1440, 820 and 390 px. Navigation and CSV downloads work without browser errors,
-external requests or horizontal page overflow. Tests cover Details visibility,
-preserved selections and aligned error values. Forecast date choices contain
-only saved model results; the publication-status test checks the selected issue.
+external requests or horizontal page overflow. Tests cover grouped choices,
+one forecast per product, observation-only areas, all map links, the full zone
+table, calendar navigation across missing days, preserved selections and aligned
+error values. The publication-status test checks the selected issue.
 Existing evaluated result files and model code were not changed.
 
 Ruff excludes standalone learning notebooks until their move in milestone 2a.
