@@ -245,7 +245,8 @@ What follows, for N zone-fuel pairs:
   commercial API key is the scaling path.
 - **Open-Meteo Previous Runs:** heaviest per request (120-day chunks × 9 variables ×
   2 offsets). Same free-tier constraint.
-- **ENTSO-E:** 400 requests/min; 30-day chunks work (`grid-signals` CLAUDE.md).
+- **ENTSO-E:** 400 requests/min; 30-day chunks work see [rate limiting](../../src/grid_signals/pipeline.py) and
+  [backfill chunks](../../src/grid_signals/flows.py).
 
 ### Per-area issues to expect
 
