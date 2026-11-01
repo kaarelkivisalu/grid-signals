@@ -86,6 +86,9 @@ def run(zone: str, target: str, delivery: date, root: Path = journal.ROOT) -> di
             eligible_at_cutoff=received <= cutoff,
             status="captured" if not rows.empty else "missing",
             sha256=hashlib.sha256(xml.encode()).hexdigest(),
+            parsed_sha256=hashlib.sha256(
+                (directory / f"{capture_id}.parquet").read_bytes()
+            ).hexdigest(),
             document=document_metadata(xml),
             rows=len(rows),
         )

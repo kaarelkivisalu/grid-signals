@@ -1,4 +1,4 @@
-"""Product operations shared by the installed CLI and future Prefect flows."""
+"""Product operations shared by the installed CLI and Prefect lifecycle."""
 
 from datetime import date, timedelta
 

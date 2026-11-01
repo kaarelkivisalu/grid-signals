@@ -2,12 +2,14 @@
 
 import json
 import os
+import re
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import streamlit as st
 
+from grid_signals.app import results
 from grid_signals.app.snapshot import SnapshotError
 
 DEFAULT_ROOT = Path(__file__).parent / "assets/explorer"
@@ -16,17 +18,30 @@ GROUPS = ("Overall", "Year", "Season", "Month", "Weekday", "Market quarter")
 
 
 def bundle_root() -> Path:
-    return Path(os.environ.get("GRID_SIGNALS_EXPLORER_PATH", DEFAULT_ROOT))
+    return Path(
+        os.environ.get("GRID_SIGNALS_EXPLORER_PATH", results.selected()[0] / "explorer")
+    )
 
 
 def load_manifest() -> dict:
     try:
-        payload = json.loads((bundle_root() / "manifest.json").read_text())
+        root, pointer, error = results.selected()
+        explorer = Path(os.environ.get("GRID_SIGNALS_EXPLORER_PATH", root / "explorer"))
+        payload = json.loads((explorer / "manifest.json").read_text())
+        payload["_root"] = str(explorer)
+        payload["_deliveries"] = pointer.get("deliveries", {})
+        payload["_publication"] = results.publication_record(root, pointer)
+        payload["_result_error"] = error
         if payload["schema_version"] != 1 or not payload["zones"]:
             raise ValueError  # noqa: TRY301
         for info in payload["zones"].values():
-            for key in ("forecast_file", "observation_file"):
-                name = info[key]
+            for key in (
+                "forecast_file",
+                "observation_file",
+                "live_forecast_file",
+                "live_observation_file",
+            ):
+                name = info.get(key)
                 if name and (Path(name).name != name or not name.endswith(".parquet")):
                     raise ValueError  # noqa: TRY301
     except (OSError, KeyError, TypeError, ValueError) as exc:
@@ -36,9 +51,14 @@ def load_manifest() -> dict:
         return payload
 
 
-@st.cache_data(show_spinner=False, max_entries=40)
-def _read_artifact(root: str, filename: str, kind: str) -> pd.DataFrame:
-    frame = pd.read_parquet(Path(root) / filename)
+@st.cache_data(show_spinner=False, max_entries=16)
+def _read_artifact(
+    _root: str,
+    filename: str,
+    kind: str,
+    cache_id: str = "",  # noqa: ARG001 -- part of the Streamlit cache key
+) -> pd.DataFrame:
+    frame = pd.read_parquet(Path(_root) / filename)
     required = {"valid_time"}
     if kind == "forecast":
         required.update(
@@ -72,14 +92,51 @@ def _read_artifact(root: str, filename: str, kind: str) -> pd.DataFrame:
 
 
 def read_market(manifest: dict, zone: str, kind: str) -> pd.DataFrame:
-    name = manifest["zones"].get(zone, {}).get(f"{kind}_file")
-    if not name:
-        return pd.DataFrame()
+    info = manifest["zones"].get(zone, {})
+    names = [info.get(f"{kind}_file"), info.get(f"live_{kind}_file")]
+    root = str(manifest.get("_root") or bundle_root())
     try:
-        return _read_artifact(str(bundle_root()), name, kind)
+        parts = [
+            _read_artifact(
+                root,
+                name,
+                kind,
+                cache_id="" if re.search(r"-[0-9a-f]{16}\.parquet$", name) else root,
+            )
+            for name in names
+            if name
+        ]
+        if not parts:
+            return pd.DataFrame()
+        frame = (
+            pd.concat(parts, ignore_index=True) if len(parts) > 1 else parts[0].copy()
+        )
+        if kind == "observation":
+            # A fresh wind-only actual must not erase other products at that instant.
+            frame = frame.groupby("valid_time", as_index=False).last()
+        elif "forecast_id" in frame:
+            for forecast_id, receipt in manifest.get("_deliveries", {}).items():
+                selected = frame.forecast_id == forecast_id
+                frame.loc[selected, "published_at"] = pd.Timestamp(
+                    receipt["published_at"]
+                )
+                frame.loc[selected, "publication_status"] = receipt[
+                    "publication_status"
+                ]
+                for field in (
+                    "saved_model_id",
+                    "training_cutoff_exclusive",
+                    "training_max_day",
+                    "model_prepared_at",
+                ):
+                    if field not in frame:
+                        frame[field] = pd.Series(None, index=frame.index, dtype=object)
+                    frame.loc[selected, field] = receipt.get(field)
     except (OSError, ValueError) as exc:
         message = "This market's exported data is unavailable."
         raise SnapshotError(message) from exc
+    else:
+        return frame
 
 
 def suggested_backtest_day(info: dict) -> str | None:

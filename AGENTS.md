@@ -31,10 +31,10 @@
 - Use `uv sync --frozen --group research` for the full development environment.
 - Run relevant tests with `uv run pytest <paths>`. CI runs `uv run pytest`,
   `uv run ruff check .` and `uv run ruff format --check .`.
-  Database tests require Docker for testcontainers.
+  Tests use local fixtures and a temporary Prefect server; image checks require Docker.
 - Run `bash scripts/check.sh` before pushing for the same locked lint, formatting,
-  full test suite and offline demo image checks as CI. Use `lint`, `test` or `demo`
+  full test suite and offline web/runner image checks as CI. Use `lint`, `test`, `demo` or `runner`
   as an argument to run just one group; see `README.md` for prerequisites.
 - See `README.md` for demo commands, `research/README.md` for current forecast
-  commands, and `docs/operations.md` for deployment. The current code layout and
-  legacy CLI are transitional; follow the implementation plan when changing them.
+  commands, and `docs/operations.md` for deployment. The daily producer uses one
+  package/CLI; follow the implementation plan when changing it.

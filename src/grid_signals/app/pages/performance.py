@@ -18,10 +18,12 @@ from grid_signals.app.presentation import (
     process_diagram,
     target_choices,
 )
+from grid_signals.app.publication import render as publication_record
 from grid_signals.markets import BY_CODE
 
 manifest = st.session_state.explorer_manifest
 st.title("Performance")
+publication_record(manifest, details=True)
 st.write(
     "Does the forecast improve on a simple reference? Compare errors on the same "
     "delivery intervals, then check when errors occur and whether prediction ranges are reliable."

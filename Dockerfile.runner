@@ -1,0 +1,23 @@
+FROM ghcr.io/astral-sh/uv:0.13.6-python3.12-trixie-slim@sha256:bf889bda77474aa50c351caf1538b855ef2b7a30add45f26ca50dcb6ade06402 AS builder
+ENV UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=0 UV_COMPILE_BYTECODE=1
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-default-groups --group runner --no-install-project
+COPY src/ src/
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-default-groups --group runner
+
+FROM python:3.12.16-slim-trixie@sha256:8523d6abeb48ceae0b7240d30c5808fc26cb79c1a635bacdf19cf3baecfbec07
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
+RUN useradd --create-home --uid 10001 app && mkdir -p /data /results /var/prefect /backups && chown app:app /data /results /var/prefect /backups
+WORKDIR /app
+COPY --from=builder --chown=app:app /app/.venv /app/.venv
+COPY --from=builder --chown=app:app /app/src /app/src
+ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
+    GRID_SIGNALS_DATA_DIR=/data GRID_SIGNALS_OUTPUT_DIR=/results \
+    GRID_SIGNALS_REPORTS_DIR=/data/reports GRID_SIGNALS_MLRUNS_DIR=/data/mlruns \
+    PREFECT_HOME=/var/prefect PREFECT_SERVER_ANALYTICS_ENABLED=false \
+    PREFECT_API_DATABASE_CONNECTION_URL=sqlite+aiosqlite:////var/prefect/prefect.db \
+    OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 LOKY_MAX_CPU_COUNT=4
+RUN /app/.venv/bin/python -c "import lightgbm, prefect, netCDF4"
+USER app
+CMD ["python", "-m", "grid_signals", "serve"]

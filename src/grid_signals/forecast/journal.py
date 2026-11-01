@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from grid_signals.forecast import paths
+from grid_signals.forecast.storage import atomic_json
 
 ROOT = paths.DATA / "operational"
 
@@ -13,10 +14,7 @@ def record(kind: str, payload: dict, root: Path = ROOT) -> Path:
     directory = root / kind
     directory.mkdir(parents=True, exist_ok=True)
     destination = directory / f"{uuid4()}.json"
-    temporary = destination.with_suffix(".tmp")
-    with temporary.open("x", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=2, allow_nan=False, default=str)
-    temporary.replace(destination)
+    atomic_json(destination, payload)
     return destination
 
 

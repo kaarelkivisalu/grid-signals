@@ -28,3 +28,10 @@ jobs:
             - uses: actions/checkout@v4
             - name: Build and browse demo without network, database or API keys
               run: bash scripts/check.sh demo
+
+    runner:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - name: Build runner and check saved models and recovery without provider access
+              run: bash scripts/check.sh runner

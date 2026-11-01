@@ -9,7 +9,8 @@ from grid_signals.forecast import paths
 
 RECORD = Path(
     os.environ.get(
-        "GRID_SIGNALS_VERSION_RECORD", paths.CONFIGS / "releases/consolidated_v1.json"
+        "GRID_SIGNALS_VERSION_RECORD",
+        paths.CONFIGS / "releases/forecast_runtime_v2.json",
     )
 )
 
@@ -42,7 +43,7 @@ def register(destination: Path) -> dict:
     }
     protocol = paths.INTERIM / "load_protocol.json"
     record = {
-        "version": "consolidated-v1",
+        "version": "forecast-runtime-v2",
         "sources": sources(),
         "historical_records": lineage,
         "historical_load_selection_sha256": hashlib.sha256(
@@ -50,10 +51,10 @@ def register(destination: Path) -> dict:
         ).hexdigest()
         if protocol.exists()
         else None,
-        "meaning": "Source consolidation verified against fixed-input predictions and metrics; no new holdout evaluation or saved-model promotion.",
+        "meaning": "Code/settings identity for SE3 saved-model preparation and verified public delivery. Trained models retain separate checked records; no frozen evaluation is reopened.",
     }
     record["identity"] = (
-        "consolidated-v1+"
+        "forecast-runtime-v2+"
         + hashlib.sha256(json.dumps(record, sort_keys=True).encode()).hexdigest()[:16]
     )
     destination.parent.mkdir(parents=True, exist_ok=True)

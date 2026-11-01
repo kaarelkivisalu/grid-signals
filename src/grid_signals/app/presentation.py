@@ -343,6 +343,13 @@ def render_forecast(target: str) -> None:
             f"Published forecast · {issue.publication_status} · "
             f"published {issue.published_at} · input cutoff {issue.information_cutoff_at}"
         )
+        if pd.notna(issue.get("training_max_day")):
+            prepared_at = pd.Timestamp(issue.model_prepared_at).strftime(
+                "%Y-%m-%d %H:%M UTC"
+            )
+            st.write(
+                f"Training data ends **{issue.training_max_day}**. Saved model prepared **{prepared_at}**."
+            )
         observed = read_market(manifest, zone, "observation")
         frame = market_day(observed, day, market.timezone)
         if target in frame:
@@ -354,6 +361,11 @@ def render_forecast(target: str) -> None:
     reference = choose_curve(
         forecasts[forecasts.split == scope], target, day, reference_model
     )
+    if scope == "Published archive" and not rows.empty and "forecast_id" in forecasts:
+        reference = forecasts[
+            (forecasts.model == reference_model)
+            & (forecasts.forecast_id == rows.forecast_id.iloc[0])
+        ].sort_values("valid_time")
     st.plotly_chart(
         forecast_chart(
             rows,

@@ -82,7 +82,7 @@ def test_new_code_record_is_immutable_and_rejects_changed_sources(
     monkeypatch.setattr(paths, "ROOT", tmp_path)
     monkeypatch.setattr(paths, "INTERIM", tmp_path)
     versions.register(record)
-    assert versions.verify()["identity"].startswith("consolidated-v1+")
+    assert versions.verify()["identity"].startswith("forecast-runtime-v2+")
     with pytest.raises(FileExistsError):
         versions.register(record)
     candidate["package/models/wind.py"] = "changed checksum"
@@ -108,3 +108,35 @@ def test_publishing_identity_does_not_import_mlflow(tmp_path):
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_default_export_commits_one_complete_generation_without_activating_a_trial(
+    tmp_path,
+):
+    data, public = tmp_path / "data", tmp_path / "public"
+    subprocess.run(  # noqa: S603 -- fixed local CLI and isolated paths
+        [
+            sys.executable,
+            "-m",
+            "grid_signals",
+            "--data-dir",
+            str(data),
+            "--output-dir",
+            str(public),
+            "export",
+            "all",
+        ],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    pointer = json.loads((public / "current.json").read_text())
+    generation = public / "generations" / pointer["generation"]
+    assert (generation / "files.json").exists()
+    assert (generation / "explorer/manifest.json").exists()
+    assert (
+        json.loads((generation / "publication.json").read_text())["status"]
+        == "not_started"
+    )
+    assert pointer["deliveries"] == {}

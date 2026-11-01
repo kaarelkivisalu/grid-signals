@@ -1,0 +1,72 @@
+name: grid-signals-forecast
+
+x-runner-image: &runner-image
+    image: grid-signals-runner:${GRID_SIGNALS_IMAGE_TAG:-local}
+    build:
+        context: .
+        dockerfile: Dockerfile.runner
+
+services:
+    prefect:
+        <<: *runner-image
+        command: ["python", "-m", "prefect", "server", "start", "--host", "0.0.0.0"]
+        environment:
+            PREFECT_UI_API_URL: /api
+        volumes:
+            - prefect-data:/var/prefect
+        ports:
+            - "127.0.0.1:4200:4200"
+        healthcheck:
+            test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4200/api/health', timeout=3)"]
+            interval: 15s
+            timeout: 5s
+            retries: 10
+        mem_limit: 1g
+        cpus: 1
+        restart: unless-stopped
+    runner:
+        <<: *runner-image
+        depends_on:
+            prefect:
+                condition: service_healthy
+        environment:
+            PREFECT_API_URL: http://prefect:4200/api
+            GRID_SIGNALS_SCHEDULES_PAUSED: ${GRID_SIGNALS_SCHEDULES_PAUSED:-true}
+            GRID_SIGNALS_PREFECT_DB: /prefect-metadata/prefect.db
+            GRID_SIGNALS_BACKUP_DIR: /backups
+            ENTSOE_API_KEY: ${ENTSOE_API_KEY:?Set ENTSOE_API_KEY for the forecast runner}
+        volumes:
+            - forecast-data:/data
+            - public-results:/results
+            - prefect-data:/prefect-metadata:ro
+            - forecast-backups:/backups
+        healthcheck:
+            test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"]
+            interval: 30s
+            timeout: 5s
+            retries: 5
+            start_period: 60s
+        mem_limit: ${GRID_SIGNALS_RUNNER_MEMORY:-3g}
+        cpus: ${GRID_SIGNALS_RUNNER_CPUS:-2}
+        stop_grace_period: 60s
+        restart: unless-stopped
+    web:
+        image: grid-signals-web:${GRID_SIGNALS_IMAGE_TAG:-local}
+        build:
+            context: .
+            dockerfile: Dockerfile.demo
+        environment:
+            GRID_SIGNALS_RESULT_ROOT: /results
+        volumes:
+            - public-results:/results:ro
+        ports:
+            - "127.0.0.1:8503:8501"
+        mem_limit: 768m
+        cpus: 1
+        restart: unless-stopped
+
+volumes:
+    forecast-data:
+    public-results:
+    prefect-data:
+    forecast-backups:

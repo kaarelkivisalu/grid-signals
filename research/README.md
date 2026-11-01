@@ -17,7 +17,8 @@ Reusable forecasting code now lives in the installed `grid_signals.forecast`
 package. Focused experiments import that package; there is no checkout-only
 `renewable_forecast` package or `PYTHONPATH` setup. Settings ship with the package,
 while this directory retains reports, frozen protocols, model version records,
-tests and local data. Prefect and saved trained models follow in milestone 2b.
+tests and local data. Milestone 2b adds the shared Prefect lifecycle and saved SE3
+models; server deployment and scheduler cutover remain manual owner steps.
 
 ## Current evidence — 2026-10-15
 
@@ -90,6 +91,7 @@ archival evidence, not current accuracy claims.
 ```bash
 uv sync --frozen --group research
 uv run grid-signals info
+uv run grid-signals workflow prepare --issue-day YYYY-MM-DD
 uv run grid-signals workflow capture
 uv run grid-signals workflow forecast
 uv run grid-signals workflow score
@@ -102,22 +104,31 @@ uv run grid-signals forecast --product de-load
 uv run grid-signals experiment decision_study
 uv run grid-signals backtest --fuel wind_onshore
 uv run grid-signals backtest --fuel solar
-uv run grid-signals export all
+uv run grid-signals export all --historical
 uv run pytest research/tests
 ```
 
-Use `workflow forecast --no-refresh` only with required source data already cached.
-It preserves real publication timing. `workflow` retains the existing local trial
-behaviour until 2b; individual product operations use the same installed package.
-See [operations](../docs/operations.md) for configuration, timers and preservation.
-No scheduled job reopens a holdout.
+Replace `YYYY-MM-DD` with a future issue day. Preparation fetches inputs, saves a
+trained SE3 model, checks reloaded predictions and promotes it under the daily
+policy; it must finish before that day's 09:00 UTC cutoff. Use
+`workflow forecast --no-refresh` only with required weather already cached and a
+matching promoted model. Prediction never fits SE3 models. Every invocation
+preserves real timing; a replay cannot count as on-time evidence. `workflow` and
+Prefect call the same lifecycle. Default `export all` commits a complete daily
+generation; `--historical` deliberately refreshes flat research bundles.
+See [operations](../docs/operations.md#se3-producer-deployment--milestone-2b) for
+deployment, model policy, timers and preservation. No scheduled job reopens a holdout.
 
 Original release records in `research/configs/releases` retain their original
 source paths and hashes. Exact reruns of those evaluations, including the locked
 price/load experiment, use the preserved original checkout and datasets described
 in operations. They are not silently reidentified as evaluations of moved code.
-The new `consolidated_v1.json` record identifies the installed package separately;
-fixed-input prediction and metric checks establish migration equivalence.
+The `consolidated_v1.json` record identifies the 2a package separately;
+fixed-input prediction and metric checks establish migration equivalence. The new
+`forecast_runtime_v2.json` identifies the saved-model lifecycle. Its
+`se3-wind-saved-v1-daily-before-issue` policy is a new forward model version,
+not a re-evaluation of the historical release. Training inputs, lag history,
+cutoff, settings, dependencies and reload checks are retained with every saved model.
 Old report reproduction blocks describe the original checkout. Current commands
 above are the supported operating interface.
 

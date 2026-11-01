@@ -707,6 +707,7 @@ def build_operational(
     with_meps: bool = False,
     with_ifs: bool = False,
     resolution: str = "1h",
+    actual_history: pd.Series | None = None,
 ) -> pd.DataFrame:
     """Design matrix for one future delivery day, with no target column.
 
@@ -747,9 +748,14 @@ def build_operational(
     series = fleet.capacity_series(turbines, zone)
     grid["capacity_mw"] = fleet.capacity_at(series, grid.issue_day.iloc[0].date())
 
-    targets = pd.read_parquet(paths.INTERIM / f"targets_{zone.lower()}_{fuel}.parquet")
-    targets["period_start"] = pd.to_datetime(targets.period_start, utc=True)
-    history = targets.set_index("period_start").cf
+    if actual_history is None:
+        targets = pd.read_parquet(
+            paths.INTERIM / f"targets_{zone.lower()}_{fuel}.parquet"
+        )
+        targets["period_start"] = pd.to_datetime(targets.period_start, utc=True)
+        history = targets.set_index("period_start").cf
+    else:
+        history = actual_history
     for lag in ACTUAL_LAGS_H:
         # The Stage 1 model was trained on hourly means. Keep lagged observations
         # hourly as well, rather than manufacturing quarter-hour measurements.

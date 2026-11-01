@@ -275,8 +275,8 @@ def test_predict_respects_issue_cutoff_and_returns_only_the_new_vintage(
     monkeypatch.setattr(predict.assemble, "build", lambda *_args, **_kwargs: training)
     monkeypatch.setattr(predict.assemble, "build_operational", build_future)
     monkeypatch.setattr(predict, "QuantileGBM", Model)
-    first = predict.run(date(2026, 1, 3), refresh=False, wind_method=method)
-    second = predict.run(date(2026, 1, 3), refresh=False, wind_method=method)
+    first = predict._fit_forecast(date(2026, 1, 3), refresh=False, wind_method=method)  # noqa: SLF001 -- original fitting regression
+    second = predict._fit_forecast(date(2026, 1, 3), refresh=False, wind_method=method)  # noqa: SLF001 -- original fitting regression
     assert len(first) == len(second) == 96
     assert len(pd.read_parquet(archive)) == 192
     assert resolutions == [source_resolution, source_resolution]

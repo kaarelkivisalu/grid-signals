@@ -11,10 +11,12 @@ from grid_signals.app.explorer_data import (
     read_market,
 )
 from grid_signals.app.presentation import delivery_day, market_choices
+from grid_signals.app.publication import render as publication_record
 from grid_signals.markets import BY_CODE, SELECTED_MODELS
 
 manifest = st.session_state.explorer_manifest
 st.title("Electricity markets")
+publication_record(manifest)
 zone = market_choices(manifest)
 market = BY_CODE[zone]
 observed = read_market(manifest, zone, "observation")

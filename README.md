@@ -10,10 +10,10 @@ regional bidding zones**: SE1–SE4, NO1–NO5, DK1–DK2, FI, EE, LV and LT. On
 comes first; offshore follows separately. This is the roadmap destination, not a
 claim of current forecast coverage.
 
-**Current milestone:** package consolidation (2a) is complete. Reusable forecasting
-code lives in the installed `grid_signals.forecast` package, with one
-`grid-signals` CLI and shared market/product definitions. The historical demo is
-public. Daily Prefect operation and saved trained models are next in 2b. See the
+**Current milestone:** the SE3 saved-model workflow (2b) is implemented and locally
+verified. Manual server deployment and scheduler cutover remain; daily public
+operation is not yet established. The historical demo is public. One installed
+`grid_signals.forecast` package and `grid-signals` CLI serve local and scheduled runs. See the
 [roadmap](ROADMAP.md) and [implementation plan](docs/implementation-plan.md).
 
 ## Run the local demo
@@ -94,10 +94,11 @@ bash scripts/check.sh
 ```
 
 This installs the locked development and research dependencies, checks lint and
-formatting, runs the full test suite with coverage (using local fixtures), then builds and browses the standalone demo image without
-network access or API keys. It stops at the first failed check and exits with an error.
-Only the demo check needs Docker. Its build needs network access to download the
-base image and locked dependencies. Tests no longer require PostgreSQL.
+formatting, runs the full test suite with coverage (local fixtures and a temporary
+Prefect server), then checks the web and runner images without network access or
+API keys. It stops at the first failed check. Image checks need Docker; builds
+need access to the base images and locked dependencies. Tests need permission to
+start a local server; PostgreSQL is not required.
 
 For a shorter feedback loop, run one check group:
 
@@ -105,6 +106,7 @@ For a shorter feedback loop, run one check group:
 bash scripts/check.sh lint
 bash scripts/check.sh test
 bash scripts/check.sh demo
+bash scripts/check.sh runner
 ```
 
 GitHub Actions uses these same commands. Ruff and pytest come from `uv.lock`, so
@@ -125,17 +127,20 @@ uv sync --frozen --group research
 uv run grid-signals export all
 ```
 
-The exporters read existing Parquet files and evaluation results, then update the
-JSON summaries and historical result files in `data/exports/` by default.
+The default export commits a complete checked generation to `data/exports/`,
+including historical results, live forecasts, actuals and publication status.
+The web reader pins that generation and falls back to the previous checked
+generation or bundled history if needed. Exporting alone does not start a trial.
 Use `--output-dir /absolute/results` before `export` to choose another destination.
 Bundled website assets are updated only with an explicit
-`uv run grid-signals --output-dir src/grid_signals/app/assets export all`.
+`uv run grid-signals --output-dir src/grid_signals/app/assets export all --historical`.
 Each Parquet filename includes a checksum of its contents. The file index is
 updated last so incomplete updates are not shown. Exporting does not train models
 or score holdouts. Bundles ship with the application; chart dates and publication status
 describe the underlying forecast, rather than the export time.
 
-Set `GRID_SIGNALS_EXPLORER_PATH` to preview another explorer directory. See the
+Set `GRID_SIGNALS_RESULT_ROOT=/absolute/results` to preview a daily result root.
+`GRID_SIGNALS_EXPLORER_PATH` still supports a flat historical explorer. See the
 [operations guide](docs/operations.md) for fetching additional market data.
 
 ## Forecast commands and configuration
@@ -147,15 +152,22 @@ uv run grid-signals fetch-actuals 2026-10-01 2026-10-15
 uv run grid-signals refresh-weather --help
 uv run grid-signals train --help
 uv run grid-signals backtest --fuel wind_onshore
-uv run grid-signals forecast --product se3-wind --no-refresh
+uv run grid-signals model prepare --issue-day YYYY-MM-DD
+uv run grid-signals model validate --issue-day YYYY-MM-DD --model-id MODEL_ID
+uv run grid-signals model promote --issue-day YYYY-MM-DD --model-id MODEL_ID --reason "Reviewed reload and training cutoff"
+uv run grid-signals workflow forecast --issue-day YYYY-MM-DD --no-refresh
 uv run grid-signals score --product se3-wind
 uv run grid-signals export all
 uv run grid-signals version
 ```
 
-`forecast` records real creation/publication times; historical invocations do not
-become on-time issues. It still fits during prediction; saved trained models and
-Prefect scheduling belong to 2b. `train` fits and scores the existing development
+Replace the dates and model ID with the intended issue and the preparation output.
+SE3 prediction loads an explicitly promoted model; it does not fit. Preparation
+must finish before the 09:00 UTC issue cutoff. The daily Prefect preparation flow
+fetches data, trains, validates and promotes under the declared daily policy.
+`forecast` and the scheduled flow share real creation/delivery timing; historical
+invocations do not become on-time evidence. German case-study forecasts retain
+their manual fitting path and have no new schedules. `train` fits and scores the existing development
 comparison, while `backtest` runs the quarter-hour product comparison. Neither
 reopens a final evaluation. Use `--help` for each command's options.
 
@@ -177,6 +189,9 @@ running outside the checkout. Existing local inputs have not moved.
 
 The original market database application, briefing/chat pages, duplicate forecast
 pages and market deployment definitions have been retired. No Docker service or
-volume was deleted. The existing local forecast timers remain until the Prefect
-cutover in 2b and call the installed CLI. See [operations](docs/operations.md) for
-preservation copies, frozen-release reproduction and timer details.
+volume was deleted during consolidation. The existing local forecast timers remain
+until the Prefect cutover and use preserved 2a source. The new
+`compose.forecast.yaml` runs a persistent Prefect server, runner and result-reading
+web service, with schedules paused initially. Follow the
+[manual deployment steps](docs/operations.md#se3-producer-deployment--milestone-2b)
+to seed data, prepare a model, disable the old timers and activate the new schedule.

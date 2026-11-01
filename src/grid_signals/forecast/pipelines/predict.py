@@ -1,16 +1,8 @@
-"""Produce an operational forecast for a delivery day whose actuals do not exist yet.
+"""Forecast archives and the shared saved-model SE3 serving entrypoint.
 
-This is the path a scheduled 09:00 UTC job would run. It differs from the backtest in
-exactly two ways, both deliberate:
-
-- It fits on **every** trainable day available at issue time, not on a rolling-origin
-  training window. That is correct for production and means this model is *not* the one
-  the sealed holdout will score -- holdout scoring refits from folds that exclude it.
-- There is no target column to score against, so the output is a forecast vintage
-  rather than a row on the leaderboard.
-
-Everything else -- offsets, lags, calendar, the capacity denominator -- comes from the
-same functions the training path uses, so the two cannot drift apart.
+SE3 operating commands use the promoted daily model and verified public delivery.
+The fitting helper remains for German case studies and migration regression checks.
+Existing historical archives keep their original identities and timing metadata.
 """
 
 import argparse
@@ -62,7 +54,7 @@ def refresh_nwp(
         ifs_runs.pull(points, issue_day, delivery_day)
 
 
-def run(
+def _fit_forecast(
     delivery_day: date | None = None,
     zone: str = "SE3",
     fuel: str = "wind_onshore",
@@ -71,7 +63,7 @@ def run(
     resolution: str = "15min",
     wind_method: str = "repeat",
 ) -> pd.DataFrame:
-    """Forecast one delivery day and append the vintage. Defaults to tomorrow."""
+    """Fit a case-study forecast; the SE3 operating entrypoint uses saved models."""
     from grid_signals.forecast import versions
 
     release = versions.verify()
@@ -183,6 +175,42 @@ def run(
     out = publication.append(out, VINTAGES, started, _read_vintages)
     logger.info("wrote %s new rows to %s", len(out), VINTAGES)
     return out
+
+
+def run(
+    delivery_day: date | None = None,
+    zone: str = "SE3",
+    fuel: str = "wind_onshore",
+    *,
+    refresh: bool = True,
+    resolution: str = "15min",
+    wind_method: str = "repeat",
+) -> pd.DataFrame:
+    if (zone, fuel) != ("SE3", "wind_onshore"):
+        return _fit_forecast(
+            delivery_day,
+            zone,
+            fuel,
+            refresh=refresh,
+            resolution=resolution,
+            wind_method=wind_method,
+        )
+    if resolution != "15min" or wind_method != "repeat":
+        raise ValueError(
+            "the prepared SE3 serving policy is hourly-repeated quarter-hour output"
+        )
+    from grid_signals.forecast import flows, live
+
+    delivery_day = delivery_day or (datetime.now(UTC).date() + timedelta(days=1))
+    result = flows.lifecycle(
+        "forecast", delivery_day - timedelta(days=1), refresh=refresh
+    )
+    receipt = result["receipt"]
+    rows = live.read_issue(receipt["forecast_id"])
+    rows["published_at"] = pd.Timestamp(receipt["published_at"])
+    rows["publication_status"] = receipt["publication_status"]
+    rows["is_primary"] = receipt["publication_status"] == "on_time"
+    return rows
 
 
 def _read_vintages() -> pd.DataFrame:

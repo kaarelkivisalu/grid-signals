@@ -1,0 +1,8 @@
+**
+!Dockerfile.runner
+!pyproject.toml
+!uv.lock
+!src/
+!src/grid_signals/
+!src/grid_signals/**
+src/**/__pycache__/

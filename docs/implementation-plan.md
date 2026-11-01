@@ -4,7 +4,8 @@ Reviewed 2026-10-26. [ROADMAP.md](../ROADMAP.md) owns the public features and th
 order. This document describes how the project should work, which existing parts
 are useful and how to replace or remove the rest. **Keep code because it serves
 the product, not simply because it already exists.** The assessment below records the original migration decisions. Milestone 2a
-implementation completed on 2026-11-01; its status and validation are recorded below.
+implementation completed on 2026-11-01. Milestone 2b's implementation is locally
+verified; the owner will deploy manually. Status and validation are recorded below.
 
 ## Goals and recommendation
 
@@ -42,9 +43,11 @@ flowchart TD
 ```
 
 Milestone 2a implements the shared package, CLI, registry and configured paths.
-The website reads exported results; local forecast timers now call that CLI. The
+The website reads exported results; local forecast timers use preserved 2a source
+until cutover. The
 original PostgreSQL/briefing flows and market deployment definitions are removed.
-The Prefect forecast lifecycle and saved trained models remain planned for 2b.
+The Prefect lifecycle and saved trained models are implemented in 2b, with manual
+server deployment and live acceptance pending.
 
 For the first always-on deployment, use one host with a **web service, Prefect
 server and forecast runner**, built from versioned releases. Choose Prefect's
@@ -134,7 +137,8 @@ failure at those boundaries. A successful process or inserted-row count is not
 proof of complete input data or delivery to the public site.
 
 Separate **model preparation** from the deadline-sensitive prediction path. Current
-wind, load and price publication functions fit models during publication. That
+load and price case-study publication functions still fit during publication. SE3
+now prepares saved models before the issue and loads them for prediction. That
 coupling becomes a resource/deadline problem when expanded across markets. Produce
 versioned fitted models on a declared training/calibration schedule, promote a
 validated candidate explicitly and record the saved model and training cutoff used
@@ -230,7 +234,8 @@ leads with SE3 wind, and the standalone image includes only the forecast pages a
 current checked result files. Offline image tests and local desktop/mobile review
 pass. The owner deployed the test site on 2026-11-01; anonymous HTTPS, desktop/phone
 navigation, historical dates and forecast CSV downloads passed public checks. See
-the [release review and owner handoff](operations.md#public-hosting). The package/CLI migration is now complete; the Prefect workflow remains milestone 2b.
+the [release review and owner handoff](operations.md#public-hosting). The package/CLI
+migration is complete; the Prefect implementation is locally verified in 2b.
 
 The observed October 23 SE3 record was 6/8 on-time issues with two timeout failures.
 That is useful initial evidence, not a demonstrated reliable service. Existing
@@ -270,3 +275,54 @@ and new code identity. Copies were saved before implementation changes. Frozen
 model version records and bundled evaluation results were not rewritten.
 Saved trained models, Prefect scheduling, deployment persistence and daily delivery
 remain 2b; this consolidation does not establish reliable forecast production.
+
+### Milestone 2b implementation — 2026-11-01
+
+The SE3 lifecycle uses Prefect flows/tasks and the same CLI operations locally.
+Daily preparation is separate from prediction. A model's exact training inputs,
+lag history, settings, code/environment, cutoff and reload fixture are retained
+and checked before explicit promotion. Prediction rejects incompatible, stale,
+post-cutoff or wrong-issue models. Fixed-input tests compare the old fitting path
+with the saved/reloaded result, including crossfit calibration; the new daily
+training cutoff is declared as a new forward policy, not historical evaluation.
+Original code version records, reports, evaluated results and archives are unchanged.
+
+Immutable candidates are delivered as complete checked generations. Receipts are
+confirmed after delivery, with conservative handling of crashes before confirmation.
+The website merges confirmed timing, shows every due day and warns about stale
+snapshots or fallback results. Complete actual days support matched model/physical
+scores and eligible pre-cutoff public point comparisons, with bias and coverage.
+Retrospective or repeated issues do not become first-on-time evidence.
+
+`Dockerfile.runner` and `compose.forecast.yaml` provide persistent data/results,
+Prefect SQLite and backups, non-root processes, resource caps, separate web
+dependencies and a read-only web result mount. Static `serve` deployments use
+explicit UTC schedules, one runner slot, bounded task retries/timeouts and overdue
+guards. New provider-phase job records identify where fetching fails without
+logging credential-bearing URLs. The original two `ReadTimeout` records contain
+insufficient evidence to identify their provider/root cause; live resolution is
+not claimed.
+
+The local systemd installer/wrapper and old multi-product timer workflow are
+retired in this checkout. Existing services were pinned to preserved 2a source;
+their schedules remain active until the owner performs the cutover. The default
+Compose deployment is paused, so importing inputs and checking the new stack
+cannot silently introduce a second active scheduler.
+
+Validation: **315 passed, 2 skipped**, Ruff lint/formatting, offline web/runner
+images and desktop/phone publication/CSV checks passed. Tests cover real Prefect
+execution, no-fit prediction, DST, model validation, partial actuals, immutable
+first receipts, deadline crossing, delivery interruption and recovery. A real
+isolated Compose restart retained six paused deployment IDs; restoring its SQLite
+backup recovered six deployments. A cached-data 934-day model preparation took
+249.1 seconds / 1,075.6 MiB peak RSS; fixed 96-hour reload/prediction took 1.4937
+seconds with agreement within `1e-12`. This retrospective artifact is retained,
+unpromoted and unscored. These workstation measurements do not establish deployed
+host capacity or full provider-to-public deadline performance.
+
+The owner chose manual deployment. The [operations guide](operations.md#se3-producer-deployment--milestone-2b)
+contains the seed archive, exact bootstrap commands, paused setup, model checks,
+old-timer shutdown and Prefect activation. Server deployment, domain cutover,
+current forecasts/subsequent scores, off-host recovery and the 30-consecutive-issue
+gate remain pending. Milestone 2b is not complete until its live acceptance holds;
+SE4 and later milestones have not started.

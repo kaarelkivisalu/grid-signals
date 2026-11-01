@@ -19,9 +19,9 @@ time, how it compared with credible alternatives, and whether it arrived on time
 | Public feature | Visitor outcome | Current position |
 |---|---|---|
 | Forecast explorer | Inspect predictions, uncertainty, actuals and errors by market, date, target and model; download results | Implemented locally for existing research outputs |
-| Performance evidence | Compare models on matched data; distinguish development, final evaluation and forward results | Historical comparisons implemented; a visible forward record remains work |
+| Performance evidence | Compare models on matched data; distinguish development, final evaluation and forward results | Historical comparisons and new forward record implemented; live deployment pending |
 | Methods, data sources and timing | Understand inputs, cutoffs, resolution, assumptions and limitations | Implemented locally; presentation must follow the regional direction |
-| Daily publication record | See latest forecasts, freshness, missing/late/failed issues and subsequent scores | Local trial and scorecards exist; always-on delivery is unproven |
+| Daily publication record | See latest forecasts, freshness, missing/late/failed issues and subsequent scores | Saved-model record verified locally; server cutover and always-on delivery pending |
 | Regional coverage matrix | See separate observation, evaluation and publication status for every zone and target | Existing map shows data/model coverage; the regional matrix remains work |
 | Research case studies | Assess SE3-to-SE4 transfer and one deep-learning challenger, including negative results | SE3 research exists; transfer and challenger remain work |
 
@@ -55,8 +55,9 @@ a milestone. The target is one forecasting package/CLI and lifecycle across loca
 use and deployment, with Prefect orchestration and a result-reading website.
 Existing code is retained only where it serves that target. Standalone learning
 exercises move outside this focused product repository. The architecture is
-documented; milestone 2a now combines the forecasting code and retires the original
-market application. The Prefect forecast lifecycle remains milestone 2b.
+documented; milestone 2a combines the forecasting code and retires the original
+market application. Milestone 2b implements the Prefect lifecycle locally; its
+manual deployment and live acceptance remain pending.
 
 ### 0. Establish direction — complete
 
@@ -138,23 +139,46 @@ two offline demo-image checks passed. Fixed-input wind/solar/load/price predicti
 and scores agree, as do all 13 exported Parquet files and three summary bundles
 (apart from generation timestamps). See [preservation and migration details](docs/operations.md#preservation-and-source-consolidation--2026-11-01).
 
-**2b — Run the forecast workflow:**
+**2b — Run the forecast workflow: implementation verified; owner deployment pending (2026-11-01)**
 
-- [ ] Replace old Prefect flows with data fetching/checks, training,
+- [x] Replace old Prefect flows with data fetching/checks, training,
   prediction, publishing, scoring and export flows. Use one scheduled runner with
   versioned code and saved models, data and results that survive restarts.
-- [ ] Separate model preparation from deadline-sensitive prediction; validate and
+- [x] Separate model preparation from deadline-sensitive prediction; validate and
   identify saved trained models and training cutoffs before promotion.
 - [ ] Provision an always-on producer independently of page serving, with bounded
   retries, resource limits, backup/restore and tested restart behaviour.
 - [ ] Cut over to Prefect scheduling and retire local forecast timers and old
   deployment definitions after equivalent lifecycle behaviour is verified.
 - [ ] Address observed timeout failures; monitor public forecast collection, forecasting and scoring.
-- [ ] Report failures to fetch data, generate forecasts or deliver results in each
+- [x] Report failures to fetch data, generate forecasts or deliver results in each
   product's job status; a successful task run alone does not prove results were published.
-- [ ] Deliver results automatically; publish a complete update at once and keep the last working version if an update fails.
-- [ ] Expose every due issue, publication time/status, freshness and available scores.
-- [ ] Compare eligible first publications with baselines and track bias/interval coverage.
+- [x] Implement automatic delivery of complete updates, retaining the last working version if an update fails.
+- [x] Expose every due issue, publication time/status, freshness and available scores.
+- [x] Compare eligible first publications with baselines and track bias/interval coverage.
+
+One persistent Prefect server, a bounded SE3 runner and a read-only result-serving
+web service are defined in `compose.forecast.yaml`. Six UTC deployments cover
+backup, preparation, public comparison collection, prediction, scoring and status.
+SE3 prediction uses checked promoted models and saved training/lag inputs without
+fitting during prediction. A new forward policy and runtime record preserve the
+original scientific evidence. Whole-generation delivery receipts determine
+first-on-time eligibility, including interrupted/retried delivery.
+
+Validation: 315 tests passed, 2 skipped; lint/formatting, both offline images,
+desktop/phone publication and CSV checks passed. An isolated Compose server/runner
+restart retained six paused deployment IDs; its checked SQLite backup restored
+all six. Cached-data preparation and reload also passed; these local checks do
+not establish live capacity or dependable publication. Provider-specific status,
+bounded timeouts and retries address failure handling; the original timeout root
+cause and its live resolution remain unverified.
+
+The owner will deploy manually. Schedules default to paused; existing local
+timers continue on preserved 2a source until the owner disables them before
+unpausing Prefect. Data seeding, model preparation, domain cutover, off-host
+recovery and current forecast/score acceptance remain required. Follow the
+[concrete deployment steps](docs/operations.md#se3-producer-deployment--milestone-2b).
+Do not start SE4 transfer before this milestone's deployment acceptance.
 
 **Done when:** current SE3 forecasts and subsequent scores reach the public site
 automatically, including visible failures and stale data. Assess the existing

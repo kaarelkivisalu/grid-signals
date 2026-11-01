@@ -23,7 +23,6 @@ PIPELINES = {
     "fetch-context": "sources.market_context",
     "train": "train",
     "backtest": "backtest_products",
-    "workflow": "daily",
 }
 EXPERIMENTS = (
     "compare_blocks",
@@ -58,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911
         cmd.add_argument("args", nargs=argparse.REMAINDER)
     forecast = sub.add_parser(
         "forecast",
-        help="Fit and publish an existing product; saved models follow in 2b",
+        help="Publish SE3 from a checked saved model, or run a German case study",
     )
     forecast.add_argument("--product", choices=PRODUCTS, default="se3-wind")
     forecast.add_argument("--day", type=date.fromisoformat)
@@ -76,6 +75,11 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911
         default="all",
         nargs="?",
     )
+    export.add_argument(
+        "--historical",
+        action="store_true",
+        help="Deliberately refresh flat historical case-study bundles",
+    )
     capture = sub.add_parser("capture", help="Save public comparison forecasts")
     capture.add_argument("--product", choices=PRODUCTS, default="se3-wind")
     capture.add_argument("--day", type=date.fromisoformat, required=True)
@@ -84,6 +88,44 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911
     )
     experiment.add_argument("name", choices=EXPERIMENTS)
     experiment.add_argument("args", nargs=argparse.REMAINDER)
+    workflow = sub.add_parser("workflow", help="Run the same SE3 lifecycle as Prefect")
+    workflow.add_argument(
+        "operation",
+        choices=("prepare", "capture", "forecast", "score", "status", "backup"),
+    )
+    workflow.add_argument("--issue-day", type=date.fromisoformat)
+    workflow.add_argument("--no-refresh", action="store_true")
+    workflow.add_argument(
+        "--allow-late",
+        action="store_true",
+        help="Allow a late run; recorded actual timing still determines eligibility",
+    )
+    model = sub.add_parser(
+        "model", help="Prepare, check or explicitly promote a saved SE3 model"
+    )
+    model.add_argument("action", choices=("prepare", "validate", "promote"))
+    model.add_argument("--issue-day", type=date.fromisoformat, required=True)
+    model.add_argument("--model-id")
+    model.add_argument("--reason")
+    runner = sub.add_parser("serve", help="Serve the versioned Prefect deployments")
+    runner.add_argument("--paused", action="store_true")
+    initialize = sub.add_parser(
+        "activate", help="Record the first due issue for a new producer"
+    )
+    initialize.add_argument("--first-issue-day", type=date.fromisoformat, required=True)
+    backup = sub.add_parser(
+        "backup", help="Save checked data, models, public evidence and Prefect metadata"
+    )
+    backup.add_argument("destination", type=Path)
+    seed = sub.add_parser(
+        "seed", help="Verify and import inputs into an empty producer data volume"
+    )
+    seed.add_argument("archive", type=Path)
+    restore = sub.add_parser(
+        "restore", help="Restore and verify a backup into a new directory"
+    )
+    restore.add_argument("archive", type=Path)
+    restore.add_argument("destination", type=Path)
     version = sub.add_parser(
         "version", help="Verify code identity or register a new immutable record"
     )
@@ -157,8 +199,84 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911
             parser.error("this experiment accepts no additional arguments")
         print(module.write() if args.name == "decision_study" else module.run())
         return 0
+    if args.command == "serve":
+        from grid_signals.forecast.flows import start
+
+        start(paused=args.paused)
+        return 0
+    if args.command == "workflow":
+        from grid_signals.forecast.flows import lifecycle
+
+        print(
+            json.dumps(
+                lifecycle(
+                    args.operation,
+                    args.issue_day,
+                    refresh=not args.no_refresh,
+                    allow_late=args.allow_late,
+                ),
+                default=str,
+            )
+        )
+        return 0
+    if args.command == "activate":
+        from grid_signals.forecast import live
+
+        with live.lock():
+            print(json.dumps(live.initialize(args.first_issue_day)))
+        return 0
+    if args.command == "model":
+        from grid_signals.forecast import live, saved_models
+
+        with live.lock():
+            if args.action == "prepare":
+                result = saved_models.prepare(args.issue_day)
+            else:
+                if not args.model_id:
+                    parser.error("--model-id is required to validate or promote")
+                if args.action == "promote":
+                    result = saved_models.promote(
+                        args.model_id, args.issue_day, reason=args.reason or ""
+                    )
+                else:
+                    _, result = saved_models.validate(args.model_id, args.issue_day)
+        print(json.dumps(result, indent=2))
+        return 0
+    if args.command == "seed":
+        from grid_signals.forecast.recovery import seed
+
+        print(json.dumps(seed(args.archive)))
+        return 0
+    if args.command in {"backup", "restore"}:
+        from grid_signals.forecast import recovery
+
+        result = (
+            recovery.backup(args.destination)
+            if args.command == "backup"
+            else recovery.restore(args.archive, args.destination)
+        )
+        print(json.dumps(result))
+        return 0
     paths.ensure_data_dirs()
     if args.command == "export":
+        if not args.historical:
+            if args.bundle != "all":
+                parser.error(
+                    "daily delivery commits a complete bundle; use --historical for a case-study exporter"
+                )
+            from grid_signals.forecast import live
+
+            with live.lock():
+                pointer = live.publish()
+            print(
+                json.dumps(
+                    {
+                        "generation": pointer["generation"],
+                        "verified_deliveries": len(pointer["deliveries"]),
+                    }
+                )
+            )
+            return 0
         modules = {
             "explorer": "export_explorer",
             "renewable": "export_demo",
@@ -205,6 +323,11 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911
             )
         )
     elif args.command == "score":
+        if args.product == "se3-wind":
+            from grid_signals.forecast.flows import lifecycle
+
+            print(json.dumps(lifecycle("score"), default=str))
+            return 0
         name = {
             "renewable": "score_live",
             "load": "score_load",

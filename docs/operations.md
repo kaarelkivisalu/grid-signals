@@ -1,9 +1,10 @@
 # Local forecast operations
 
-Milestone 2a consolidates forecasting in the installed `grid_signals.forecast`
-package and `grid-signals` CLI. The original PostgreSQL ingestion and briefing/chat
-runtime has been removed. Existing local forecast timers remain temporarily;
-Prefect cutover, saved trained models and always-on operation are milestone 2b.
+One installed `grid_signals.forecast` package and `grid-signals` CLI own forecasting.
+The SE3 saved-model lifecycle and three-service deployment are locally verified.
+The owner will deploy manually; server activation, scheduler cutover and current
+public forecasts remain pending. Existing local timers continue on preserved 2a
+source until that cutover. No remote service was changed for 2b.
 
 Run `uv run grid-signals ui` and open http://localhost:8501. The website reads
 portable JSON/Parquet bundles independently of training. Atomic exports keep the last
@@ -41,12 +42,13 @@ For exact original evaluation reproduction, work in a separate restored director
 install its original locked environment, and use its original `research/src`
 imports and cached inputs. Do not rewrite old source paths or checksums to point
 at moved files. The consolidated package has a separate code version record at
-`src/grid_signals/forecast/configs/releases/consolidated_v1.json`. New publications
-verify this record and use its identity. It links the historical records and load
+`src/grid_signals/forecast/configs/releases/consolidated_v1.json`. The 2a publications
+verify that record and use its identity. It links the historical records and load
 selection by checksum without claiming a new final evaluation. A new code/settings
 revision requires a new record, created with `grid-signals version --register PATH`
 and selected through `GRID_SIGNALS_VERSION_RECORD`; this is code identity, not the
-saved-trained-model promotion planned in 2b.
+saved-trained-model promotion. The 2b runtime has a separate record described below;
+the original and 2a records remain unchanged.
 
 Migration checks compare original and moved models on deterministic wind, solar,
 load and price inputs, including quantile predictions and scores. Model, feature,
@@ -67,24 +69,18 @@ set `GRID_SIGNALS_EXPLORER_PATH` to the exported `explorer` directory and
 
 ## Daily local trial
 
-This is the existing trial mechanism, scheduled for retirement after Prefect
-cutover. Do not add another active scheduler for the same production issues.
+The old local trial remains the active schedule until the owner's Prefect cutover.
+The installer and shell wrapper have been retired from this checkout. The three
+existing user services use the checked source from commit
+`20b607b` in
+`/home/kaarel/Projects/grid-signals-preserved/2026-11-01-before-2b/source`,
+selected by their `PYTHONPATH` environment setting. Copies of the unit files are
+in that preservation directory's `systemd/` folder. The preserved package's code
+record verifies. Data locations, timers and their schedules were not changed;
+systemd was reloaded without starting jobs. Do not add another active scheduler
+for these issues before the cutover.
 
-After `uv sync --group research`:
-
-```bash
-uv run python scripts/install_forecast_schedule.py
-systemctl --user list-timers 'grid-signals-*'
-```
-
-The installer writes user services/timers for this checkout's virtualenv. During
-2a, the three existing services were updated to this checkout and
-`python -m grid_signals workflow MODE`; their former lowercase checkout paths
-were stale. Systemd was reloaded without starting jobs or changing timers. All
-three timers remained active and waiting. The original unit files are preserved
-in the directory above. This confirms configuration only, not a successful daily run.
-
-The schedule remains:
+Inspect with `systemctl --user list-timers 'grid-signals-*'`. The old schedule remains:
 
 | Job | UTC | Behaviour |
 |---|---|---|
@@ -130,6 +126,215 @@ Disable the schedule with:
 systemctl --user disable --now grid-signals-capture.timer grid-signals-forecast.timer grid-signals-score.timer
 ```
 
+## SE3 producer deployment — milestone 2b
+
+Implementation is ready for manual deployment from `feat/electricity-forecasting`.
+`compose.forecast.yaml` runs one Prefect server, one runner and one web service.
+This replaces the multi-product local schedule with **SE3 onshore wind only**;
+German results remain historical case studies and manual commands. The historical
+public site stays available during setup.
+
+### What is implemented
+
+- `forecast_runtime_v2.json` identifies runtime
+  `forecast-runtime-v2+1a775e36653d5d5b`. The daily saved-model policy is
+  `se3-wind-saved-v1-daily-before-issue`, a new forward version. Each preparation
+  retains exact training inputs, lag history, settings, code/dependency identities,
+  training cutoff, trained model, fitted physical reference and a reload comparison.
+  It excludes training delivery days at or after the preparation/issue cutoff.
+- Preparation validates and explicitly promotes a saved model. Prediction only
+  loads the matching issue's promoted model. Changed files, code or dependencies,
+  models prepared after the issue cutoff and models over 30 hours old are rejected.
+  Train inside the deployed runner: the local Python 3.13 validation artifact is
+  intentionally incompatible with the runner's pinned Python 3.12 environment.
+- Durable candidate files precede publication. All public payloads are checked
+  before a whole-generation pointer is committed. A delivery receipt is confirmed
+  only after that generation is readable. A crash before confirmation remains
+  unverified; recovery uses its real confirmation time. Retries preserve confirmed
+  first publications. The web pins a checked generation and can fall back to the
+  previous one or bundled history, with a warning.
+- Publication pages expose every due day, missing/late/failed issues, freshness,
+  model and collection evidence. The client derives missing due days even when
+  the producer stops; a snapshot older than 45 minutes is visibly stale.
+  Forward scores use complete actual days and the first verified on-time receipt,
+  matched against the saved physical reference. Public point forecasts are compared
+  only with complete, hashed responses received before the information cutoff.
+  Bias, CRPS and interval coverage are retained; scores remain revisable with actuals.
+- Provider phases have separate status, error type and elapsed time. Actuals and
+  weather fetching have bounded retries/timeouts; fitting and prediction do not
+  retry blindly. Historical `ReadTimeout` records do not identify the original
+  provider/root cause. The new controls and visibility are tested, but live
+  evidence that those failures are resolved is still required.
+
+All six deployments use UTC and share a single runner slot and data lock:
+
+| Operation | UTC schedule | Behaviour |
+|---|---|---|
+| Backup | 03:00 | Checked data/results and online SQLite backup |
+| Prepare | 06:00 | Refresh inputs, fit, verify reload, promote for today's issue |
+| Capture | 08:55 | Save the public SE3 wind forecast before the cutoff |
+| Forecast | 09:00 | Fetch eligible weather, load saved model, deliver by 09:30 |
+| Score | 15:00 | Refresh actuals and publish matched scores |
+| Status | Every 15 minutes | Publish current due-day and job status |
+
+Prefect schedules keep their original scheduled day across restarts. Overdue
+forecast/preparation/collection runs fail visibly instead of using newer inputs
+to fabricate on-time evidence. Local commands call the same flow/task functions.
+The static runner uses Prefect's [local-process deployments](https://docs.prefect.io/v3/how-to-guides/deployment_infra/run-flows-in-local-processes).
+Schedules start **paused**; the server persists its SQLite database independently
+of runner and page serving.
+
+### Manual deployment steps
+
+1. Make the reviewed commit available on `feat/electricity-forecasting` when ready
+   and wait for its CI checks. No push or remote deployment was performed during
+   preparation. Leave Dokploy automatic deployment disabled.
+2. In Dokploy, create a **Docker Compose** application from this repository and
+   branch, using `compose.forecast.yaml`. Build from the repository root. Set:
+
+   ```dotenv
+   ENTSOE_API_KEY=your-existing-provider-key
+   GRID_SIGNALS_IMAGE_TAG=the-reviewed-commit
+   GRID_SIGNALS_SCHEDULES_PAUSED=true
+   GRID_SIGNALS_RUNNER_MEMORY=3g
+   GRID_SIGNALS_RUNNER_CPUS=2
+   ```
+
+   The image tag is a label: deploy the reviewed source commit as well. The runner
+   alone receives the provider key. Four named volumes persist forecast data,
+   public results, Prefect state and backups. The web mounts results read-only.
+   All app processes run as UID 10001. Default memory caps total 4.75 GiB; ensure
+   the host also has room for Dokploy, builds and existing services. Host capacity
+   has not been checked. Do not remove these volumes when updating containers.
+3. Deploy with schedules paused. Check that `prefect` and `runner` are healthy and
+   `web` serves `/_stcore/health`. On the host the diagnostic endpoints are bound
+   to loopback: Prefect `http://127.0.0.1:4200` and web
+   `http://127.0.0.1:8503`. An SSH tunnel can reach them without publishing Prefect.
+   Confirm the six `se3-*` deployments are paused. The runner health server uses
+   internal port 8080. Dokploy's [Compose guide](https://docs.dokploy.com/docs/core/docker-compose)
+   describes its application setup.
+4. Transfer the checked seed archive from this workstation:
+   `data/deployment/se3-seed-2026-11-01.tar.gz` (identity recorded below). Upload it
+   to the server using your normal file transfer. Find the runner's actual
+   container name in Dokploy and replace `RUNNER_CONTAINER` below:
+
+   ```bash
+   docker cp /path/on/server/se3-seed-2026-11-01.tar.gz RUNNER_CONTAINER:/tmp/forecast-seed.tar.gz
+   docker exec --user 10001 RUNNER_CONTAINER python -m grid_signals seed /tmp/forecast-seed.tar.gz
+   ```
+
+   `seed` verifies every archived file, imports inputs/history/tracking into an
+   **empty** data volume and records the archive checksum. It refuses an existing
+   producer's data. It does not activate the trial or promote the local validation
+   model. Keep the original checked archive outside the server as a recovery source.
+5. Choose a future first issue day, usually tomorrow, and replace `YYYY-MM-DD`.
+   Prepare and validate before its 09:00 UTC cutoff:
+
+   ```bash
+   docker exec --user 10001 RUNNER_CONTAINER python -m grid_signals activate --first-issue-day YYYY-MM-DD
+   docker exec --user 10001 RUNNER_CONTAINER python -m grid_signals workflow prepare --issue-day YYYY-MM-DD
+   docker exec --user 10001 RUNNER_CONTAINER python -m grid_signals workflow status --issue-day YYYY-MM-DD
+   ```
+
+   `activate` does not reset an existing trial. Preparation fetches current data,
+   fits inside the deployed environment and promotes only after validation. Its
+   output names the model; the public status details must show `active_model`
+   ready, a pre-issue preparation time and a training end before the cutoff.
+   If setup misses the cutoff, use the next issue day; do not backdate it.
+6. Add a temporary preview domain to the Compose **web** service, internal port
+   **8501**, with HTTPS. Use Dokploy's [Compose domain settings](https://docs.dokploy.com/docs/core/docker-compose/domains).
+   Check the historical pages, the new Daily SE3 wind section on Overview and
+   Performance, CSV downloads and phone navigation. The first issue is pending
+   until the actual scheduled forecast arrives. Keep the existing historical
+   demo/image available for rollback; move the test domain to this web service
+   after the preview checks pass. The final domain and `main` merge remain deferred.
+7. Before unpausing the server, run this **on the original workstation**:
+
+   ```bash
+   systemctl --user disable --now grid-signals-capture.timer grid-signals-forecast.timer grid-signals-score.timer
+   systemctl --user list-timers 'grid-signals-*'
+   ```
+
+   Then set `GRID_SIGNALS_SCHEDULES_PAUSED=false` in Dokploy and redeploy the runner
+   with the same volumes and reviewed image. Confirm all six schedules are active.
+   Do not run both schedulers. The first preparation at 06:00 may replace the
+   checked bootstrap model under the same declared daily policy.
+8. After 09:00–09:30 UTC on the first issue day, check a current forecast through
+   the anonymous HTTPS site and download its CSV. Verify its delivery date,
+   saved model/training cutoff and actual publication time. Check collection and
+   any failure records, then complete actuals/scores on subsequent days. Record
+   the deployed commit/image, domain, first issue and backup destination here.
+   Server restart, off-host recovery and the approximately 30 consecutive on-time
+   issue gate require deployment evidence before claiming dependable operation.
+
+### Backup and recovery
+
+The initial transfer archive is
+`data/deployment/se3-seed-2026-11-01.tar.gz`, with 6,144 checked files and SHA-256
+`28e3f6c0d94745c9600e1235b734c925f9eb2aa2d25af9dd8773ec087f90ff1a`.
+It includes local inputs, historical evidence, tracking and the unpromoted model
+validation artifact. It contains no deployed Prefect database and does not reset
+or import an active new-producer trial. The archive is gitignored and must be
+transferred separately from the source commit. Restoring this exact archive into
+a separate temporary directory verified all 6,144 files before handoff.
+
+The 03:00 job saves `/backups/forecast-<UTC time>.tar.gz`, including recorded
+inputs, saved models, publication evidence, results, experiment metadata and an
+online checked copy of Prefect's SQLite database. Manual equivalents:
+
+```bash
+docker exec --user 10001 RUNNER_CONTAINER python -m grid_signals backup /backups/manual-check.tar.gz
+docker exec --user 10001 RUNNER_CONTAINER python -m grid_signals restore /backups/manual-check.tar.gz /backups/restored-check
+```
+
+Restore requires a new destination and checks its complete file index and
+checksums. This command verifies an archive; it does not overwrite running
+volumes. For a real recovery, pause/stop runner and server, restore into new
+volumes, place restored `data/`, `public/` and `prefect.db` at their respective
+mount roots with UID 10001 ownership, and start the same reviewed images with
+schedules paused. Retain old volumes until checks pass. Validate the promoted
+model in that exact environment, inspect the last public receipt and six Prefect
+deployments, then resume. Newer code/environment must not silently reuse an
+incompatible model. Never turn a recovered late issue into an on-time receipt.
+
+The named backup volume is on the same host. Copy checked archives to a separate
+host/storage location and set retention appropriate to available space; no
+off-host destination or automatic cleanup is configured. Do not delete original
+evaluated inputs, frozen code/model records or first-publication evidence.
+Dokploy also provides [volume backups](https://docs.dokploy.com/docs/core/volume-backups);
+application backups use SQLite's online backup API for a consistent database copy.
+
+### Local verification — 2026-11-01
+
+- 315 tests passed, 2 skipped. Checks include the real temporary Prefect engine,
+  fixed-input fitted-versus-reloaded predictions, crossfit calibration, 92/96/100
+  interval delivery grids, incomplete actuals, bad/missing model files, deadline
+  crossing, delivery interruption/retry and verified backup/restore/seed behaviour.
+- Ruff lint/formatting passed. Both final images passed checks without network
+  access or credentials. The runner check performs synthetic preparation,
+  promotion, prediction, publication and recovery as UID 10001; web/experiment
+  dependencies are excluded from the runner.
+- An isolated Compose stack started healthy, registered six paused UTC schedules,
+  retained all six IDs and pause states across server/runner restarts, and restored
+  its real Prefect database with six deployment rows. The web result mount was
+  verified read-only. No real provider calls or scheduled forecasts were run.
+- Desktop (1440 px) and phone (390 px) browser checks passed for the new publication
+  record, latest forecast navigation and both CSV downloads. Forecast CSVs included
+  96 intervals and saved-model/training metadata. This used isolated synthetic
+  results; it did not publish new live evidence. No browser errors or page overflow
+  were found.
+- A cached-data preparation with the default crossfit settings used 934 training
+  days / 22,392 hourly rows, took 249.1 seconds and peaked at 1,075.6 MiB RSS.
+  Loading that model and predicting a fixed 96-hour input took 1.4937 seconds;
+  predictions agreed within `1e-12`. This uncapped workstation measurement excludes
+  provider fetching and feature construction and is not a host/deadline guarantee.
+  The retrospective 2026-10-22 artifact and verification are retained under
+  `research/data/model_validation/`, unpromoted and unscored. It is not a serving
+  model for the runner's different Python environment.
+
+The actual host, domain cutover, first current issue/scores, off-host recovery and
+ongoing reliability checks remain the owner's manual deployment work.
+
 ## Refresh the historical explorer
 
 The website has one shared market/date/target/model selection, full backtest
@@ -137,17 +342,17 @@ series and grouped diagnostics. Exporting reads **completed** research evaluatio
 it never trains or reopens a sealed holdout:
 
 ```bash
-uv run grid-signals export explorer
+uv run grid-signals export explorer --historical
 ```
 
-The daily results-export job also runs this exporter. Files are named using checksums and the
-file index (`manifest.json`) changes last, so a failed refresh leaves the previous generation readable.
+Daily delivery commits complete generations separately. Historical flat exporters
+name files using checksums and update the file index (`manifest.json`) last.
 Old generations can be removed when no running reader needs them. The web image
 contains the exported result files, not the raw cache.
 
 Generated Parquet exports are ignored by Git; the files already committed remain
 tracked. Exports default to `data/exports`; use
-`uv run grid-signals --output-dir src/grid_signals/app/assets export all` only
+`uv run grid-signals --output-dir src/grid_signals/app/assets export all --historical` only
 when deliberately refreshing bundled results. When updating the bundled demo, commit the updated file index together
 with its referenced result files. Use `git add -f` for newly generated files listed
 in that index, rather than adding every older export in the directory.
@@ -216,7 +421,7 @@ only those files into the final image. Older local exports are preserved under
 View logs with `docker compose -f compose.demo.yaml logs -f`; stop and remove the
 demo container with `docker compose -f compose.demo.yaml down`.
 Use `compose.demo.yaml` explicitly. The original market Compose files and worker
-Dockerfile were removed in 2a; the forecast runner deployment follows in 2b.
+Dockerfile were removed in 2a; use `compose.forecast.yaml` for the new producer.
 The Python runtime and uv builder images are pinned by digest. The Dockerfile
 follows Astral's [multistage example](https://github.com/astral-sh/uv-docker-example/blob/main/multistage.Dockerfile):
 the uv 0.13.6 Python builder runs `uv sync --locked` with a shared build cache and
@@ -351,8 +556,9 @@ The initial historical release needs only the web service. The target daily
 deployment adds a Prefect server and forecast runner on the same host, with
 persistent product data and a published-results volume mounted read-only in the
 web container. See the [target deployment](implementation-plan.md#how-the-deployed-system-should-run).
-The current Compose files do not implement that target; do not deploy the original
-market stack unchanged as the forecast producer.
+`compose.forecast.yaml` implements that target; follow the separate
+[producer deployment steps](#se3-producer-deployment--milestone-2b), including data
+seeding and scheduler cutover. The demo-only steps above do not activate daily forecasts.
 
 Existing Dokploy capacity hosts the test site; reconsider hosting only for a
 concrete operational or cost constraint. The

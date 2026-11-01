@@ -48,6 +48,8 @@ st.markdown(
 )
 try:
     st.session_state.explorer_manifest = load_manifest()
+    if st.session_state.explorer_manifest.get("_result_error"):
+        st.warning(st.session_state.explorer_manifest["_result_error"])
 except SnapshotError:
     st.title("Grid Signals")
     st.error("Forecast results unavailable")

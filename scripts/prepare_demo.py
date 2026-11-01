@@ -18,6 +18,8 @@ APP_FILES = (
     "model_catalogue.py",
     "presentation.py",
     "snapshot.py",
+    "results.py",
+    "publication.py",
     "pages/overview.py",
     "pages/wind.py",
     "pages/solar.py",
