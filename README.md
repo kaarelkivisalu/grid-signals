@@ -79,8 +79,11 @@ Custom DE-LU load is implemented; its first price-input experiment shows no reso
 Custom German wind and residual-load forecasts are deferred; observed residual
 load is available where all components exist. The German demand study is available
 from Demand in the sidebar. The old database and chat tools are outside the demo.
-Public hosting is handled by the project owner. See the
-[local release review and deployment handoff](docs/operations.md#public-hosting).
+The historical demo is deployed through Dokploy at
+[grid-signals-demotest.kaarelkivisalu.ee](https://grid-signals-demotest.kaarelkivisalu.ee)
+from `feat/electricity-forecasting`. Once the roadmap is reasonably complete and
+merged into `main`, the planned domain is `https://grid-signals.kaarelkivisalu.ee`.
+See the [release review and deployment details](docs/operations.md#public-hosting).
 
 See the [historical direction and commercial comparison](docs/project-direction-review.md),
 [research results](research/README.md) and [operations guide](docs/operations.md).

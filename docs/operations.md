@@ -113,6 +113,20 @@ the project's [SDAC registry](https://www.entsoe.eu/network_codes/cacm/implement
 
 ## Public hosting
 
+The owner confirmed the Dokploy test deployment on **2026-11-01**:
+[grid-signals-demotest.kaarelkivisalu.ee](https://grid-signals-demotest.kaarelkivisalu.ee).
+It is deployed from `feat/electricity-forecasting`. Anonymous requests to the
+homepage and `/_stcore/health` returned HTTP 200 with certificate verification
+enabled; the health response was `ok`. Public desktop/mobile navigation,
+historical dates and CSV downloads still need acceptance checks. The deployed
+Git revision and image identity have not yet been recorded from Dokploy.
+
+Keep this test domain while developing the roadmap. Once the roadmap is
+reasonably complete and the owner approves merging into `main`, change the
+deployment source to `main` and the domain to
+**`https://grid-signals.kaarelkivisalu.ee`**, configure its DNS and HTTPS, and
+repeat the public acceptance checks. The final domain is planned, not verified.
+
 The presentation has a separate, non-root web-only image with pinned UI dependencies.
 Start it locally with Docker Compose:
 
@@ -218,8 +232,8 @@ their recorded checksums intact; other lint rules remain active.
 
 ### Manual deployment steps for the owner
 
-Public deployment and signed-out HTTPS verification remain open. Use the existing
-Dokploy capacity for one web service:
+The test site is deployed and anonymous HTTPS access is verified. Use these
+steps for later demo updates or to recreate the web service:
 
 Deploy from **`feat/electricity-forecasting`** while the roadmap is being developed.
 Keep this branch name stable. Updating `main` is a separate owner decision once
@@ -253,9 +267,7 @@ web container. See the [target deployment](implementation-plan.md#how-the-deploy
 The current Compose files do not implement that target; do not deploy the original
 market stack unchanged as the forecast producer.
 
-The earlier public URL returned 404; local evidence does not establish its cause.
-No public deployment has changed. Deployment will be handled by the project owner
-after local demo review. Existing Dokploy capacity is the first choice; reconsider
-hosting only for a concrete operational or cost constraint. The
+Existing Dokploy capacity hosts the test site; reconsider hosting only for a
+concrete operational or cost constraint. The
 [roadmap](../ROADMAP.md) defines release acceptance; the
 [historical direction review](project-direction-review.md) retains the comparison.
