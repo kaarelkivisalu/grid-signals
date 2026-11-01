@@ -8,6 +8,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import sys
 import unittest
 from pathlib import Path
 
@@ -19,6 +20,8 @@ APP = Path("/app/src/grid_signals/app")
 class DemoReleaseTests(unittest.TestCase):
     def test_image_contains_only_current_results_and_web_dependencies(self):
         assert os.getuid() != 0
+        assert sys.prefix == "/opt/venv"
+        assert sys.prefix != sys.base_prefix
         assert not (Path("/app") / ".env").exists()
         for key in ("ENTSOE_API_KEY", "ANTHROPIC_API_KEY", "DATABASE_URL"):
             assert key not in os.environ
