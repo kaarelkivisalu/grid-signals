@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from renewable_forecast.pipelines.decision_study import dispatch
+from grid_signals.forecast.pipelines.decision_study import dispatch
 
 
 @pytest.mark.parametrize("intervals", [92, 96, 100])

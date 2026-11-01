@@ -10,8 +10,8 @@ from grid_signals.app.explorer_data import (
     market_day,
     read_market,
 )
-from grid_signals.app.markets import BY_CODE, SELECTED_MODELS
 from grid_signals.app.presentation import delivery_day, market_choices
+from grid_signals.markets import BY_CODE, SELECTED_MODELS
 
 manifest = st.session_state.explorer_manifest
 st.title("Electricity markets")

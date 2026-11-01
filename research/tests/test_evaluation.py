@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from renewable_forecast.evaluation import metrics, splits
+from grid_signals.forecast.evaluation import metrics, splits
 
 LEVELS = np.round(np.arange(0.05, 1.0, 0.05), 2)
 

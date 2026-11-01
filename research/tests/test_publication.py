@@ -6,9 +6,9 @@ from uuid import uuid4
 import pandas as pd
 import pytest
 
-from renewable_forecast import journal, publication
-from renewable_forecast.pipelines import score_live
-from renewable_forecast.sources import capture
+from grid_signals.forecast import journal, publication
+from grid_signals.forecast.pipelines import score_live
+from grid_signals.forecast.sources import capture
 
 CUTOFF = datetime(2026, 1, 2, 9, tzinfo=UTC)
 

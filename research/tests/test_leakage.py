@@ -11,9 +11,9 @@ from datetime import timedelta
 import pandas as pd
 import pytest
 
-from renewable_forecast import windows
-from renewable_forecast.features import assemble
-from renewable_forecast.sources import ifs_runs
+from grid_signals.forecast import windows
+from grid_signals.forecast.features import assemble
+from grid_signals.forecast.sources import ifs_runs
 
 
 def _frame(*, fixed_offset: int | None = None) -> pd.DataFrame:

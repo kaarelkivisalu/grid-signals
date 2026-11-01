@@ -10,14 +10,11 @@ regional bidding zones**: SE1–SE4, NO1–NO5, DK1–DK2, FI, EE, LV and LT. On
 comes first; offshore follows separately. This is the roadmap destination, not a
 claim of current forecast coverage.
 
-**Current milestone:** prepare the historical demo for public release, leading with SE3 wind
-and retaining German forecasts as supporting case studies. Then expose daily
-publication and performance through a consolidated forecasting product, transfer
-wind to SE4 and improve the demo one feature at a time. The target uses one package
-and CLI across local use and deployment, Prefect orchestration and a
-website that reads saved forecast results. The original PostgreSQL/briefing/chat application will
-be retired; standalone exercises move elsewhere. See the authoritative [roadmap](ROADMAP.md) and
-[whole-project assessment and implementation plan](docs/implementation-plan.md).
+**Current milestone:** package consolidation (2a) is complete. Reusable forecasting
+code lives in the installed `grid_signals.forecast` package, with one
+`grid-signals` CLI and shared market/product definitions. The historical demo is
+public. Daily Prefect operation and saved trained models are next in 2b. See the
+[roadmap](ROADMAP.md) and [implementation plan](docs/implementation-plan.md).
 
 ## Run the local demo
 
@@ -43,7 +40,7 @@ uv run grid-signals ui
 ```
 
 Open **http://localhost:8501**. Bundled results need no database, API keys,
-research dependencies or model training.
+forecast runner dependencies or model training.
 
 - **Overview:** area/date selection, one electricity-price graph and one combined
   wind, solar and demand graph. Each product has at most one saved model forecast;
@@ -97,11 +94,10 @@ bash scripts/check.sh
 ```
 
 This installs the locked development and research dependencies, checks lint and
-formatting, runs the full test suite with coverage (including PostgreSQL tests
-through testcontainers), then builds and browses the standalone demo image without
+formatting, runs the full test suite with coverage (using local fixtures), then builds and browses the standalone demo image without
 network access or API keys. It stops at the first failed check and exits with an error.
-Docker must be accessible to your user; database tests may download `postgres:17`,
-and the demo build needs network access to download its image and dependencies.
+Only the demo check needs Docker. Its build needs network access to download the
+base image and locked dependencies. Tests no longer require PostgreSQL.
 
 For a shorter feedback loop, run one check group:
 
@@ -125,14 +121,15 @@ point to its new location.
 After generating the underlying research results:
 
 ```bash
-PYTHONPATH=research/src uv run --group research python -m renewable_forecast.reporting.export_demo
-PYTHONPATH=research/src uv run --group research python -m renewable_forecast.reporting.export_price
-PYTHONPATH=research/src uv run --group research python -m renewable_forecast.reporting.export_load
-PYTHONPATH=research/src uv run --group research python -m renewable_forecast.reporting.export_explorer
+uv sync --frozen --group research
+uv run grid-signals export all
 ```
 
 The exporters read existing Parquet files and evaluation results, then update the
-JSON summaries and historical result files in `src/grid_signals/app/assets/`.
+JSON summaries and historical result files in `data/exports/` by default.
+Use `--output-dir /absolute/results` before `export` to choose another destination.
+Bundled website assets are updated only with an explicit
+`uv run grid-signals --output-dir src/grid_signals/app/assets export all`.
 Each Parquet filename includes a checksum of its contents. The file index is
 updated last so incomplete updates are not shown. Exporting does not train models
 or score holdouts. Bundles ship with the application; chart dates and publication status
@@ -141,13 +138,45 @@ describe the underlying forecast, rather than the export time.
 Set `GRID_SIGNALS_EXPLORER_PATH` to preview another explorer directory. See the
 [operations guide](docs/operations.md) for fetching additional market data.
 
-## Implementation transition
+## Forecast commands and configuration
 
-The current checkout still contains the original PostgreSQL market dashboard,
-briefings/chat, ingestion-oriented CLI and local forecast timers. They have not
-been removed. They are not permanent supporting products in the target architecture.
-Forecast production currently uses the [research entrypoints](research/README.md#run-the-research).
-The code-reorganisation milestone replaces the split runtimes with one package/CLI and
-Prefect lifecycle while preserving evaluated results and publication evidence.
-See the [implementation plan](docs/implementation-plan.md) for keep/remove decisions
-and the [publication contract](research/docs/integration_contract.md) for reliability.
+```bash
+uv sync --frozen --group research
+uv run grid-signals info
+uv run grid-signals fetch-actuals 2026-10-01 2026-10-15
+uv run grid-signals refresh-weather --help
+uv run grid-signals train --help
+uv run grid-signals backtest --fuel wind_onshore
+uv run grid-signals forecast --product se3-wind --no-refresh
+uv run grid-signals score --product se3-wind
+uv run grid-signals export all
+uv run grid-signals version
+```
+
+`forecast` records real creation/publication times; historical invocations do not
+become on-time issues. It still fits during prediction; saved trained models and
+Prefect scheduling belong to 2b. `train` fits and scores the existing development
+comparison, while `backtest` runs the quarter-hour product comparison. Neither
+reopens a final evaluation. Use `--help` for each command's options.
+
+The single lockfile has `web`, `runner`, `research` and `dev` dependency groups.
+For a web environment use `uv sync --frozen --no-default-groups --group web`;
+for forecasting use `uv sync --frozen --no-default-groups --group runner`.
+The full development environment uses `uv sync --frozen --group research`.
+MLflow and plotting tools are experiment dependencies; PostgreSQL, chat clients,
+DuckDB and generic notebook packages are no longer required.
+
+Set `GRID_SIGNALS_DATA_DIR`, `GRID_SIGNALS_OUTPUT_DIR`,
+`GRID_SIGNALS_CONFIG_DIR`, `GRID_SIGNALS_REPORTS_DIR` or
+`GRID_SIGNALS_MLRUNS_DIR` before importing pipelines. The matching CLI options
+(`--data-dir`, `--output-dir`, etc.) go before the command. Data defaults to
+`research/data`, exports to `data/exports`, reports to `research/reports` and
+MLflow to `research/mlruns`, relative to the working directory. Settings ship in
+`src/grid_signals/forecast/configs`. Absolute paths support mounted volumes and
+running outside the checkout. Existing local inputs have not moved.
+
+The original market database application, briefing/chat pages, duplicate forecast
+pages and market deployment definitions have been retired. No Docker service or
+volume was deleted. The existing local forecast timers remain until the Prefect
+cutover in 2b and call the installed CLI. See [operations](docs/operations.md) for
+preservation copies, frozen-release reproduction and timer details.

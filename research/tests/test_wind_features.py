@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from renewable_forecast.features import wind
+from grid_signals.forecast.features import wind
 
 RATED_SPEED = 12.0
 CUT_IN = 3.0
@@ -128,7 +128,7 @@ def test_aggregate_never_turns_missing_clusters_into_calm() -> None:
     import numpy as np
     import pandas as pd
 
-    from renewable_forecast.features import wind
+    from grid_signals.forecast.features import wind
 
     points = pd.DataFrame(
         {

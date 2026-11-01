@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 from grid_signals.app.snapshot import DEFAULT_SNAPSHOT
-from renewable_forecast.reporting import export_demo
+from grid_signals.forecast.reporting import export_demo
 
 
 def test_export_rejects_holdout_evaluation_rows(monkeypatch, tmp_path):

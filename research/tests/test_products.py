@@ -6,16 +6,16 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from renewable_forecast import config, windows
-from renewable_forecast.evaluation.solar import (
+from grid_signals.forecast import config, windows
+from grid_signals.forecast.evaluation.solar import (
     ClearSkyClimatology,
     SmartPersistence,
     SolarPhysical,
 )
-from renewable_forecast.features import assemble, resolution, solar
-from renewable_forecast.models.solar import SolarQuantileGBM
-from renewable_forecast.pipelines import backtest_products, evaluate, predict
-from renewable_forecast.targets import actuals
+from grid_signals.forecast.features import assemble, resolution, solar
+from grid_signals.forecast.models.solar import SolarQuantileGBM
+from grid_signals.forecast.pipelines import backtest_products, evaluate, predict
+from grid_signals.forecast.targets import actuals
 
 
 def test_weather_interpolation_preserves_missing_values_gaps_and_vintages():
@@ -227,7 +227,9 @@ def test_predict_respects_issue_cutoff_and_returns_only_the_new_vintage(
 ):
     archive = tmp_path / "vintages.parquet"
     monkeypatch.setattr(predict, "VINTAGES", archive)
-    monkeypatch.setattr(predict.experiment, "version", lambda cfg: cfg.fingerprint())
+    from grid_signals.forecast import versions
+
+    monkeypatch.setattr(versions, "verify", lambda: {"identity": "fixture-version"})
     future = pd.DataFrame(
         {
             "valid_time": pd.to_datetime(

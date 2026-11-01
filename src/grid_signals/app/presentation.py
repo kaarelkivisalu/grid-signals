@@ -15,19 +15,19 @@ from grid_signals.app.explorer_data import (
     market_day,
     read_market,
 )
-from grid_signals.app.markets import (
-    BY_CODE,
-    MARKET_GROUPS,
-    PORTFOLIO_MARKETS,
-    SDAC_MARKETS,
-    SELECTED_MODELS,
-)
 from grid_signals.app.model_catalogue import (
     FORECAST_GUIDES,
     REFERENCE_MODELS,
     model_name,
 )
 from grid_signals.app.snapshot import SnapshotError
+from grid_signals.markets import (
+    BY_CODE,
+    MARKET_GROUPS,
+    PORTFOLIO_MARKETS,
+    SDAC_MARKETS,
+    SELECTED_MODELS,
+)
 
 FAMILIES = {
     "wind_onshore": "Wind",

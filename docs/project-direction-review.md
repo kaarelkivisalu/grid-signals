@@ -78,7 +78,7 @@ A read-only request to `https://grid-signals.kaarelkivisalu.ee/` returned **HTTP
 
 There are also confirmed repository problems to address:
 
-- [DEPLOY.md](../DEPLOY.md) and the root README still describe DuckDB/shared volumes. The actual Compose files use PostgreSQL and a shared Docker network.
+- `DEPLOY.md` (retired in 2a and preserved with the original checkout) and the root README still describe DuckDB/shared volumes. The actual Compose files use PostgreSQL and a shared Docker network.
 - The app Compose service depends on the external `grid-signals` network and a `postgres` service deployed separately. PostgreSQL password and service connectivity are absent from the old deployment instructions.
 - Dashboard and briefing pages obtain database connections without a useful unavailable-data fallback. Their default dates assume fresh ingestion.
 - The home page presents navigation instructions instead of results. The best work is invisible to a recruiter opening the URL.

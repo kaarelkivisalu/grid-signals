@@ -3,7 +3,6 @@
 import pandas as pd
 import streamlit as st
 
-from grid_signals.app.markets import BY_CODE, SELECTED_MODELS
 from grid_signals.app.model_catalogue import (
     CATALOGUE,
     FORECAST_GUIDES,
@@ -14,6 +13,7 @@ from grid_signals.app.model_catalogue import (
 )
 from grid_signals.app.presentation import process_diagram, target_choices
 from grid_signals.app.snapshot import SnapshotError, load_price_snapshot
+from grid_signals.markets import BY_CODE, SELECTED_MODELS
 
 manifest = st.session_state.explorer_manifest
 st.title("Models & data")

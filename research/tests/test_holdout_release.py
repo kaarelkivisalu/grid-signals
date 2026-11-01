@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from renewable_forecast.pipelines import holdout
+from grid_signals.forecast.pipelines import holdout
 
 
 def test_frozen_candidate_rejects_unrecorded_changes(tmp_path, monkeypatch):

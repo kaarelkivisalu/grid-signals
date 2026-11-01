@@ -6,10 +6,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from renewable_forecast import windows
-from renewable_forecast.models import price as models
-from renewable_forecast.pipelines import price
-from renewable_forecast.sources import prices
+from grid_signals.forecast import windows
+from grid_signals.forecast.models import price as models
+from grid_signals.forecast.pipelines import price
+from grid_signals.forecast.sources import prices
 
 
 def test_old_hourly_prices_never_become_native_quarter_targets():

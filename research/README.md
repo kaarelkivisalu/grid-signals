@@ -13,12 +13,11 @@ publication has since begun; see the [assessment](../docs/implementation-plan.md
 for the later trial observations. The [earlier research backlog](docs/roadmap.md)
 is historical context, not a competing roadmap.
 
-The [target architecture](../docs/implementation-plan.md) consolidates reusable
-research code into the installed product package and one CLI, with Prefect
-orchestration and saved models with recorded versions. The commands and paths below describe
-the current implementation until that migration. Preserve original release inputs,
-source hashes and results before moving code; standalone learning exercises are
-not part of the target product.
+Reusable forecasting code now lives in the installed `grid_signals.forecast`
+package. Focused experiments import that package; there is no checkout-only
+`renewable_forecast` package or `PYTHONPATH` setup. Settings ship with the package,
+while this directory retains reports, frozen protocols, model version records,
+tests and local data. Prefect and saved trained models follow in milestone 2b.
 
 ## Current evidence — 2026-10-15
 
@@ -89,35 +88,38 @@ archival evidence, not current accuracy claims.
 ## Run the research
 
 ```bash
-uv sync --group research
-export PYTHONPATH=research/src
-
-# Root .env supplies ENTSOE_API_KEY.
-uv run python -m renewable_forecast.pipelines.daily capture
-uv run python -m renewable_forecast.pipelines.daily forecast
-uv run python -m renewable_forecast.pipelines.daily score
-
-uv run python -m renewable_forecast.pipelines.price refresh
-uv run python -m renewable_forecast.pipelines.price backtest
-uv run python -m renewable_forecast.pipelines.price predict
-uv run python -m renewable_forecast.pipelines.price_forward  # current LEAR publication
-uv run python -m renewable_forecast.sources.load
-uv run python -m renewable_forecast.pipelines.load backtest
-uv run python -m renewable_forecast.pipelines.load predict
-uv run python -m renewable_forecast.pipelines.price_load
-uv run python -m renewable_forecast.pipelines.decision_study
-
-uv run python -m renewable_forecast.reporting.export_demo
-uv run python -m renewable_forecast.reporting.export_price
-uv run python -m renewable_forecast.reporting.export_load
-uv run python -m renewable_forecast.pipelines.backtest_products --fuel wind_onshore
-uv run python -m renewable_forecast.pipelines.backtest_products --fuel solar
+uv sync --frozen --group research
+uv run grid-signals info
+uv run grid-signals workflow capture
+uv run grid-signals workflow forecast
+uv run grid-signals workflow score
+uv run grid-signals fetch-price 2026-10-01 2026-10-15
+uv run grid-signals fetch-load 2026-10-01 2026-10-15
+uv run grid-signals backtest-price
+uv run grid-signals backtest-load
+uv run grid-signals forecast --product de-price
+uv run grid-signals forecast --product de-load
+uv run grid-signals experiment decision_study
+uv run grid-signals backtest --fuel wind_onshore
+uv run grid-signals backtest --fuel solar
+uv run grid-signals export all
 uv run pytest research/tests
 ```
 
-Use `daily forecast --no-refresh` only with the required source data already cached.
-It preserves real publication timing. See [operations](../docs/operations.md) for
-local timer installation and logs. No scheduled job reopens a holdout.
+Use `workflow forecast --no-refresh` only with required source data already cached.
+It preserves real publication timing. `workflow` retains the existing local trial
+behaviour until 2b; individual product operations use the same installed package.
+See [operations](../docs/operations.md) for configuration, timers and preservation.
+No scheduled job reopens a holdout.
+
+Original release records in `research/configs/releases` retain their original
+source paths and hashes. Exact reruns of those evaluations, including the locked
+price/load experiment, use the preserved original checkout and datasets described
+in operations. They are not silently reidentified as evaluations of moved code.
+The new `consolidated_v1.json` record identifies the installed package separately;
+fixed-input prediction and metric checks establish migration equivalence.
+Old report reproduction blocks describe the original checkout. Current commands
+above are the supported operating interface.
 
 The exploratory decision example shifts 1 MWh/day into eight quarter-hours under a
 0.5 MW limit. It uses development predictions, allows interruptions and excludes
@@ -134,4 +136,4 @@ results. Parquet datasets and MLflow runs remain local and gitignored.
 Further context: [dataflow](docs/dataflow.md), [metrics](docs/metrics.md),
 [literature](docs/literature.md), [renewable final protocol](reports/holdout_protocol.md),
 [integration contract](docs/integration_contract.md),
-[public forecast inventory](configs/benchmarks.yaml).
+[public forecast inventory](../src/grid_signals/forecast/configs/benchmarks.yaml).

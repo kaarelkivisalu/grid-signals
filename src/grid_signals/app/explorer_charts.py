@@ -9,8 +9,8 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from grid_signals.app.markets import BY_CODE, TARGETS
 from grid_signals.app.model_catalogue import model_name
+from grid_signals.markets import BY_CODE, TARGETS
 
 COLORS = {
     "load": "#344957",

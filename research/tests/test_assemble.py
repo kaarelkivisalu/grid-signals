@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from renewable_forecast.features import assemble
+from grid_signals.forecast.features import assemble
 
 
 def _zonal(models: dict[str, list[float]], n: int = 4) -> pd.DataFrame:

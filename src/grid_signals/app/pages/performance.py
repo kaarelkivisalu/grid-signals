@@ -11,7 +11,6 @@ from grid_signals.app.explorer_data import (
     grouped_scores,
     matched_rows,
 )
-from grid_signals.app.markets import BY_CODE
 from grid_signals.app.model_catalogue import model_name
 from grid_signals.app.presentation import (
     evaluated_forecasts,
@@ -19,6 +18,7 @@ from grid_signals.app.presentation import (
     process_diagram,
     target_choices,
 )
+from grid_signals.markets import BY_CODE
 
 manifest = st.session_state.explorer_manifest
 st.title("Performance")

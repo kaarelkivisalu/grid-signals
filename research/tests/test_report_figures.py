@@ -9,8 +9,8 @@ import re
 
 import pytest
 
-from renewable_forecast import paths
-from renewable_forecast.reporting import figures
+from grid_signals.forecast import paths
+from grid_signals.forecast.reporting import figures
 
 IMAGE = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
 MARKDOWN = (

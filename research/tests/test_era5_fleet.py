@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 import xarray as xr
 
-from renewable_forecast.features import era5_fleet
+from grid_signals.forecast.features import era5_fleet
 
 
 def test_low_specific_power_reaches_rated_at_lower_speed():

@@ -3,8 +3,8 @@
 import pandas as pd
 import pytest
 
-from renewable_forecast.features import assemble
-from renewable_forecast.pipelines import compare_blocks
+from grid_signals.forecast.features import assemble
+from grid_signals.forecast.pipelines import compare_blocks
 
 
 def _frame() -> pd.DataFrame:

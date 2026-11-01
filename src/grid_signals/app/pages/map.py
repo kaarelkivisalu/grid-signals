@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from grid_signals.app.explorer_charts import coverage_map
-from grid_signals.app.markets import MARKET_GROUPS
+from grid_signals.markets import MARKET_GROUPS
 
 manifest = st.session_state.explorer_manifest
 st.title("Map")

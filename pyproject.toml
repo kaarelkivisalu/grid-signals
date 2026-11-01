@@ -4,61 +4,44 @@ version = "0.1.0"
 description = "European day-ahead power forecasts and reproducible benchmarks"
 requires-python = ">=3.12"
 dependencies = [
-    "psycopg[binary]>=3.2, <4",
-    "entsoe-py==0.7.11",
-    "httpx>=0.28",
-    "anthropic>=0.86, <1",
     "pydantic>=2.12, <3",
     "pandas>=2.2, <3",
+    "numpy>=2, <3",
     "pyarrow>=18, <24",
-    "streamlit>=1.45, <2",
-    "plotly>=6.0, <7",
-    "prefect>=3.0, <4",
-    "ecmwf-opendata>=0.3.34",
-    "earthkit>=1.0.0",
-    "cdsapi>=0.7.7",
+    "pyyaml>=6.0",
     "python-dotenv>=1.2.2",
-    "ecmwf-datastores-client>=0.5",
 ]
 
 [dependency-groups]
+web = ["streamlit==1.55.0", "plotly==6.6.0"]
+runner = [
+    "entsoe-py==0.7.11",
+    "httpx>=0.28",
+    "prefect>=3.0, <4",
+    "ecmwf-opendata>=0.3.34",
+    "ecmwf-datastores-client>=0.5",
+    "lightgbm>=4.5",
+    "scikit-learn>=1.5",
+    "pvlib>=0.11",
+    "windpowerlib>=0.2",
+    "geopandas>=1.0",
+    "scoringrules>=0.7",
+    "xarray>=2024.10",
+    "netcdf4>=1.7",
+    "tenacity>=9.0",
+    "pydantic-settings>=2.6",
+]
 dev = [
+    {include-group = "web"},
     "pytest>=9, <10",
-    "pytest-asyncio>=0.24",
     "pytest-cov>=6.0",
     "pandas-stubs>=2.2",
     "ruff>=0.9",
-    "testcontainers[postgres]>=4, <5",
-    "ipykernel>=7.3.0",
-    "nbclient>=0.11.0",
 ]
-
 research = [
-    # experiment tracking
+    {include-group = "runner"},
     "mlflow>=2.18",
-    # modelling
-    "lightgbm>=4.5",
-    "scikit-learn>=1.5",
-    # physics
-    "pvlib>=0.11",
-    "windpowerlib>=0.2",
-    # geo / fleet registry
-    "geopandas>=1.0",
-    # scoring
-    "scoringrules>=0.7",
-    # storage & compute
-    "duckdb>=1.1",
-    "pyarrow>=18",
-    "xarray>=2024.10",
-    # io
-    "tenacity>=9.0",
-    "pyyaml>=6.0",
-    "pydantic-settings>=2.6",
-    # exploration
     "matplotlib>=3.9",
-    "jupyterlab>=4.3",
-    # NOTE: `darts` is deliberately deferred to the Phase 4 spike -- it pulls torch
-    # for its deep models and we do not yet know which extra we need.
 ]
 
 [tool.uv]
@@ -73,13 +56,10 @@ build-backend = "uv_build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "research/tests"]
-pythonpath = ["research/src"]
 
 [tool.ruff]
 target-version = "py312"
-# Standalone learning notebooks are outside the forecast product. They move out
-# of this repository in milestone 2a; research product code remains checked.
-extend-exclude = ["notebooks"]
+
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -134,7 +114,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
+"tests/**" = ["S101", "INP001"]
 # No __init__.py: it would collide with the root `tests` package at import time.
 "research/tests/**" = ["S101", "PLR2004", "INP001"]
 # Research code: `X`/`y`/`df` are the idiom, and long inline exception messages are
@@ -142,21 +122,14 @@ ignore = [
 # PD013: `.stack` keeps the DatetimeIndex; `.melt` would require discarding it first.
 # PD010: `.pivot` is deliberate -- `.pivot_table` would silently average duplicate
 #        (valid_time, model) rows instead of raising, hiding a data bug.
-"research/src/**" = ["N803", "N806", "PD901", "PD011", "PD013", "PD010", "TRY003", "EM101", "EM102", "S311"]
-# Keep these evaluated files byte-for-byte identical to their model version
-# records. These three style suggestions do not affect correctness.
-"research/src/renewable_forecast/evaluation/splits.py" = ["RUF007"]
-"research/src/renewable_forecast/models/conformal.py" = ["PLR6104", "RUF031"]
-# Exploratory notebooks are not linted; anything promoted out of one lands in
-# research/src/ where full lint applies.
-"research/notebooks/**" = ["ALL"]
+"src/grid_signals/forecast/**" = ["N803", "N806", "PD901", "PD011", "PD013", "PD010", "TRY003", "EM101", "EM102", "S311"]
+# Avoid incidental algorithm edits during the source consolidation.
+"src/grid_signals/forecast/evaluation/splits.py" = ["RUF007"]
+"src/grid_signals/forecast/models/conformal.py" = ["PLR6104", "RUF031"]
 "scripts/**" = ["INP001"]
-"**.ipynb" = ["ERA001", "F401", "PT018"]
-"exercises.ipynb" = ["S101", "FIX"]
 
 [tool.ruff.lint.isort]
-# research/src is not on ruff's inferred src path, so name it explicitly.
-known-first-party = ["grid_signals", "renewable_forecast"]
+known-first-party = ["grid_signals"]
 
 [tool.ruff.lint.flake8-import-conventions]
 # `gpd` is the universal geopandas convention; ruff's preview default bans it.

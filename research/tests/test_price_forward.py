@@ -5,8 +5,8 @@ from datetime import date, timedelta
 import pandas as pd
 import pytest
 
-from renewable_forecast import windows
-from renewable_forecast.pipelines.price_forward import profiles_available
+from grid_signals.forecast import windows
+from grid_signals.forecast.pipelines.price_forward import profiles_available
 
 
 @pytest.mark.parametrize("delivery", [date(2026, 3, 30), date(2026, 10, 26)])

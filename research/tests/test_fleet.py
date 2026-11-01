@@ -6,7 +6,7 @@ import geopandas as gpd
 import pandas as pd
 from shapely.geometry import Point
 
-from renewable_forecast.sources import fleet
+from grid_signals.forecast.sources import fleet
 
 
 def _turbines(rows) -> gpd.GeoDataFrame:

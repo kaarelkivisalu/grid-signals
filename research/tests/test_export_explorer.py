@@ -5,12 +5,12 @@ import pandas as pd
 import pytest
 import scoringrules as sr
 
-from renewable_forecast.reporting.export_explorer import (
+from grid_signals.forecast.reporting.export_explorer import (
     LEVELS,
     expand_native,
     normalise_backtest,
 )
-from renewable_forecast.sources.market_context import normalise_generation
+from grid_signals.forecast.sources.market_context import normalise_generation
 
 
 def test_native_hour_projection_keeps_gaps_and_does_not_overlap_new_quarters():

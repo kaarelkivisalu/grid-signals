@@ -2,7 +2,7 @@
 
 import pandas as pd
 
-from renewable_forecast.targets import actuals
+from grid_signals.forecast.targets import actuals
 
 
 def _raw(timestamps, values, *, aggregation="Actual Aggregated"):

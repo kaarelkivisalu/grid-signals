@@ -7,12 +7,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from renewable_forecast import paths, windows
-from renewable_forecast.features import load as features
-from renewable_forecast.models import load as models
-from renewable_forecast.pipelines import load as pipeline
-from renewable_forecast.pipelines import score_load
-from renewable_forecast.sources import load as source
+from grid_signals.forecast import paths, windows
+from grid_signals.forecast.features import load as features
+from grid_signals.forecast.models import load as models
+from grid_signals.forecast.pipelines import load as pipeline
+from grid_signals.forecast.pipelines import score_load
+from grid_signals.forecast.sources import load as source
 
 
 def test_actual_targets_are_not_manufactured_from_hourly_values():

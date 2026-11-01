@@ -27,7 +27,11 @@ class DemoReleaseTests(unittest.TestCase):
             assert key not in os.environ
         for module in ("psycopg", "anthropic", "prefect", "lightgbm", "mlflow"):
             assert importlib.util.find_spec(module) is None
-        assert {path.name for path in APP.parent.iterdir()} == {"__init__.py", "app"}
+        assert {path.name for path in APP.parent.iterdir()} == {
+            "__init__.py",
+            "markets.py",
+            "app",
+        }
         assert {path.name for path in (APP / "pages").glob("*.py")} == {
             "overview.py",
             "wind.py",

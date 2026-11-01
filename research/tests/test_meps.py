@@ -22,8 +22,8 @@ from datetime import UTC, date, datetime
 import numpy as np
 import pytest
 
-from renewable_forecast import windows
-from renewable_forecast.sources import meps
+from grid_signals.forecast import windows
+from grid_signals.forecast.sources import meps
 
 NETWORK = pytest.mark.skipif(
     os.environ.get("MEPS_NETWORK_TESTS") != "1",
@@ -183,7 +183,7 @@ def test_bounding_box_matches_the_ascii_oracle() -> None:
     """The two decode paths must agree, or the box is being indexed wrongly."""
     import httpx
 
-    from renewable_forecast.features import sites
+    from grid_signals.forecast.features import sites
 
     points = sites.build("SE3").head(2)
     run = datetime(2026, 3, 2, 0, tzinfo=UTC)

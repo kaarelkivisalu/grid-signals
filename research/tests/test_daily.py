@@ -4,8 +4,8 @@ from datetime import UTC, datetime, timedelta
 
 import pandas as pd
 
-from renewable_forecast import journal, publication, windows
-from renewable_forecast.pipelines import daily, price, score_price
+from grid_signals.forecast import journal, publication, windows
+from grid_signals.forecast.pipelines import daily, price, score_price
 
 
 def test_failed_wind_does_not_suppress_solar_or_price(monkeypatch):

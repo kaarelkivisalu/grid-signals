@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from renewable_forecast import config
+from grid_signals.forecast import config
 
 
 def test_base_config_loads_and_matches_the_frozen_task() -> None:

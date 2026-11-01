@@ -55,7 +55,8 @@ a milestone. The target is one forecasting package/CLI and lifecycle across loca
 use and deployment, with Prefect orchestration and a result-reading website.
 Existing code is retained only where it serves that target. Standalone learning
 exercises move outside this focused product repository. The architecture is
-documented; the code has not yet been combined or removed.
+documented; milestone 2a now combines the forecasting code and retires the original
+market application. The Prefect forecast lifecycle remains milestone 2b.
 
 ### 0. Establish direction — complete
 
@@ -112,18 +113,30 @@ are deferred until the roadmap is reasonably complete.
 
 Complete these two parts in order, keeping the demo usable throughout.
 
-**2a — One product:**
+**2a — One product: complete (2026-11-01)**
 
-- [ ] Save copies of the original code, data and evaluated results before moving code.
-- [ ] Bring reusable forecasting code together into the installed package with one CLI,
+- [x] Save copies of the original code, data and evaluated results before moving code.
+- [x] Bring reusable forecasting code together into the installed package with one CLI,
   product registry and explicit data/output configuration. Local and scheduled runs
   must invoke the same functions.
-- [ ] Extract needed mappings/data, then retire the original PostgreSQL market
+- [x] Extract needed mappings/data, then retire the original PostgreSQL market
   application, briefing/chat product, stale commands/scripts and duplicate pages.
-- [ ] Move standalone exercises/exploration elsewhere; focused experiments import
+- [x] Move standalone exercises/exploration elsewhere; focused experiments import
   the product package and share its data/evaluation contracts.
-- [ ] Reshape dependencies and tests around the retained product; verify fixed-input
+- [x] Reshape dependencies and tests around the retained product; verify fixed-input
   model predictions and metrics before removing superseded implementations.
+
+The installed `grid_signals.forecast` package and `grid-signals` CLI now own
+forecasting, with shared market/product definitions, packaged settings and explicit
+data/output roots. Original Git history, source and data were copied and restored
+before migration; frozen records and results remain unchanged. Standalone notebooks
+moved to a sibling learning workspace. The original market database/chat runtime,
+duplicate pages and obsolete deployment definitions are removed; no running
+containers or volumes were deleted. Existing forecast timers use the installed CLI
+until the 2b cutover. Validation: 291 tests passed, 2 skipped; lint/formatting and
+two offline demo-image checks passed. Fixed-input wind/solar/load/price predictions
+and scores agree, as do all 13 exported Parquet files and three summary bundles
+(apart from generation timestamps). See [preservation and migration details](docs/operations.md#preservation-and-source-consolidation--2026-11-01).
 
 **2b — Run the forecast workflow:**
 

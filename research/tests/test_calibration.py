@@ -12,8 +12,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from renewable_forecast.evaluation import metrics, splits
-from renewable_forecast.models.conformal import SpreadCQR, StratifiedCQR
+from grid_signals.forecast.evaluation import metrics, splits
+from grid_signals.forecast.models.conformal import SpreadCQR, StratifiedCQR
 
 LEVELS = np.round(np.arange(0.05, 1.0, 0.05), 2)
 
@@ -162,7 +162,7 @@ def test_day_blocks_partition_whole_days_in_order() -> None:
 
 
 def test_crossfit_calibration_fits_and_returns_valid_quantiles() -> None:
-    from renewable_forecast.models.quantile import QuantileGBM
+    from grid_signals.forecast.models.quantile import QuantileGBM
 
     rng = np.random.default_rng(7)
     train = _train(60).reset_index(drop=True)
@@ -181,7 +181,7 @@ def test_crossfit_calibration_fits_and_returns_valid_quantiles() -> None:
 
 
 def test_unknown_calibration_scheme_is_rejected() -> None:
-    from renewable_forecast.models.quantile import QuantileGBM
+    from grid_signals.forecast.models.quantile import QuantileGBM
 
     with pytest.raises(ValueError, match="unknown calibration"):
         QuantileGBM(LEVELS, calibration="bogus")

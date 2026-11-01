@@ -9,7 +9,7 @@ from itertools import pairwise
 
 import pytest
 
-from renewable_forecast import windows
+from grid_signals.forecast import windows
 
 # EU daylight-saving transitions: last Sunday of March and of October.
 SPRING_FORWARD_2026 = date(2026, 3, 29)

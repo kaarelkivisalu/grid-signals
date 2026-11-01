@@ -1,16 +1,69 @@
 # Local forecast operations
 
-The [target architecture and migration plan](implementation-plan.md) replaces the two job
-families. `grid-signals daily` and the existing Prefect flows operate PostgreSQL
-market ingestion and briefings. The research `pipelines.daily` commands and local
-timers below operate forecast publication. Neither currently calls the other.
-These are current-state instructions, not two workflows to maintain indefinitely:
-the target consolidates forecasting behind one package/CLI and Prefect lifecycle,
-retires the original market application and removes forecast timers after cutover.
+Milestone 2a consolidates forecasting in the installed `grid_signals.forecast`
+package and `grid-signals` CLI. The original PostgreSQL ingestion and briefing/chat
+runtime has been removed. Existing local forecast timers remain temporarily;
+Prefect cutover, saved trained models and always-on operation are milestone 2b.
 
 Run `uv run grid-signals ui` and open http://localhost:8501. The website reads
 portable JSON/Parquet bundles independently of training. Atomic exports keep the last
 results available during a production failure, with underlying forecast dates intact.
+
+## Preservation and source consolidation — 2026-11-01
+
+The pre-migration revision is `23986cfa73f93796e74882ce12c86a85f2f62790`.
+Local preservation copies are outside this checkout at
+`/home/kaarel/Projects/grid-signals-preserved/2026-11-01-before-2a/`:
+
+- `history.bundle`: complete Git history and branch references; verified with
+  `git bundle verify`. SHA-256:
+  `3c14bcda93974949ce40a9e600ee01b246f669097a0de9727285f739712852e8`.
+- `workspace.tar`: original source, datasets, raw provider responses, evaluation
+  outputs, publication history, MLflow data and exercises. SHA-256:
+  `0972d26eb1b16741cc276af7a110301c7923bfcb61c3b7abb4a70c784c6a3708`.
+- `original/`: restored archive; 6,409 research, data, source and notebook files
+  were checked byte for byte against the originals before any code moved.
+- `systemd/`: copies of the six original service/timer unit files, saved before
+  updating service commands to the installed CLI.
+- `SHA256SUMS`: archive checksums. Environment/credential files, tool settings,
+  virtualenvs and caches are excluded; this is a local preservation copy.
+
+The standalone notebooks were also copied and checked in
+`/home/kaarel/Projects/grid-signals-learning/notebooks/`. Local research data and
+original frozen model version records remain in place. No containers, database
+services or Docker volumes were removed; the local running-container inventory
+contained no Grid Signals market database. Remote services were not changed.
+Older market deployment/recovery instructions remain recoverable from the Git
+bundle and original snapshot; do not delete old remote volumes or backups based
+on removal of their application code.
+
+For exact original evaluation reproduction, work in a separate restored directory,
+install its original locked environment, and use its original `research/src`
+imports and cached inputs. Do not rewrite old source paths or checksums to point
+at moved files. The consolidated package has a separate code version record at
+`src/grid_signals/forecast/configs/releases/consolidated_v1.json`. New publications
+verify this record and use its identity. It links the historical records and load
+selection by checksum without claiming a new final evaluation. A new code/settings
+revision requires a new record, created with `grid-signals version --register PATH`
+and selected through `GRID_SIGNALS_VERSION_RECORD`; this is code identity, not the
+saved-trained-model promotion planned in 2b.
+
+Migration checks compare original and moved models on deterministic wind, solar,
+load and price inputs, including quantile predictions and scores. Model, feature,
+target and evaluation syntax trees agree after import renaming. Fresh exports from
+the preserved and installed code have identical 13 Parquet files and zone inventory;
+all three summary bundles agree except generation timestamps. The existing
+bundled results and historical records have not been regenerated. Unindexed local demo
+exports were moved to `data/retired_demo_exports` so package builds include only
+the current result files.
+
+Configuration is shared by local and scheduled operations. Set
+`GRID_SIGNALS_DATA_DIR` and `GRID_SIGNALS_OUTPUT_DIR` to absolute paths for mounted
+volumes. Optional settings/report/tracking roots and CLI examples are in the
+[README](../README.md#forecast-commands-and-configuration). To preview new exports,
+set `GRID_SIGNALS_EXPLORER_PATH` to the exported `explorer` directory and
+`GRID_SIGNALS_SNAPSHOT_PATH`, `GRID_SIGNALS_PRICE_SNAPSHOT_PATH` and
+`GRID_SIGNALS_LOAD_SNAPSHOT_PATH` to the three exported summary files.
 
 ## Daily local trial
 
@@ -24,7 +77,14 @@ uv run python scripts/install_forecast_schedule.py
 systemctl --user list-timers 'grid-signals-*'
 ```
 
-The installer writes user services/timers for this checkout's virtualenv:
+The installer writes user services/timers for this checkout's virtualenv. During
+2a, the three existing services were updated to this checkout and
+`python -m grid_signals workflow MODE`; their former lowercase checkout paths
+were stale. Systemd was reloaded without starting jobs or changing timers. All
+three timers remained active and waiting. The original unit files are preserved
+in the directory above. This confirms configuration only, not a successful daily run.
+
+The schedule remains:
 
 | Job | UTC | Behaviour |
 |---|---|---|
@@ -54,7 +114,7 @@ today's late forecasts contribute no on-time evidence. Historical replay cannot
 satisfy the 30-run integration gate.
 
 Price publication now uses the declared LEAR baseline in
-`research/configs/price_forward.yaml`, with hourly distributions repeated onto market
+`src/grid_signals/forecast/configs/price_forward.yaml`, with hourly distributions repeated onto market
 quarter-hours. Historical direct-quantile price forecasts remain archived as a
 separate model version. Load is published with the candidate selected before its
 final evaluation. Each product has its own forward scorecard.
@@ -77,7 +137,7 @@ series and grouped diagnostics. Exporting reads **completed** research evaluatio
 it never trains or reopens a sealed holdout:
 
 ```bash
-PYTHONPATH=research/src uv run python -m renewable_forecast.reporting.export_explorer
+uv run grid-signals export explorer
 ```
 
 The daily results-export job also runs this exporter. Files are named using checksums and the
@@ -86,14 +146,16 @@ Old generations can be removed when no running reader needs them. The web image
 contains the exported result files, not the raw cache.
 
 Generated Parquet exports are ignored by Git; the files already committed remain
-tracked. When updating the bundled demo, commit the updated file index together
+tracked. Exports default to `data/exports`; use
+`uv run grid-signals --output-dir src/grid_signals/app/assets export all` only
+when deliberately refreshing bundled results. When updating the bundled demo, commit the updated file index together
 with its referenced result files. Use `git add -f` for newly generated files listed
 in that index, rather than adding every older export in the directory.
 
 Additional market observations are a bounded preview, separate from forecast inputs:
 
 ```bash
-PYTHONPATH=research/src uv run python -m renewable_forecast.sources.market_context --start 2026-09-01 --end 2026-10-16
+uv run grid-signals fetch-context --start 2026-09-01 --end 2026-10-16
 ```
 
 Use `--refresh` to replace this preview with a different range (maximum 90 days),
@@ -149,24 +211,23 @@ docker compose -f compose.demo.yaml up --build -d
 Open http://localhost:8502. The image includes the historical explorer and three summary bundles and omits the
 legacy database/agent tools. Its build context excludes research data, secrets and
 the virtualenv. The build checks every indexed Parquet file's checksum and copies
-only those files into the final image. Old local exports remain untouched.
+only those files into the final image. Older local exports are preserved under
+`data/retired_demo_exports`, outside installed package assets.
 View logs with `docker compose -f compose.demo.yaml logs -f`; stop and remove the
 demo container with `docker compose -f compose.demo.yaml down`.
-Use `compose.demo.yaml` explicitly: the existing `compose.yaml` still configures
-the original database/agent application and its external network.
+Use `compose.demo.yaml` explicitly. The original market Compose files and worker
+Dockerfile were removed in 2a; the forecast runner deployment follows in 2b.
 The Python runtime and uv builder images are pinned by digest. The Dockerfile
 follows Astral's [multistage example](https://github.com/astral-sh/uv-docker-example/blob/main/multistage.Dockerfile):
 the uv 0.13.6 Python builder runs `uv sync --locked` with a shared build cache and
 compiled bytecode, then prepares the checked website files. The final Python
 image copies those files and `/app/.venv`; it contains no uv binary or build cache.
 The website runs directly with the virtual environment's Python as UID 10001.
-`deploy/demo/pyproject.toml` defines the web dependencies and `deploy/demo/uv.lock`
-locks their versions and hashes. This smaller project excludes the full project's
-legacy database and forecasting dependencies. To intentionally update its lock:
-
-```bash
-uv lock --project deploy/demo --upgrade
-```
+The root `pyproject.toml` defines `web`, `runner`, `research` and `dev` groups;
+root `uv.lock` locks all profiles. The image installs only base/web dependencies
+with `uv sync --locked --no-default-groups --group web --no-install-project`.
+There is no separate demo project or lockfile. Update dependencies deliberately
+with `uv lock`, then rerun release checks.
 
 Check the built image without networking or credentials:
 
@@ -252,9 +313,9 @@ screenshots were also reviewed. These checks complete historical-demo acceptance
 they do not establish daily production or freshness. The deployed Git revision
 and image identity are recorded above.
 
-Ruff excludes standalone learning notebooks until their move in milestone 2a.
-Three style rules are narrowly exempted in two evaluated source files to keep
-their recorded checksums intact; other lint rules remain active.
+Standalone learning notebooks have moved out in milestone 2a. Three style rules
+remain narrowly exempted in the moved split/conformal modules to avoid incidental
+algorithm edits during consolidation; original evaluated source is preserved separately.
 
 ### Manual deployment steps for the owner
 

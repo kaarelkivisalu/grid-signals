@@ -6,7 +6,7 @@ from unittest.mock import Mock
 import pandas as pd
 import pytest
 
-from renewable_forecast.pipelines import price_load
+from grid_signals.forecast.pipelines import price_load
 
 
 def _upstream():

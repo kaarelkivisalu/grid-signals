@@ -27,12 +27,6 @@ from grid_signals.app.explorer_data import (
     matched_rows,
     read_market,
 )
-from grid_signals.app.markets import (
-    BY_CODE,
-    MARKET_GROUPS,
-    PORTFOLIO_MARKETS,
-    SDAC_MARKETS,
-)
 from grid_signals.app.model_catalogue import (
     CATALOGUE,
     MODEL_DATA,
@@ -40,13 +34,22 @@ from grid_signals.app.model_catalogue import (
     model_name,
 )
 from grid_signals.app.presentation import available_markets
+from grid_signals.markets import (
+    BY_CODE,
+    MARKET_GROUPS,
+    PORTFOLIO_MARKETS,
+    SDAC_MARKETS,
+)
 
 APP = Path(__file__).parents[1] / "src/grid_signals/app/main.py"
 
 
 def test_overview_is_populated_and_sidebar_is_just_navigation(monkeypatch):
     connect = Mock(side_effect=AssertionError("website opened a database"))
-    monkeypatch.setattr("psycopg.connect", connect)
+    import sys
+    from types import SimpleNamespace
+
+    monkeypatch.setitem(sys.modules, "psycopg", SimpleNamespace(connect=connect))
     monkeypatch.delenv("ENTSOE_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     app = AppTest.from_file(str(APP), default_timeout=30).run()

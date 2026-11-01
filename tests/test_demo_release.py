@@ -38,6 +38,7 @@ def test_release_copies_only_indexed_results_and_product_pages(tmp_path):
     }
     assert {path.name for path in (output / "src/grid_signals").iterdir()} == {
         "__init__.py",
+        "markets.py",
         "app",
     }
     assert not (output / ".env").exists()

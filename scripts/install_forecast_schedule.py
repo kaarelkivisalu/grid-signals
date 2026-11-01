@@ -22,12 +22,11 @@ After=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory={project}
-Environment="PYTHONPATH={project}/research/src"
 Environment="MPLCONFIGDIR=/tmp/grid-signals-matplotlib"
 Environment="OMP_NUM_THREADS=4"
 Environment="LOKY_MAX_CPU_COUNT=4"
 Environment="OPENBLAS_NUM_THREADS=4"
-ExecStart={shlex.quote(str(python))} -m renewable_forecast.pipelines.daily {mode}
+ExecStart={shlex.quote(str(python))} -m grid_signals workflow {mode}
 TimeoutStartSec=27min
 Nice=10
 """

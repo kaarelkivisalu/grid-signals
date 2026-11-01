@@ -15,7 +15,6 @@ APP_FILES = (
     "main.py",
     "explorer_data.py",
     "explorer_charts.py",
-    "markets.py",
     "model_catalogue.py",
     "presentation.py",
     "snapshot.py",
@@ -65,6 +64,7 @@ def prepare(source: Path, output: Path) -> dict:
     results = checked_results(source / app / "assets/explorer")
     files = [
         Path("src/grid_signals/__init__.py"),
+        Path("src/grid_signals/markets.py"),
         Path(".streamlit/config.toml"),
         *(app / name for name in APP_FILES),
         *(path.relative_to(source) for path in results),

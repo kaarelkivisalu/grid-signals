@@ -3,8 +3,8 @@
 Reviewed 2026-10-26. [ROADMAP.md](../ROADMAP.md) owns the public features and their
 order. This document describes how the project should work, which existing parts
 are useful and how to replace or remove the rest. **Keep code because it serves
-the product, not simply because it already exists.** This review changes
-documentation, not application code or running services.
+the product, not simply because it already exists.** The assessment below records the original migration decisions. Milestone 2a
+implementation completed on 2026-11-01; its status and validation are recorded below.
 
 ## Goals and recommendation
 
@@ -41,9 +41,10 @@ flowchart TD
     tracking["MLflow: experiment comparison"] --- core
 ```
 
-This is the planned setup. It has not been implemented yet. Today Prefect runs the
-original PostgreSQL data-fetching and briefing jobs; research uses separate module commands and
-local systemd timers. The website reads exported research results.
+Milestone 2a implements the shared package, CLI, registry and configured paths.
+The website reads exported results; local forecast timers now call that CLI. The
+original PostgreSQL/briefing flows and market deployment definitions are removed.
+The Prefect forecast lifecycle and saved trained models remain planned for 2b.
 
 For the first always-on deployment, use one host with a **web service, Prefect
 server and forecast runner**, built from versioned releases. Choose Prefect's
@@ -229,10 +230,43 @@ leads with SE3 wind, and the standalone image includes only the forecast pages a
 current checked result files. Offline image tests and local desktop/mobile review
 pass. The owner deployed the test site on 2026-11-01; anonymous HTTPS, desktop/phone
 navigation, historical dates and forecast CSV downloads passed public checks. See
-the [release review and owner handoff](operations.md#public-hosting). The package/CLI and workflow migration
-above remain milestone 2 work.
+the [release review and owner handoff](operations.md#public-hosting). The package/CLI migration is now complete; the Prefect workflow remains milestone 2b.
 
 The observed October 23 SE3 record was 6/8 on-time issues with two timeout failures.
 That is useful initial evidence, not a demonstrated reliable service. Existing
 [research results](../research/README.md) remain available; live host capacity and
 actual deployment state will be established with the owner when deployment is addressed.
+
+
+### Milestone 2a completion — 2026-11-01
+
+- Forecasting code moved from `research/src/renewable_forecast` into installed
+  `grid_signals.forecast`. Market metadata is shared by the app and product
+  registry; ENTSO-E provider codes and evaluated product restrictions are explicit.
+- One CLI handles fetching, fitting/development comparisons, forecasting,
+  capture, scoring, export, focused experiments and UI. Configuration selects
+  data, output, settings, report and tracking directories before pipeline imports.
+  Package builds include settings and the new consolidated code version record.
+- PostgreSQL market ingestion, briefing/chat, duplicate pages, DuckDB helper,
+  repair scripts and obsolete market deployment definitions are retired. The
+  existing forecast timer schedule remains until 2b and invokes the installed CLI.
+  No running service or volume was deleted; original unit files were preserved.
+- Standalone notebooks were copied and checked outside the product repository.
+  Research reports, frozen records, tests and local datasets remain here; focused
+  experiment modules import the installed package. Exact frozen evaluation reruns
+  use the original preserved source and data, rather than relabelling moved code.
+- A single lockfile provides web, runner and experiment profiles. MLflow imports
+  are lazy, and model code no longer requires the original application dependencies.
+- Validation: 291 tests passed, 2 skipped; Ruff lint/formatting and both offline
+  image checks passed. Fixed-input wind, solar, load and price predictions and
+  metrics agree with original code. Model/feature/target/evaluation syntax trees
+  agree after import renaming. All 13 exported Parquet files and the three summary
+  bundles agree except generation timestamps. A built wheel loads packaged
+  settings and verifies its new version record outside the source checkout.
+
+The [operations guide](operations.md#preservation-and-source-consolidation--2026-11-01)
+records the original revision, archive locations/checksums, restore verification
+and new code identity. Copies were saved before implementation changes. Frozen
+model version records and bundled evaluation results were not rewritten.
+Saved trained models, Prefect scheduling, deployment persistence and daily delivery
+remain 2b; this consolidation does not establish reliable forecast production.

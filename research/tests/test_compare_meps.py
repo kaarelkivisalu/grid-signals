@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from renewable_forecast.pipelines import compare_meps
+from grid_signals.forecast.pipelines import compare_meps
 
 
 def _frame() -> pd.DataFrame:

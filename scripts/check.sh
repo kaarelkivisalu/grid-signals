@@ -5,7 +5,7 @@ cd -- "$(dirname -- "$0")/.."
 
 usage() {
     echo "Usage: bash scripts/check.sh [all|lint|test|demo]"
-    echo "Default: all. Tests and demo checks require a running Docker daemon."
+    echo "Default: all. Demo checks require a running Docker daemon."
 }
 
 if (( $# > 1 )); then
@@ -20,7 +20,7 @@ case "$check" in
     *) usage >&2; exit 2 ;;
 esac
 
-if [[ "$check" != lint ]] && ! docker info > /dev/null 2>&1; then
+if [[ "$check" == all || "$check" == demo ]] && ! docker info > /dev/null 2>&1; then
     echo "Docker is required for $check checks. Start Docker and ensure your user can access it." >&2
     exit 1
 fi

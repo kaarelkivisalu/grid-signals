@@ -5,8 +5,8 @@ from datetime import date
 import streamlit as st
 
 from grid_signals.app.explorer_data import load_manifest
-from grid_signals.app.markets import SDAC_MARKETS
 from grid_signals.app.snapshot import SnapshotError
+from grid_signals.markets import SDAC_MARKETS
 
 st.set_page_config(page_title="Grid Signals · Electricity forecasts", layout="wide")
 st.markdown(
