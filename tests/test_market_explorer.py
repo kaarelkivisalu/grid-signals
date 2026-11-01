@@ -33,7 +33,12 @@ from grid_signals.app.markets import (
     PORTFOLIO_MARKETS,
     SDAC_MARKETS,
 )
-from grid_signals.app.model_catalogue import CATALOGUE, MODEL_DATA
+from grid_signals.app.model_catalogue import (
+    CATALOGUE,
+    MODEL_DATA,
+    REFERENCE_MODELS,
+    model_name,
+)
 from grid_signals.app.presentation import available_markets
 
 APP = Path(__file__).parents[1] / "src/grid_signals/app/main.py"
@@ -49,7 +54,7 @@ def test_overview_is_populated_and_sidebar_is_just_navigation(monkeypatch):
     assert not app.sidebar.selectbox
     assert not app.sidebar.date_input
     assert [item.value for item in app.sidebar.title] == ["Grid Signals"]
-    assert [item.value for item in app.sidebar.caption] == ["Nordic/Baltic electricity"]
+    assert not app.sidebar.caption
     assert app.date_input(key="overview_day_SE3").value == date(2026, 9, 19)
     assert not app.main.caption
     assert not app.main.get("page_link")
@@ -59,6 +64,7 @@ def test_overview_is_populated_and_sidebar_is_just_navigation(monkeypatch):
         "Prices",
         "Wind",
         "Solar",
+        "Demand",
         "Models & data",
         "Performance",
     ]
@@ -93,7 +99,6 @@ def test_product_pages_only_offer_real_forecasts(page, target, zone):
     assert not app.exception
     assert app.session_state["selected_zone"] == zone
     assert app.session_state["selected_target"] == target
-    assert not app.expander
     assert not app.button(key=f"market_{target}_{zone}").disabled
     other = "SE3" if zone == "DE_LU" else "DE_LU"
     assert app.button(key=f"market_{target}_{other}").disabled
@@ -152,16 +157,20 @@ def test_publication_archive_displays_recorded_status_and_timestamp():
     ).iloc[0]
     app = AppTest.from_file(str(APP), default_timeout=30).run()
     app.switch_page("pages/wind.py").run()
-    app.selectbox(key="archive_wind_onshore").set_value("Published archive").run()
+    key = "forecast_day_SE3_wind_onshore_hourly_repeated"
+    app.date_input(key=key).set_value(
+        date.fromisoformat(pool.delivery_date.max())
+    ).run()
     assert not app.exception
     assert any(
         expected.publication_status in item.value
         and str(expected.published_at) in item.value
-        for item in app.caption
+        for item in app.markdown
     )
-    app.selectbox(key="archive_wind_onshore").set_value("Final holdout").run()
+    app.date_input(key=key).set_value(date(2026, 9, 19)).run()
     assert not app.exception
-    assert any("Final evaluation" in item.value for item in app.caption)
+    assert any("Historical evaluation" in item.value for item in app.markdown)
+    assert all(item.label != "Archive" for item in app.selectbox)
 
 
 def test_performance_keeps_matched_metrics_and_detailed_period_controls():
@@ -176,7 +185,7 @@ def test_performance_keeps_matched_metrics_and_detailed_period_controls():
         app.selectbox(key="score_group").set_value(group).run()
         assert not app.exception
         assert not app.dataframe[-1].value.empty
-    app.button_group(key="selected_target").set_value("price").run()
+    app.button(key="target_price").click().run()
     assert not app.exception
     assert app.session_state["selected_zone"] == "DE_LU"
     app.date_input(key="score_range_DE_LU_price_Final holdout").set_value(
@@ -264,11 +273,11 @@ def test_every_model_has_explicit_sources_forecast_inputs_and_fitting_data():
     app = AppTest.from_file(str(APP), default_timeout=30).run()
     app.switch_page("pages/methods.py").run()
     for model in ("hourly_repeated", "interpolated_weather", "physical_power_curve"):
-        app.selectbox(key="method_model").set_value(model).run()
+        app.selectbox(key="method_model_wind_onshore").set_value(model).run()
         assert not app.exception
         assert any(MODEL_DATA[model][1] in item.value for item in app.markdown)
-    app.button_group(key="selected_target").set_value("price").run()
-    app.selectbox(key="method_model").set_value("lear_hourly").run()
+    app.button(key="target_price").click().run()
+    app.selectbox(key="method_model_price").set_value("lear_hourly").run()
     assert not app.exception
     assert any("No weather, demand or renewable" in item.value for item in app.markdown)
 
@@ -292,9 +301,8 @@ def test_pages_have_one_view_and_group_area_choices(page):
     app = AppTest.from_file(str(APP), default_timeout=30).run()
     app.switch_page(f"pages/{page}.py").run()
     assert not app.exception
-    assert not app.expander
     assert not app.toggle
-    if page != "map":
+    if page not in {"map", "methods"}:
         captions = [item.value for item in app.caption]
         assert not any(group in captions for group in MARKET_GROUPS)
         prefix = (
@@ -303,7 +311,7 @@ def test_pages_have_one_view_and_group_area_choices(page):
         assert [
             button.label
             for button in app.button
-            if button.key.startswith(f"market_{prefix}_")
+            if button.key and button.key.startswith(f"market_{prefix}_")
         ] == [
             code.replace("_", "-")
             for codes in MARKET_GROUPS.values()
@@ -484,7 +492,14 @@ def test_overview_charts_use_common_units_and_one_forecast_per_product():
 def test_calendar_navigation_skips_missing_forecasts_and_stops_at_bounds():
     app = AppTest.from_file(str(APP), default_timeout=30).run()
     app.switch_page("pages/wind.py").run()
-    key = "forecast_day_SE3_wind_onshore_Final holdout_hourly_repeated"
+    key = "forecast_day_SE3_wind_onshore_hourly_repeated"
+    forecasts = read_market(load_manifest(), "SE3", "forecast")
+    pool = forecasts[
+        (forecasts.target == "wind_onshore") & (forecasts.model == "hourly_repeated")
+    ]
+    app.date_input(key=key).set_value(
+        date.fromisoformat(pool.delivery_date.max())
+    ).run()
     assert app.button(key=f"next_{key}").disabled
     app.date_input(key=key).set_value(date(2026, 6, 23)).run()
     app.button(key=f"next_{key}").click().run()
@@ -496,7 +511,9 @@ def test_calendar_navigation_skips_missing_forecasts_and_stops_at_bounds():
     assert any("No saved forecast" in message.value for message in app.info)
     app.button(key=f"next_{key}").click().run()
     assert app.date_input(key=key).value == date(2026, 6, 25)
-    app.date_input(key=key).set_value(date(2026, 3, 20)).run()
+    app.date_input(key=key).set_value(
+        date.fromisoformat(pool.delivery_date.min())
+    ).run()
     assert app.button(key=f"previous_{key}").disabled
 
 
@@ -527,3 +544,48 @@ def test_clearing_delivery_calendar_keeps_the_selected_day(page):
     assert app.session_state["delivery_date"] == date(2026, 9, 17)
     app.run()
     assert not app.exception
+
+
+def test_methods_explains_models_without_changing_selected_area():
+    app = AppTest.from_file(str(APP), default_timeout=30).run()
+    app.button(key="market_overview_EE").click().run()
+    app.switch_page("pages/methods.py").run()
+    for target in ("price", "solar", "load", "wind_onshore"):
+        app.button(key=f"target_{target}").click().run()
+        assert not app.exception
+        assert app.session_state["selected_zone"] == "EE"
+        assert not any(
+            button.key and button.key.startswith("market_") for button in app.button
+        )
+        assert any("process-flow" in item.value for item in app.markdown)
+        assert not any("Result export:" in item.value for item in app.caption)
+        assert not app.table[0].value.empty
+
+
+@pytest.mark.parametrize(
+    ("page", "target", "zone"),
+    [
+        ("wind", "wind_onshore", "SE3"),
+        ("solar", "solar", "DE_LU"),
+        ("price", "price", "DE_LU"),
+        ("load", "load", "DE_LU"),
+    ],
+)
+def test_default_forecast_names_its_reference_and_methods_link(page, target, zone):
+    app = AppTest.from_file(str(APP), default_timeout=30).run()
+    app.switch_page(f"pages/{page}.py").run()
+    assert not app.exception
+    assert app.session_state["selected_zone"] == zone
+    spec = json.loads(app.get("plotly_chart")[0].proto.spec)
+    assert model_name(REFERENCE_MODELS[target]) in [
+        trace.get("name") for trace in spec["data"]
+    ]
+    assert not app.main.caption
+    next(
+        button
+        for button in app.button
+        if button.label == "Explore model inputs & methods"
+    ).click().run()
+    assert not app.exception
+    assert app.title[0].value == "Models & data"
+    assert app.session_state["selected_target"] == target

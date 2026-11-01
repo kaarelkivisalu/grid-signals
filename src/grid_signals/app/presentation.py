@@ -1,6 +1,7 @@
 """Shared portfolio navigation, availability choices and forecast presentation."""
 
 from datetime import date
+from html import escape
 
 import pandas as pd
 import streamlit as st
@@ -21,10 +22,19 @@ from grid_signals.app.markets import (
     SDAC_MARKETS,
     SELECTED_MODELS,
 )
-from grid_signals.app.model_catalogue import CATALOGUE, model_name
+from grid_signals.app.model_catalogue import (
+    FORECAST_GUIDES,
+    REFERENCE_MODELS,
+    model_name,
+)
 from grid_signals.app.snapshot import SnapshotError
 
-FAMILIES = {"wind_onshore": "Wind", "solar": "Solar", "price": "Prices", "load": "Load"}
+FAMILIES = {
+    "wind_onshore": "Wind",
+    "solar": "Solar",
+    "price": "Prices",
+    "load": "Demand",
+}
 
 
 def available_markets(manifest: dict, target: str) -> list[str]:
@@ -191,17 +201,69 @@ def delivery_day(days: list[str], key: str) -> str:
     return selected.isoformat()
 
 
+def _choose_target(target: str) -> None:
+    st.session_state.selected_target = target
+
+
 def target_choices() -> str:
     if st.session_state.selected_target not in FAMILIES:
         st.session_state.selected_target = "wind_onshore"
-    chosen = st.segmented_control(
-        "Forecast target",
-        list(FAMILIES),
-        format_func=FAMILIES.get,
-        key="selected_target",
-        label_visibility="collapsed",
+    chosen = st.session_state.selected_target
+    st.markdown(
+        """<style>
+        .st-key-target-selector button { border-radius: 0; min-height: 2rem; }
+        </style>""",
+        unsafe_allow_html=True,
     )
-    return chosen or "wind_onshore"
+    with st.container(
+        horizontal=True, width="content", gap=None, key="target-selector"
+    ):
+        for target, label in FAMILIES.items():
+            st.button(
+                label,
+                key=f"target_{target}",
+                type="primary" if target == chosen else "secondary",
+                on_click=_choose_target,
+                args=(target,),
+            )
+    return chosen
+
+
+def process_diagram(steps: tuple[tuple[str, str, str], ...]) -> None:
+    """A responsive, readable flow; the DOM order also conveys the sequence."""
+    items = "".join(
+        f"<li><span>{escape(label)}</span><strong>{escape(title)}</strong>"
+        f"<p>{escape(detail)}</p>"
+        + (
+            '<svg class="process-arrow" viewBox="0 0 24 24" aria-hidden="true">'
+            '<path d="M3 12h17m-6-6 6 6-6 6" fill="none" '
+            'stroke="currentColor" stroke-width="1.5"/></svg>'
+            if index < len(steps) - 1
+            else ""
+        )
+        + "</li>"
+        for index, (label, title, detail) in enumerate(steps)
+    )
+    st.markdown(
+        """<style>
+        [data-testid="stMarkdownContainer"] ol.process-flow {
+            display: flex; list-style: none; padding: 0; margin: 1rem 0 1.5rem;
+            gap: 1.5rem; width: 100%; max-width: none; }
+        .process-flow li { position: relative; flex: 1; min-width: 0; border-top: 2px solid #147d77;
+            padding-top: .75rem; }
+        .process-arrow { position: absolute; width: 24px; height: 24px;
+            right: -24px; top: 2.1rem; color: #147d77; }
+        .process-flow span { display: block; color: #536963; margin-bottom: .35rem; }
+        .process-flow strong { display: block; font-size: 1.15rem; color: #183c3b; }
+        .process-flow p { margin: .5rem 0 0; line-height: 1.6; }
+        @media(max-width: 700px) {
+            .process-flow { flex-direction: column; gap: 1rem; }
+            .process-arrow { display: none; }
+        }
+        </style>"""
+        f'<ol class="process-flow">{items}</ol>',
+        unsafe_allow_html=True,
+    )
 
 
 def evaluated_forecasts(manifest: dict, zone: str) -> pd.DataFrame:
@@ -227,69 +289,59 @@ def render_forecast(target: str) -> None:
     market = BY_CODE[zone]
     forecasts = evaluated_forecasts(manifest, zone)
     forecasts = forecasts[forecasts.target == target]
-    kinds = [
-        split
-        for split in (*SCORED_SPLITS, "Published archive")
-        if (forecasts.split == split).any()
-    ]
-    scope_key = f"chosen_archive_{target}"
-    scope = st.session_state.get(scope_key, kinds[0])
-    if scope not in kinds:
-        scope = kinds[0]
-    archive_column, model_column = st.columns(2)
-    scope = archive_column.selectbox(
-        "Archive",
-        kinds,
-        index=kinds.index(scope),
-        key=f"archive_{target}",
-        format_func=lambda value: {
-            "Final holdout": "Final evaluation",
-            "Development": "Development",
-            "Published archive": "Published issues",
-        }[value],
-    )
-    st.session_state[scope_key] = scope
-    pool = forecasts[forecasts.split == scope]
-    models = sorted(pool.model.unique())
+    models = sorted(forecasts.model.unique(), key=model_name)
     if st.session_state.get("selected_model") not in models:
         st.session_state.selected_model = (
             SELECTED_MODELS[target] if SELECTED_MODELS[target] in models else models[0]
         )
-    model = st.session_state.selected_model
-    model = model_column.selectbox(
-        "Model", models, key="selected_model", format_func=model_name
-    )
-    pool = pool[pool.model == model]
-    days = sorted(pool.delivery_date.unique(), reverse=True)
-    day = delivery_day(days, f"forecast_day_{zone}_{target}_{scope}_{model}")
+    with st.expander("Explore other forecast models"):
+        st.write(
+            "The default is the selected model for this product. Alternative models "
+            "are saved research comparisons; their available dates may differ."
+        )
+        model = st.selectbox(
+            "Forecast model", models, key="selected_model", format_func=model_name
+        )
+    pool = forecasts[forecasts.model == model]
+    days = sorted(pool.delivery_date.unique())
+    day = delivery_day(days, f"forecast_day_{zone}_{target}_{model}")
     if day not in days:
         st.info(
             "No saved forecast for this day. Use the arrows to find a saved result."
         )
         st.stop()
-    scope_label = {
-        "Final holdout": "Final evaluation",
-        "Development": "Development",
-        "Published archive": "Published issue",
-    }[scope]
-    st.caption(
-        f"{zone.replace('_', '-')} · {market.name} · {date.fromisoformat(day):%d %b %Y} · {scope_label}"
-    )
     rows = choose_curve(pool, target, day, model)
+    scope = rows.split.iloc[0]
+    if scope == "Final holdout":
+        st.write(
+            "Historical evaluation · Forecasts reconstructed for a held-out test period."
+        )
+    elif scope == "Development":
+        st.write(
+            "Development results · These dates were used to compare and select models."
+        )
     if scope == "Published archive":
-        issues = pool[pool.delivery_date == day].sort_values("published_at")
+        issues = pool[
+            (pool.delivery_date == day) & (pool.split == "Published archive")
+        ].sort_values("published_at")
         ids = issues.forecast_id.unique().tolist()
         if len(ids) > 1:
-            chosen = st.selectbox(
-                "Issue / revision",
-                ids,
-                index=len(ids) - 1,
-                format_func=lambda value: str(value)[:8],
-            )
+            with st.expander("Earlier publications for this day"):
+                st.write("The latest saved publication is shown by default.")
+                chosen = st.selectbox(
+                    "Publication time",
+                    ids,
+                    index=len(ids) - 1,
+                    format_func=lambda value: pd.Timestamp(
+                        issues.loc[issues.forecast_id == value, "published_at"].iloc[0]
+                    ).strftime("%d %b %Y, %H:%M UTC"),
+                    key=f"revision_{zone}_{target}_{model}_{day}",
+                )
             rows = issues[issues.forecast_id == chosen].sort_values("valid_time")
         issue = rows.iloc[0]
-        st.caption(
-            f"{issue.publication_status} · published {issue.published_at} · cutoff {issue.information_cutoff_at}"
+        st.write(
+            f"Published forecast · {issue.publication_status} · "
+            f"published {issue.published_at} · input cutoff {issue.information_cutoff_at}"
         )
         observed = read_market(manifest, zone, "observation")
         frame = market_day(observed, day, market.timezone)
@@ -298,12 +350,7 @@ def render_forecast(target: str) -> None:
             rows["actual"] = (
                 frame[target].reindex(pd.DatetimeIndex(rows.valid_time)).to_numpy()
             )
-    reference_model = {
-        "wind_onshore": "physical_power_curve",
-        "solar": "smart_persistence",
-        "price": "seasonal_naive",
-        "load": "load_weekly",
-    }[target]
+    reference_model = REFERENCE_MODELS[target]
     reference = choose_curve(
         forecasts[forecasts.split == scope], target, day, reference_model
     )
@@ -325,6 +372,21 @@ def render_forecast(target: str) -> None:
         file_name=f"{zone}-{target}-{day}.csv",
         mime="text/csv",
     )
-    _recipe, _features, _uncertainty, resolution, limits = CATALOGUE[model]
-    st.caption(f"{model_name(model)} · {resolution} {limits}")
-    st.page_link("pages/methods.py", label="Model inputs & method")
+    st.subheader("About this forecast")
+    st.write(
+        f"**{model_name(model)}.** {FORECAST_GUIDES[target]['note']}"
+        if model == SELECTED_MODELS[target]
+        else f"**{model_name(model)}.** See the model guide for this comparison's inputs and limits."
+    )
+    if not reference.empty and model != reference_model:
+        st.write(
+            f"**{model_name(reference_model)}:** {FORECAST_GUIDES[target]['reference']}"
+        )
+    elif model != reference_model:
+        st.write("A matching reference forecast is unavailable for this saved day.")
+    st.write("The shaded 80% range runs from the 10th to the 90th percentile.")
+    if rows.actual.notna().any():
+        st.write("The lower panel shows forecast minus actual.")
+    if st.button("Explore model inputs & methods", icon=":material/arrow_forward:"):
+        st.session_state[f"method_model_{target}"] = model
+        st.switch_page("pages/methods.py")

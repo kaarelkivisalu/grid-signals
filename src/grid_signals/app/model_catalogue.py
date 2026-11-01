@@ -2,6 +2,105 @@
 
 from grid_signals.app.snapshot import MODEL_LABELS
 
+REFERENCE_MODELS = {
+    "wind_onshore": "physical_power_curve",
+    "solar": "smart_persistence",
+    "price": "seasonal_naive",
+    "load": "load_weekly",
+}
+
+# Overview first; exact, evaluated recipes remain in CATALOGUE below.
+FORECAST_GUIDES = {
+    "wind_onshore": {
+        "question": "How much electricity will the onshore turbine fleet generate?",
+        "steps": (
+            (
+                "Inputs",
+                "Wind forecasts & turbine fleet",
+                "Weather from several models, turbine response and recent generation.",
+            ),
+            (
+                "Model",
+                "Physical response + LightGBM",
+                "Learn the generation distribution and calibrate it on training-side predictions.",
+            ),
+            (
+                "Output",
+                "Generation & uncertainty",
+                "Median and prediction ranges, scaled by installed capacity.",
+            ),
+        ),
+        "reference": "Turbine power curves convert forecast wind into generation, with a fitted bias correction.",
+        "note": "The wind model learns at hourly resolution; each hour is repeated across four quarter-hours.",
+    },
+    "solar": {
+        "question": "How much electricity will the solar fleet generate during daylight?",
+        "steps": (
+            (
+                "Inputs",
+                "Sunlight, weather & panels",
+                "Archived irradiance and temperature, solar geometry and panel orientations.",
+            ),
+            (
+                "Model",
+                "Physical PV + LightGBM",
+                "Learn daylight generation quantiles around a physical panel model.",
+            ),
+            (
+                "Output",
+                "Daylight generation & ranges",
+                "Calibrated generation ranges; night-time output is zero.",
+            ),
+        ),
+        "reference": "The sunlight-adjusted pattern from 48 hours earlier, applied to the delivery day's clear-sky profile.",
+        "note": "Solar predictions use quarter-hour targets. The final evaluation still shows overprediction.",
+    },
+    "price": {
+        "question": "What will the next day's wholesale electricity prices be?",
+        "steps": (
+            (
+                "Inputs",
+                "Price history & weekday",
+                "Daily price profiles from 1, 2, 3 and 7 days earlier.",
+            ),
+            (
+                "Model",
+                "LEAR hourly regressions",
+                "One LASSO regression per hour learns recurring price patterns.",
+            ),
+            (
+                "Output",
+                "Prices & prediction ranges",
+                "Hourly prices repeated on the quarter-hour grid; training errors set the ranges.",
+            ),
+        ),
+        "reference": "The price at the same UTC interval one week earlier, adjusted by a training residual offset.",
+        "note": "This LEAR adaptation uses price history and weekday only. Negative prices are retained.",
+    },
+    "load": {
+        "question": "How much electricity will consumers demand?",
+        "steps": (
+            (
+                "Inputs",
+                "Demand, temperature & calendar",
+                "Past demand, forecast heating/cooling needs, time of day and holidays.",
+            ),
+            (
+                "Model",
+                "LightGBM quantiles",
+                "Learn 19 demand quantiles from historical demand and archived weather.",
+            ),
+            (
+                "Output",
+                "Demand & prediction ranges",
+                "Quarter-hour demand with a median and uncertainty ranges.",
+            ),
+        ),
+        "reference": "Demand at the same UTC interval one week earlier, adjusted by a training residual offset.",
+        "note": "The German demand case study uses six temperature sites and national holidays; historical observations may be revised.",
+    },
+}
+
 PRICE_FEATURES = (
     "Observed price lags: 24, 48, 72 and 168 hours (UTC; unavailable auction prices masked).",
     "24-hour price profiles from 1, 2, 3 and 7 delivery days earlier; weekday indicators, market quarter and month.",

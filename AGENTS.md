@@ -1,8 +1,11 @@
 # Working in this repository
 
 - Do all work on a clearly named branch other than `main`. If the current branch
-  is `main`, create a feature branch before editing. Rename a feature branch when
-  its name no longer describes the work.
+  is `main`, create a feature branch before editing. Choose a broad name that
+  describes the full scope of work different from `main`, including earlier
+  commits and uncommitted changes, rather than just the latest task. Keep that
+  name stable through individual tasks and refinements; rename it only when the
+  user asks.
 - Do not push unless the user explicitly asks.
 - Do not create new documentation files without the user's explicit approval.
   Update existing documentation instead, keeping the number of files manageable.

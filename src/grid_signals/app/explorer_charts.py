@@ -163,7 +163,7 @@ def forecast_chart(
         go.Scatter(
             x=times,
             y=rows["q0.50"],
-            name="Forecast",
+            name=model_name(rows.model.iloc[0]),
             line={"color": "#b65753", "width": 2.5},
             legendrank=10,
         )
@@ -184,7 +184,7 @@ def forecast_chart(
             go.Scatter(
                 x=times,
                 y=aligned["q0.50"],
-                name="Reference",
+                name=model_name(comparison.model.iloc[0]),
                 hovertemplate=model_name(comparison.model.iloc[0])
                 + (": %{y:.2f}" if target == "price" else ": %{y:,.0f} MW")
                 + "<extra></extra>",
@@ -242,13 +242,13 @@ def diagnostic_chart(scores: pd.DataFrame, metric: str) -> go.Figure:
             )
         )
     else:
-        for (split, model), rows in scores.groupby(["split", "model"], sort=False):
+        for (_split, model), rows in scores.groupby(["split", "model"], sort=False):
             figure.add_trace(
                 go.Scatter(
                     x=rows.Group,
                     y=rows[metric],
                     mode="lines+markers",
-                    name=f"{model_name(model)} · {split}",
+                    name=model_name(model),
                 )
             )
     if metric == "Coverage80":

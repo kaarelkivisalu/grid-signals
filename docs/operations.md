@@ -113,17 +113,21 @@ the project's [SDAC registry](https://www.entsoe.eu/network_codes/cacm/implement
 
 ## Public hosting
 
-The presentation has a separate, non-root web-only image with pinned UI dependencies:
+The presentation has a separate, non-root web-only image with pinned UI dependencies.
+Start it locally with Docker Compose:
 
 ```bash
-docker build -f Dockerfile.demo -t grid-signals-demo:local .
-docker run --rm -p 127.0.0.1:8502:8501 grid-signals-demo:local
+docker compose -f compose.demo.yaml up --build -d
 ```
 
 Open http://localhost:8502. The image includes the historical explorer and three summary bundles and omits the
 legacy database/agent tools. Its build context excludes research data, secrets and
 the virtualenv. The build checks every indexed Parquet file's checksum and copies
 only those files into the final image. Old local exports remain untouched.
+View logs with `docker compose -f compose.demo.yaml logs -f`; stop and remove the
+demo container with `docker compose -f compose.demo.yaml down`.
+Use `compose.demo.yaml` explicitly: the existing `compose.yaml` still configures
+the original database/agent application and its external network.
 The base image is pinned by digest; `deploy/demo/requirements.txt` locks all web
 dependencies with hashes. To intentionally update that dependency lock:
 
@@ -148,17 +152,24 @@ graph. Area and date controls are visible. The saved selected model supplies at
 most one forecast per product; products without a forecast show observations
 only. Price uses EUR/MWh; fundamentals use MW with whole-MW axis labels and
 tooltips. Overview omits repeated selection captions and the demand case-study
-link; demand remains a separate page linked from Map. The sidebar has three
-groups: Overview/Map, Prices/Wind/Solar, and Models & data/Performance.
+link; demand has a separate page. The sidebar has three
+groups: Overview/Map, Prices/Wind/Solar/Demand, and Models & data/Performance.
 Area choices group country zones and nearby single-area markets, with
 EE/LV/LT together. Buttons join edge to edge with square corners, small gaps
 between groups and no country headings. Unsupported choices are greyed out for
 each page.
 
-Every page has one view, with its controls directly available and no Details
-switch. Product pages retain aligned forecast/error panels and CSV downloads.
-Performance exposes period and diagnostic controls; Models & data shows inputs,
-fitting rules and limits. Delivery dates use a 160 px calendar field joined to
+Product pages use area and date as the main controls, with alternative models
+and earlier publications in expandable sections. The selected date determines
+whether a forecast is a historical evaluation, development result or published
+issue; the page explains that distinction. Chart legends name the forecast and
+reference. Forecast/error panels and CSV downloads remain available.
+Performance leads with matched scores and monthly error patterns; evaluation
+period and model controls are optional. Models & data explains each approach
+with a responsive input-to-forecast diagram before its regional applications.
+Detailed sources, fitting rules and timing assumptions can be expanded. Product
+selectors use joined buttons, matching area selectors. Delivery dates use a 160 px
+calendar field joined to
 two arrow buttons that move between saved days; missing dates show an explicit
 empty state. The clear control is disabled; an empty value sent by an older
 browser restores the last selected day before date-range checks. Map keeps all
@@ -186,6 +197,13 @@ table, calendar navigation across missing days, cleared-date recovery on Overvie
 and Wind, preserved selections and aligned error values. The publication-status
 test checks the selected issue.
 Existing evaluated result files and model code were not changed.
+
+The 2026-11-01 usability revision passed **52 focused tests**, Ruff lint and
+formatting, and local browser checks at 1440, 820 and 390 px. Forecasts select
+the saved result type by date, chart references are named, and model guides work
+independently of area selection. Navigation, CSV downloads and responsive diagrams
+passed without browser errors or horizontal page overflow. This review used a
+separate local Streamlit preview; the running Docker demo was not refreshed.
 
 Ruff excludes standalone learning notebooks until their move in milestone 2a.
 Three style rules are narrowly exempted in two evaluated source files to keep

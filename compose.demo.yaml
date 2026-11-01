@@ -1,0 +1,10 @@
+name: grid-signals-demo
+
+services:
+    demo:
+        build:
+            context: .
+            dockerfile: Dockerfile.demo
+        image: grid-signals-demo:local
+        ports:
+            - "127.0.0.1:8502:8501"

@@ -8,7 +8,13 @@ from grid_signals.app.markets import MARKET_GROUPS
 
 manifest = st.session_state.explorer_manifest
 st.title("Map")
-st.markdown(coverage_map(manifest), unsafe_allow_html=True)
+with st.container(gap="small"):
+    st.markdown(coverage_map(manifest), unsafe_allow_html=True)
+    st.markdown(
+        "Bidding-zone boundaries from [entsoe-py](https://github.com/EnergieID/entsoe-py/tree/master/entsoe/geo), "
+        "simplified for display."
+    )
+st.divider()
 st.subheader("Availability")
 rows = []
 
@@ -79,7 +85,3 @@ st.markdown(
 matrix = pd.DataFrame(rows).drop(columns="Region").set_index("Area")
 with st.container(key="market-matrix", width=640):
     st.table(matrix.style.map(status_style), border="horizontal")
-st.markdown(
-    "[Market boundaries: entsoe-py](https://github.com/EnergieID/entsoe-py/tree/master/entsoe/geo) "
-    "· Simplified for display; local geometry, no external map service."
-)

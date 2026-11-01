@@ -21,16 +21,19 @@ be retired; standalone exercises move elsewhere. See the authoritative [roadmap]
 
 ## Run the local demo
 
-The standalone image installs only the web dependencies and needs no credentials:
+With Docker and Docker Compose installed, start the demo with one command:
 
 ```bash
-docker build -f Dockerfile.demo -t grid-signals-demo:local .
-docker run --rm -p 127.0.0.1:8502:8501 grid-signals-demo:local
+docker compose -f compose.demo.yaml up --build -d
 ```
 
 Open **http://localhost:8502**. Overview leads with **SE3 onshore wind on
 2026-09-19**, comparing the model, physical reference, uncertainty and actuals.
-The sidebar links directly to wind, solar, prices, performance, coverage and methods.
+The sidebar links directly to wind, solar, prices, demand, performance, coverage and methods.
+
+The standalone image installs only the web dependencies and needs no credentials.
+View logs with `docker compose -f compose.demo.yaml logs -f`. Stop and remove the
+demo container with `docker compose -f compose.demo.yaml down`.
 
 For development with the existing full project environment:
 
@@ -45,20 +48,23 @@ research dependencies or model training.
 - **Overview:** area/date selection, one electricity-price graph and one combined
   wind, solar and demand graph. Each product has at most one saved model forecast;
   observations remain visible where no evaluated forecast exists.
-- **Wind, Solar and Prices:** saved dates/models, actuals, a reference, an 80%
-  range, aligned errors, published issues and CSV downloads in one view.
-- **Performance:** matched model comparisons with period, grouping, uncertainty
-  and bias diagnostics.
+- **Wind, Solar, Prices and Demand:** choose an area and date to see the selected
+  model, named reference, actuals, an 80% range, errors and CSV downloads. The date
+  chooses historical evaluation, development results or a published forecast
+  automatically; alternative models and earlier publications are optional.
+- **Performance:** matched model comparisons with score explanations and monthly
+  error patterns. Period, model and normalisation controls are optional.
 - **Map:** all 39 SDAC bidding zones and a full colour-coded availability table.
   Map areas and cells link directly to their saved data; unsupported areas remain visible.
-- **Models & data:** source/input tables, model choices, fitting data, recipes
-  and timing rules.
+- **Models & data:** input-to-forecast diagrams explain each approach before its
+  regional applications. Detailed sources, recipes and fitting rules can be expanded.
 
 Area buttons join edge to edge within groups, with small gaps between countries
 and EE/LV/LT together. Country names are available on hover. Selectors show the
 regional project areas plus other areas with saved data; Map shows every SDAC area.
-Unavailable areas are greyed out for each page. Controls are visible directly;
-there is no separate Details mode.
+Unavailable areas are greyed out for each page. Product selectors use the same
+joined buttons as area selectors. Models & data explains approaches independently
+of the selected area; detailed controls and recipes use expandable sections.
 Delivery dates use one compact control: a calendar between two arrow buttons
 that step between saved days. A date without a saved forecast shows an empty
 state. Fundamentals use MW, with labels and tooltips rounded to whole MW.
@@ -71,8 +77,8 @@ always-on reliability has yet to be demonstrated. LEAR leads the German price be
 is the forward publication baseline; its price intervals still under-cover on holdout.
 Custom DE-LU load is implemented; its first price-input experiment shows no resolved gain.
 Custom German wind and residual-load forecasts are deferred; observed residual
-load is available where all components exist. The German demand study remains
-accessible from Overview. The old database and chat tools are outside the demo.
+load is available where all components exist. The German demand study is available
+from Demand in the sidebar. The old database and chat tools are outside the demo.
 Public hosting is handled by the project owner. See the
 [local release review and deployment handoff](docs/operations.md#public-hosting).
 

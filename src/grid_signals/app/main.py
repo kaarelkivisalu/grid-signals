@@ -71,7 +71,7 @@ st.session_state.setdefault("delivery_date", date(2026, 9, 19))
 
 link_groups = (
     (("overview", "Overview"), ("map", "Map")),
-    (("price", "Prices"), ("wind", "Wind"), ("solar", "Solar")),
+    (("price", "Prices"), ("wind", "Wind"), ("solar", "Solar"), ("load", "Demand")),
     (("methods", "Models & data"), ("performance", "Performance")),
 )
 links = [link for group in link_groups for link in group]
@@ -79,13 +79,11 @@ pages = st.navigation(
     [
         st.Page(f"pages/{path}.py", title=label, default=path == "overview")
         for path, label in links
-    ]
-    + [st.Page("pages/load.py", title="Load case study")],
+    ],
     position="hidden",
 )
 with st.sidebar:
     st.title("Grid Signals")
-    st.caption("Nordic/Baltic electricity")
     with st.container(gap="small", key="sidebar-navigation"):
         for index, group in enumerate(link_groups):
             with st.container(gap="small", key=f"navigation-{index}"):
