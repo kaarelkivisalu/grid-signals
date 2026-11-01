@@ -67,7 +67,7 @@ documented; the code has not yet been combined or removed.
 This session establishes direction and documentation only. Application changes,
 new model experiments and deployment belong to later sessions.
 
-### 1. Publish the historical demo — test site deployed; public UI checks pending
+### 1. Publish the historical demo — complete
 
 Reuse the existing Streamlit explorer, saved results and standalone demo image.
 Open on **SE3 onshore wind with a populated historical comparison**. Keep German
@@ -83,7 +83,7 @@ case studies accessible and database-dependent tools outside the public demo.
 - [x] Verify the standalone image without database access or API credentials.
 - [x] Review the local demo, then hand deployment to the project owner.
 - [x] Deploy the test site through Dokploy and verify anonymous HTTPS access.
-- [ ] Verify desktop/mobile use, CSV downloads and explicit historical dates on the public site.
+- [x] Verify desktop/mobile use, CSV downloads and explicit historical dates on the public site.
 
 Local portfolio review completed 2026-10-26: 407 tests passed, 2 skipped; lint and formatting
 passed; the built image passed offline browsing checks and desktop/tablet/phone
@@ -91,7 +91,12 @@ review. See the [release review and deployment handoff](docs/operations.md#publi
 The owner confirmed deployment on 2026-11-01 at
 [grid-signals-demotest.kaarelkivisalu.ee](https://grid-signals-demotest.kaarelkivisalu.ee).
 Anonymous HTTPS requests to the homepage and health endpoint returned HTTP 200;
-the health response was `ok`. Public desktop/mobile and download checks remain open.
+the health response was `ok`. Public acceptance checks passed on 2026-11-01 at
+1440 px desktop and 390 px phone widths: all eight pages, phone navigation,
+historical labels, date controls and all four forecast CSV downloads. Each CSV
+contains 96 intervals for 2026-09-19, with actuals and median forecasts. No browser
+errors or horizontal page overflow were found. The deployed Git revision and image
+identity still need to be copied from Dokploy for the deployment record.
 Deploy from `feat/electricity-forecasting` until the roadmap is reasonably complete.
 After the owner approves merging into `main`, switch to
 `https://grid-signals.kaarelkivisalu.ee`.

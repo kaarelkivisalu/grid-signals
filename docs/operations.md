@@ -117,9 +117,9 @@ The owner confirmed the Dokploy test deployment on **2026-11-01**:
 [grid-signals-demotest.kaarelkivisalu.ee](https://grid-signals-demotest.kaarelkivisalu.ee).
 It is deployed from `feat/electricity-forecasting`. Anonymous requests to the
 homepage and `/_stcore/health` returned HTTP 200 with certificate verification
-enabled; the health response was `ok`. Public desktop/mobile navigation,
-historical dates and CSV downloads still need acceptance checks. The deployed
-Git revision and image identity have not yet been recorded from Dokploy.
+enabled; the health response was `ok`. Public acceptance checks passed on
+2026-11-01 (details below). The deployed Git revision and image identity have not
+yet been recorded from Dokploy.
 
 Keep this test domain while developing the roadmap. Once the roadmap is
 reasonably complete and the owner approves merging into `main`, change the
@@ -226,6 +226,20 @@ independently of area selection. Navigation, CSV downloads and responsive diagra
 passed without browser errors or horizontal page overflow. This review used a
 separate local Streamlit preview; the running Docker demo was not refreshed.
 
+The deployed test site passed anonymous Chromium acceptance checks on
+**2026-11-01** at **1440 × 1100** and **390 × 844**. Overview, Wind, Solar,
+Prices, Demand, Performance, Models & data and Map rendered without application
+exceptions, browser errors or horizontal page overflow. Phone sidebar navigation,
+previous/next saved-day controls and the forecast-to-methods link worked. Wind
+opens on SE3's populated historical comparison; German solar, price and demand
+case studies remain accessible. Forecast pages explicitly label the selected
+2026-09-19 results as historical evaluation. On both screen sizes, each of the
+four forecast CSV downloads contained 96 quarter-hour intervals for that delivery
+date, with actuals and median forecasts. Desktop performance and phone wind
+screenshots were also reviewed. These checks complete historical-demo acceptance;
+they do not establish daily production or freshness. Copy the deployed Git
+revision and image identity from Dokploy into the deployment record when available.
+
 Ruff excludes standalone learning notebooks until their move in milestone 2a.
 Three style rules are narrowly exempted in two evaluated source files to keep
 their recorded checksums intact; other lint rules remain active.
@@ -257,7 +271,7 @@ after the checks pass for the commit being deployed.
 5. Use a signed-out browser to check HTTPS, the historical SE3 date and chart,
    all product and evidence pages, German case studies, CSV downloads and phone navigation.
 6. Record the public URL, Git revision, image identity and deployment date in this
-   guide, then complete the remaining roadmap checkbox. Keep the previous image
+   guide. Repeat the public checks after each deployment. Keep the previous image
    available for rollback when updating the demo.
 
 The initial historical release needs only the web service. The target daily
