@@ -1,28 +1,35 @@
-FROM ghcr.io/astral-sh/uv:0.13.5@sha256:32a7bb39b496babbd997b0a39a4d66c126bdaf5661b302bf6f06abda8deca6ff AS uv
+FROM ghcr.io/astral-sh/uv:0.13.6-python3.12-trixie-slim@sha256:bf889bda77474aa50c351caf1538b855ef2b7a30add45f26ca50dcb6ade06402 AS builder
 
-FROM python:3.12-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704 AS bundle
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_NO_DEV=1 \
+    UV_PYTHON_DOWNLOADS=0
 
-WORKDIR /source
+WORKDIR /app
+# Install dependencies before copying source so UI changes reuse this layer.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=deploy/demo/uv.lock,target=uv.lock \
+    --mount=type=bind,source=deploy/demo/pyproject.toml,target=pyproject.toml \
+    uv sync --locked --no-install-project
+
+# Validate saved results and prepare only the files needed by the website.
 COPY scripts/prepare_demo.py /source/scripts/prepare_demo.py
 COPY src/grid_signals/__init__.py /source/src/grid_signals/__init__.py
 COPY src/grid_signals/app/ /source/src/grid_signals/app/
 COPY .streamlit/config.toml /source/.streamlit/config.toml
-RUN python scripts/prepare_demo.py --output /prepared
+RUN python /source/scripts/prepare_demo.py --output /prepared
 
-FROM python:3.12-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704
+FROM python:3.12.16-slim-trixie@sha256:8523d6abeb48ceae0b7240d30c5808fc26cb79c1a635bacdf19cf3baecfbec07
 
+RUN useradd --create-home --uid 10001 app
 WORKDIR /app
-ENV VIRTUAL_ENV=/opt/venv \
-    PATH="/opt/venv/bin:$PATH"
-COPY deploy/demo/requirements.txt /app/requirements.txt
-RUN --mount=from=uv,source=/uv,target=/bin/uv \
-    --mount=type=cache,target=/root/.cache/uv \
-    uv venv --python /usr/local/bin/python /opt/venv \
-    && uv pip sync --require-hashes --compile-bytecode --link-mode=copy requirements.txt \
-    && useradd --create-home --uid 10001 app
+COPY --from=builder --chown=app:app /app/.venv /app/.venv
+COPY --from=builder --chown=app:app /prepared/ /app/
 
-COPY --from=bundle /prepared/ /app/
-ENV PYTHONPATH=/app/src \
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app/src \
     STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
 USER app
 EXPOSE 8501

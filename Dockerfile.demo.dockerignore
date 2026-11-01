@@ -8,7 +8,8 @@
 !scripts/prepare_demo.py
 !deploy/
 !deploy/demo/
-!deploy/demo/requirements.txt
+!deploy/demo/pyproject.toml
+!deploy/demo/uv.lock
 !.streamlit/
 !.streamlit/config.toml
 !Dockerfile.demo

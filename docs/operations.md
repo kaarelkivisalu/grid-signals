@@ -128,17 +128,18 @@ View logs with `docker compose -f compose.demo.yaml logs -f`; stop and remove th
 demo container with `docker compose -f compose.demo.yaml down`.
 Use `compose.demo.yaml` explicitly: the existing `compose.yaml` still configures
 the original database/agent application and its external network.
-The Python base and uv images are pinned by digest. Following the
-[uv Docker guide](https://docs.astral.sh/uv/guides/integration/docker/), the build
-uses uv to install the web dependencies into `/opt/venv` with a shared build cache
-and compiled bytecode. The uv binary and cache are build-only mounts; the website
-runs directly with the virtual environment's Python as UID 10001.
-`deploy/demo/requirements.txt` locks all web dependencies with hashes. The demo
-uses this smaller dependency set rather than the full project's legacy database
-and forecasting dependencies. To intentionally update that dependency lock:
+The Python runtime and uv builder images are pinned by digest. The Dockerfile
+follows Astral's [multistage example](https://github.com/astral-sh/uv-docker-example/blob/main/multistage.Dockerfile):
+the uv 0.13.6 Python builder runs `uv sync --locked` with a shared build cache and
+compiled bytecode, then prepares the checked website files. The final Python
+image copies those files and `/app/.venv`; it contains no uv binary or build cache.
+The website runs directly with the virtual environment's Python as UID 10001.
+`deploy/demo/pyproject.toml` defines the web dependencies and `deploy/demo/uv.lock`
+locks their versions and hashes. This smaller project excludes the full project's
+legacy database and forecasting dependencies. To intentionally update its lock:
 
 ```bash
-uv pip compile deploy/demo/requirements.in --python-version 3.12 --python-platform linux --generate-hashes --output-file deploy/demo/requirements.txt
+uv lock --project deploy/demo --upgrade
 ```
 
 Check the built image without networking or credentials:
