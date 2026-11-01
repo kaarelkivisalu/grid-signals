@@ -214,10 +214,20 @@ their recorded checksums intact; other lint rules remain active.
 Public deployment and signed-out HTTPS verification remain open. Use the existing
 Dokploy capacity for one web service:
 
+Deploy from **`feat/electricity-forecasting`** while the roadmap is being developed.
+Keep this branch name stable. Updating `main` is a separate owner decision once
+the roadmap is reasonably complete; deployment needs no pull request or merge.
+GitHub Actions runs lint, tests and the offline demo-image check on each push to
+this branch. Leave Dokploy automatic deployment disabled and deploy manually
+after the checks pass for the commit being deployed.
+
 1. Review the local demo at http://localhost:8502, then make the reviewed Git
-   revision available to Dokploy when ready. Local preparation does not push code.
+   revision available with `git push -u origin feat/electricity-forecasting` when
+   ready. Wait for that commit's GitHub Actions checks to pass. Local preparation
+   does not push code.
 2. Choose a **Dockerfile** build with the repository root as context and
-   **`Dockerfile.demo`** as the Dockerfile. Select the reviewed Git revision.
+   **`Dockerfile.demo`** as the Dockerfile. Set the source branch to
+   **`feat/electricity-forecasting`** and deploy the reviewed Git revision.
 3. Set the internal port to **8501**, leaving the startup command and health check
    in place. No API keys, database settings or persistent volumes are needed.
    The image runs as UID 10001; its health endpoint is `/_stcore/health`.
