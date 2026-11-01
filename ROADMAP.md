@@ -95,8 +95,9 @@ the health response was `ok`. Public acceptance checks passed on 2026-11-01 at
 1440 px desktop and 390 px phone widths: all eight pages, phone navigation,
 historical labels, date controls and all four forecast CSV downloads. Each CSV
 contains 96 intervals for 2026-09-19, with actuals and median forecasts. No browser
-errors or horizontal page overflow were found. The deployed Git revision and image
-identity still need to be copied from Dokploy for the deployment record.
+errors or horizontal page overflow were found. The deployed commit
+`5e08069c9a9fdcc62598da1ede6fba4ad2458cbf` and image digests are recorded in the
+[deployment record](docs/operations.md#public-hosting).
 Deploy from `feat/electricity-forecasting` until the roadmap is reasonably complete.
 After the owner approves merging into `main`, switch to
 `https://grid-signals.kaarelkivisalu.ee`.

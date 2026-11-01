@@ -118,8 +118,20 @@ The owner confirmed the Dokploy test deployment on **2026-11-01**:
 It is deployed from `feat/electricity-forecasting`. Anonymous requests to the
 homepage and `/_stcore/health` returned HTTP 200 with certificate verification
 enabled; the health response was `ok`. Public acceptance checks passed on
-2026-11-01 (details below). The deployed Git revision and image identity have not
-yet been recorded from Dokploy.
+2026-11-01 (details below). The owner supplied the deployed commit and Docker
+build output for this deployment:
+
+| Item | Recorded value |
+|---|---|
+| Git commit | `5e08069c9a9fdcc62598da1ede6fba4ad2458cbf` |
+| Image tag | `docker.io/library/gridsignals-gridsignalsdemo-95atzm:latest` |
+| Image index (manifest list) digest | `sha256:99fa7561577e72e40a0c6a6b22e75b029b0a3a3415690dcdce05286d78fba8d1` |
+| Image manifest digest | `sha256:ad8a033f5e0a397afa5aefcad7a10f54b541689f38c8a62200bd7400b0e1a54c` |
+| Image config digest | `sha256:3578c823e81a7e84e89912d15d9112c8e558b5428d9856b22ded1a3404371ad2` |
+
+These digests identify the build output; the `latest` tag can change on a later
+build. The local image name does not establish that the image was pushed to a
+registry.
 
 Keep this test domain while developing the roadmap. Once the roadmap is
 reasonably complete and the owner approves merging into `main`, change the
@@ -237,8 +249,8 @@ case studies remain accessible. Forecast pages explicitly label the selected
 four forecast CSV downloads contained 96 quarter-hour intervals for that delivery
 date, with actuals and median forecasts. Desktop performance and phone wind
 screenshots were also reviewed. These checks complete historical-demo acceptance;
-they do not establish daily production or freshness. Copy the deployed Git
-revision and image identity from Dokploy into the deployment record when available.
+they do not establish daily production or freshness. The deployed Git revision
+and image identity are recorded above.
 
 Ruff excludes standalone learning notebooks until their move in milestone 2a.
 Three style rules are narrowly exempted in two evaluated source files to keep
