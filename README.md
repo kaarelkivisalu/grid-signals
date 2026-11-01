@@ -85,6 +85,38 @@ Public hosting is handled by the project owner. See the
 See the [historical direction and commercial comparison](docs/project-direction-review.md),
 [research results](research/README.md) and [operations guide](docs/operations.md).
 
+## Run the CI checks locally
+
+With `uv` installed and Docker running, run all checks before pushing:
+
+```bash
+bash scripts/check.sh
+```
+
+This installs the locked development and research dependencies, checks lint and
+formatting, runs the full test suite with coverage (including PostgreSQL tests
+through testcontainers), then builds and browses the standalone demo image without
+network access or API keys. It stops at the first failed check and exits with an error.
+Docker must be accessible to your user; database tests may download `postgres:17`,
+and the demo build needs network access to download its image and dependencies.
+
+For a shorter feedback loop, run one check group:
+
+```bash
+bash scripts/check.sh lint
+bash scripts/check.sh test
+bash scripts/check.sh demo
+```
+
+GitHub Actions uses these same commands. Ruff and pytest come from `uv.lock`, so
+CI uses the same tool versions as local checks. The lint command needs no Docker.
+Checks report issues without changing source files; fix formatting with
+`uv run python -m ruff format .` and rerun the checks.
+
+If you move or rename the checkout, recreate `.venv` with
+`uv venv --clear && uv sync --frozen --group research` so installed command paths
+point to its new location.
+
 ## Refresh the portable results
 
 After generating the underlying research results:

@@ -11,23 +11,20 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
-            - name: Lint check (Ruff)
-              uses: astral-sh/ruff-action@v3
-            - name: Format check (Ruff)
-              run: ruff format --check --diff
+            - uses: astral-sh/setup-uv@v5
+            - name: Lint and format checks (locked Ruff)
+              run: bash scripts/check.sh lint
 
     test:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
             - uses: astral-sh/setup-uv@v5
-            - run: uv sync --frozen --group research
-            - run: uv run pytest --tb=short --cov=grid_signals --cov-report=term-missing
+            - run: bash scripts/check.sh test
 
     demo:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
-            - run: docker build -f Dockerfile.demo -t grid-signals-demo:ci .
-            - name: Browse built demo without network, database or API keys
-              run: docker run --rm -i --network none --entrypoint python grid-signals-demo:ci < tests/demo_image_check.py
+            - name: Build and browse demo without network, database or API keys
+              run: bash scripts/check.sh demo
