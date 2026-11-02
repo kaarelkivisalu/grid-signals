@@ -38,6 +38,11 @@ Older market deployment/recovery instructions remain recoverable from the Git
 bundle and original snapshot; do not delete old remote volumes or backups based
 on removal of their application code.
 
+Local cleanup on 2026-11-02 removed the unused empty `deploy/demo`, `deploy`,
+`research/src` and `research/notebooks` directories, plus the retired `briefings`
+directory. Its only file, `2026-03-26.md`, matched the preserved copy under
+`original/briefings/` byte for byte before removal.
+
 For exact original evaluation reproduction, work in a separate restored directory,
 install its original locked environment, and use its original `research/src`
 imports and cached inputs. Do not rewrite old source paths or checksums to point
