@@ -85,6 +85,12 @@ See the [release review and deployment details](docs/operations.md#public-hostin
 See the [historical direction and commercial comparison](docs/project-direction-review.md),
 [research results](research/README.md) and [operations guide](docs/operations.md).
 
+For each serving model's **exact data sources, fetched fields, derived features,
+architecture, reasons for selection, backtests/results and production schedule**,
+start with the [serving-model guide](research/docs/dataflow.md). It links the
+implementing functions and frozen evidence, and distinguishes scheduled SE3 from
+the German manual case studies and research-only alternatives.
+
 ## Run the CI checks locally
 
 With `uv` installed and Docker running, run all checks before pushing:

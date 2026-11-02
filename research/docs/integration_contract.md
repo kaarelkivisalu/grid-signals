@@ -1,10 +1,12 @@
 # Forecast publication contract
 
-**Status:** the read-only portfolio demo and local Parquet publication trial are
-implemented. The [target architecture](../../docs/implementation-plan.md) uses
-publishing Parquet and other result files, a result-reading website and a Prefect-operated
-forecast lifecycle. A downstream database/API feed is not a planned requirement.
-Displaying research snapshots does not establish reliable daily delivery.
+**Status, 2026-11-02:** the historical demo is published; the SE3 saved-model
+Prefect lifecycle and checked public delivery are implemented and locally tested.
+Owner deployment and scheduler cutover remain pending. German publications retain
+their older manual archive path and have no new schedules. The
+[serving-model guide](dataflow.md) traces exact sources, features, model choices,
+evaluations and execution. A downstream database/API feed is not a planned
+requirement. Displaying research snapshots does not establish daily reliability.
 
 ## Operational gate
 
@@ -20,8 +22,8 @@ point error. Historical replay cannot establish operational reliability.
 
 ## Identity and timing
 
-The current archive implements these semantics; package and orchestration changes
-must preserve them:
+The legacy manual archives and SE3 checked-generation workflow share these timing
+principles. Their delivery authority differs as described below:
 
 | Field | Meaning |
 |---|---|
@@ -29,9 +31,9 @@ must preserve them:
 | `issue_time` / `information_cutoff_at` | Intended information cutoff: 09:00 UTC D-1 |
 | `run_started_at` | Actual start of generation |
 | `created_at` | Actual completion of the forecast rows |
-| `published_at` | Actual archive publication time |
+| `published_at` | SE3: confirmed delivery time after a complete public generation becomes readable; older manual path: archive publication time |
 | `publication_deadline_at` | 09:30 UTC D-1 |
-| `publication_status` | On time, late, early, retrospective or legacy unverified |
+| `publication_status` | On time, late, early, retrospective or legacy unverified; new SE3 receipts can remain `pending_delivery` after an interrupted confirmation |
 | `is_primary` | First eligible on-time issue for this product/day |
 | `revision_of` | Original eligible forecast, if this is a later revision |
 | `model_version` | Resolvable source/configuration identity |
@@ -39,6 +41,13 @@ must preserve them:
 All timestamps are timezone-aware UTC. A revision retains the original cutoff,
 receives a new forecast ID and never replaces the forecast used for scoring.
 An intended issue timestamp alone does not prove on-time publication.
+
+For SE3, `live.publish` first commits complete checked files and then confirms
+their receipt in the public pointer. A crash between those steps stays unverified;
+recovery uses its actual later confirmation time. `live.eligible_receipts` selects
+the first confirmed on-time issue, not an older archive's local `is_primary` flag.
+Manual German archive timing does not by itself prove website delivery. These
+distinctions prevent a retry/recovery from inventing on-time evidence.
 
 ## Forecast files and model versions
 
@@ -53,11 +62,14 @@ Preserve the append-only archive and original eligible forecast across retries
 and revisions. Do not confuse a scheduler retry with a replacement for a scored
 issue. Model versions and original code and input files must remain recoverable.
 
-The code-reorganisation milestone also introduces saved trained models and
-model version records listing the code/settings, training cutoff and reasons for
-approving each model. This is target work, not an existing reload/promotion guarantee. Source
-relocation must not rewrite the original model version records or reopen evaluation
-windows. A future database or public API would require a separate justified design.
+The SE3 workflow saves trained main/reference models, exact training inputs and
+lag history, code/settings/environment identities, training cutoff and reload
+fixtures. Validation and explicit promotion precede prediction; stale, changed,
+wrong-issue or post-cutoff models are rejected. This is implemented in
+`saved_models.py` and exercised locally; live production acceptance is pending.
+German manual commands still fit during prediction. Source relocation must not
+rewrite original model records or reopen evaluation windows. The daily SE3 policy
+is a new forward version, not a new accuracy evaluation of the frozen release.
 
 ## Input and output guarantees
 
@@ -71,6 +83,10 @@ windows. A future database or public API would require a separate justified desi
 - A69/A01's documented reference is fixed at 18:00 Brussels time, later than our
   cutoff. Its historical response is not automatically a matched benchmark;
   high apparent accuracy alone does not prove a revision mechanism.
+- The new SE3 comparison collector explicitly requests A69/**A18** at 08:55 UTC.
+  Only a complete wind curve with raw/parsed hash evidence received before the
+  cutoff is eligible; it is not an A01 historical latest-vintage replacement or
+  an input to our model. Missing comparison data leave its score unavailable.
 
 ## Failure behaviour
 

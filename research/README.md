@@ -20,6 +20,12 @@ while this directory retains reports, frozen protocols, model version records,
 tests and local data. Milestone 2b adds the shared Prefect lifecycle and saved SE3
 models; server deployment and scheduler cutover remain manual owner steps.
 
+The [serving-model guide](docs/dataflow.md) is the current source-to-model reference:
+provider fields and fetch timing, exact feature names, architecture and selection
+reasons, backtest populations/results, and production execution/storage. Read it
+before tracing the linked implementation. It also identifies historical-only
+comparisons and gaps such as the daily saved-model policy's unmeasured live accuracy.
+
 ## Current evidence — 2026-10-15
 
 | Task | Evidence | Limit |

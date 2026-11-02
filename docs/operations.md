@@ -6,6 +6,11 @@ The owner will deploy manually; server activation, scheduler cutover and current
 public forecasts remain pending. Existing local timers continue on preserved 2a
 source until that cutover. No remote service was changed for 2b.
 
+For exact model inputs, feature definitions, architectures, selection reasons and
+backtest evidence, read the [serving-model guide](../research/docs/dataflow.md).
+It includes all SE3 schedules and explains the German manual-command prerequisites;
+this operations guide owns the concrete deployment and recovery steps.
+
 Run `uv run grid-signals ui` and open http://localhost:8501. The website reads
 portable JSON/Parquet bundles independently of training. Atomic exports keep the last
 results available during a production failure, with underlying forecast dates intact.
