@@ -1,156 +1,55 @@
-# Day-ahead power forecasting
+# Research evidence
 
-Public market data and forecast weather become next-day generation and price
-forecasts, with explicit information cutoffs, uncertainty and publication records.
-The [project roadmap](../ROADMAP.md) sets current priorities: SE3-led demo delivery,
-SE4 wind transfer, a bounded deep-learning comparison, then onshore wind, solar
-and spot prices across all 15 Nordic/Baltic zones. German results remain supporting
-case studies; the existing implementation does not yet provide regional coverage. The
-[website](../README.md#run-the-local-demo) presents portable results.
+This directory holds evaluation reports, frozen protocols, model version records
+and local research data. Reusable code lives in `grid_signals.forecast`.
+Start with the [model reference](../docs/dataflow.md) for current inputs and model
+choices; use the [roadmap](../ROADMAP.md) for priorities.
 
-The evidence table below records the October 15 research releases. Local
-publication has since begun; see the [assessment](../docs/implementation-plan.md)
-for the later trial observations. The [earlier research backlog](docs/roadmap.md)
-is historical context, not a competing roadmap.
+## Results from the October 15, 2026 evaluations
 
-Reusable forecasting code now lives in the installed `grid_signals.forecast`
-package. Focused experiments import that package; there is no checkout-only
-`renewable_forecast` package or `PYTHONPATH` setup. Settings ship with the package,
-while this directory retains reports, frozen protocols, model version records,
-tests and local data. Milestone 2b adds the shared Prefect lifecycle and saved SE3
-models; server deployment and scheduler cutover remain manual owner steps.
-
-The [serving-model guide](docs/dataflow.md) is the current source-to-model reference:
-provider fields and fetch timing, exact feature names, architecture and selection
-reasons, backtest populations/results, and production execution/storage. Read it
-before tracing the linked implementation. It also identifies historical-only
-comparisons and gaps such as the daily saved-model policy's unmeasured live accuracy.
-
-## Current evidence — 2026-10-15
-
-| Task | Evidence | Limit |
-|---|---|---|
-| SE3 wind | Final: 2.46% capacity-normalised MAE, 81.1% coverage at nominal 80%, 182/184 days | Hourly model repeated to quarter-hours; fleet availability remains approximate |
-| DE-LU solar | Final: 2.84% daylight capacity-normalised MAE, 80.6% coverage, 184/184 days | Approximate fleet; mean overprediction of 2.07% capacity on daylight rows |
-| DE-LU prices | Four fixed price-only references; 123 development days, 42/44 final holdout days | LEAR leads; uncertainty coverage deteriorates on holdout |
-| DE-LU load | Four references; selected quantile GBM: 1,433 MW MAE vs 1,746 MW weekly naive, 79.7% 80% coverage, 44/44 final days | Actual-lag revisions assumed; six-site temperature approximation |
-| Daily publication | Local timers installed; first scheduled issue October 16 | No completed on-time forward record yet |
-| German wind, residual load, other zones | Planned | No complete custom German renewable chain or Europe-wide coverage claim |
-
-Price results in EUR/MWh:
-
-| Method | Development MAE | Final holdout MAE | Final 80% coverage |
+| Task | Main result | Important limit | Evidence |
 |---|---|---|---|
-| Hourly price-only LEAR | 24.72 | 37.21 | 68.2% |
-| Native quarter-hour point GBM + residuals | 26.92 | 41.38 | 65.5% |
-| Native quarter-hour direct quantile GBM | 26.16 | 42.97 | 52.9% |
-| Weekly seasonal naive + residuals | 35.66 | 57.89 | 62.6% |
+| SE3 wind | 2.46% capacity-normalised MAE; 81.1% coverage for the nominal 80% range; 182/184 days | Hourly-trained forecast repeated to quarter-hours; approximate fleet availability | [Protocol](reports/holdout_protocol.md), [results](reports/holdout.md), [diagnostics](reports/holdout_diagnostics.md) |
+| DE-LU solar | 2.84% daylight capacity-normalised MAE; 80.6% coverage; 184/184 days | Approximate fleet; daylight overprediction of 2.07% capacity | [Development](reports/products_15min.md), [final results](reports/holdout.md) |
+| DE-LU load | Selected quantile GBM: 1,433 MW MAE versus 1,746 MW weekly reference; 79.7% coverage; 44/44 days | Assumed actual-lag revisions; six-site temperature approximation | [Protocol](reports/load_protocol.md), [development](reports/load_benchmark.md), [final results](reports/load_holdout.md) |
+| DE-LU prices | LEAR: 37.21 EUR/MWh final MAE versus 57.89 weekly reference; 68.2% coverage; 42/44 days | Price intervals under-cover; LEAR's forward selection followed historical evaluation | [Protocol](reports/price_protocol.md), [development](reports/price_benchmark.md), [final results](reports/price_holdout.md) |
+| Custom load as price input | MAE changed from 26.16 to 25.89 EUR/MWh with the load median | Paired CRPS intervals include zero; no resolved gain | [Protocol](reports/price_load_protocol.md), [result](reports/price_load.md) |
 
-See [price development](reports/price_benchmark.md),
-[final price evaluation](reports/price_holdout.md),
-[price protocol](reports/price_protocol.md) and
-[corrected renewable development](reports/products_15min.md).
-The [final renewable evaluation](reports/holdout.md) compares fixed candidates with
-physical and persistence references; its harness correction is recorded in the protocol.
-The [monthly diagnostics](reports/holdout_diagnostics.md) report bias, coverage,
-excluded dates and paired day-block confidence intervals against physical references.
-Direct-quantile price GBM remains an experimental reference. LEAR is the newly
-declared forward publication baseline, selected after the historical evaluations;
-new forward issues assess that serving decision. No historical model was retuned.
+Renewable final delivery dates are March 20–September 19, 2026; load/price final
+windows are September 1–October 14. Reports retain scored populations, exclusions
+and original reproduction commands. See [metrics](../docs/metrics.md) before
+comparing scores across evaluations.
 
-Load evidence: [protocol](reports/load_protocol.md), [development](reports/load_benchmark.md),
-[final evaluation](reports/load_holdout.md). The final load matrix is frozen and hashed.
-An [out-of-sample load-input price experiment](reports/price_load_protocol.md) compares
-price-only inputs with custom load medians and quantiles on matched development rows.
-It requires separate forward confirmation; the completed price final window is not reopened.
-The [first result](reports/price_load.md) changes MAE from 26.16 to 25.89 EUR/MWh
-with the load median, but paired CRPS intervals include zero for both added-input
-arms. This does not establish downstream value from the improved load forecast.
+The SE3 daily saved-model policy is a separate forward version. Reload and
+migration checks establish implementation equivalence, not independently measured
+live skill. Its deployment and reliability status are in the roadmap.
 
-## Information and evaluation rules
+## Reproduce or extend the work
 
-- Cutoff: **09:00 UTC D-1**; publication deadline: 09:30 UTC. Creation and actual
-  publication have separate timestamps. Only immutable first on-time issues enter
-  live scoring; late, early, retrospective, legacy and revised forecasts are excluded.
-- Use run-addressed weather where available, train-only preprocessing/calibration,
-  rolling refits, a seven-day embargo and matched complete delivery days.
-- Renewable errors use installed-capacity normalisation; solar headline metrics
-  exclude night. Prices use EUR/MWh, retain negative values and avoid MAPE.
-- Historical hourly prices are not native quarter-hour GBM targets. The price GBMs
-  use the genuine SDAC quarter-hour regime from October 2025.
-- ENTSO-E A69/A01's reference is fixed at 18:00 Brussels time. Its historical API
-  response alone does not establish availability at our cutoff. Exceptional apparent
-  accuracy does not prove a particular revision mechanism.
-- Save public forecasts with raw XML, request/receipt timestamps, metadata and
-  hashes. Retain missing and late responses. Historical public fundamentals are
-  excluded from price modelling until evidence that the data was available before the cutoff is verified.
-- Residual-load uncertainty needs a joint distribution, not marginal subtraction.
+For exact frozen evaluations, use the original source, locked environment and
+cached data in the [preservation record](../docs/archive/operations-record.md#preservation-and-source-consolidation--2026-11-01).
+Original records in `research/configs/releases/` retain their source paths and
+hashes. Old report commands target that checkout. The consolidated package and
+saved-model runtime have separate records under
+`src/grid_signals/forecast/configs/releases/`; do not rewrite old identities.
 
-The renewable final window is March 20–September 19, 2026; the separate price final
-window is September 1–October 14. Model version records with source/settings checksums are in
-`configs/releases/`; local data and publication evidence remain gitignored.
-Older September hourly charts predate the corrected weather-age policy and are
-archival evidence, not current accuracy claims.
+For current development comparisons, follow the
+[research commands](../docs/operations.md#run-development-comparisons). New model
+selection must use a declared development protocol; completed final windows stay
+closed to tuning. Local raw data, frozen load matrices, price caches and MLflow
+runs are gitignored. Website bundles contain results, not training inputs.
 
-## Run the research
+## Supporting studies
 
-```bash
-uv sync --frozen --group research
-uv run grid-signals info
-uv run grid-signals workflow prepare --issue-day YYYY-MM-DD
-uv run grid-signals workflow capture
-uv run grid-signals workflow forecast
-uv run grid-signals workflow score
-uv run grid-signals fetch-price 2026-10-01 2026-10-15
-uv run grid-signals fetch-load 2026-10-01 2026-10-15
-uv run grid-signals backtest-price
-uv run grid-signals backtest-load
-uv run grid-signals forecast --product de-price
-uv run grid-signals forecast --product de-load
-uv run grid-signals experiment decision_study
-uv run grid-signals backtest --fuel wind_onshore
-uv run grid-signals backtest --fuel solar
-uv run grid-signals export all --historical
-uv run pytest research/tests
-```
+- [Data audit](reports/data_audit.md) and [original evaluation protocol](reports/protocol.md).
+- [Weather information age](reports/openmeteo_vintage.md),
+  [MEPS/IFS comparisons](reports/meps_archive.md), [calibration](reports/calibration.md)
+  and [original modelling](reports/modelling.md). Earlier hourly boards predate
+  corrected weather timing; they are historical evidence.
+- [ERA5 ceiling](reports/era5_ceiling.md) and [generated tables](reports/era5_ceiling_tables.md).
+- [Literature library](literature.md), [historical research backlog](../docs/archive/research-roadmap.md)
+  and [dated market notes](../docs/archive/MARKET_CHANGES.md).
 
-Replace `YYYY-MM-DD` with a future issue day. Preparation fetches inputs, saves a
-trained SE3 model, checks reloaded predictions and promotes it under the daily
-policy; it must finish before that day's 09:00 UTC cutoff. Use
-`workflow forecast --no-refresh` only with required weather already cached and a
-matching promoted model. Prediction never fits SE3 models. Every invocation
-preserves real timing; a replay cannot count as on-time evidence. `workflow` and
-Prefect call the same lifecycle. Default `export all` commits a complete daily
-generation; `--historical` deliberately refreshes flat research bundles.
-See [operations](../docs/operations.md#se3-producer-deployment--milestone-2b) for
-deployment, model policy, timers and preservation. No scheduled job reopens a holdout.
-
-Original release records in `research/configs/releases` retain their original
-source paths and hashes. Exact reruns of those evaluations, including the locked
-price/load experiment, use the preserved original checkout and datasets described
-in operations. They are not silently reidentified as evaluations of moved code.
-The `consolidated_v1.json` record identifies the 2a package separately;
-fixed-input prediction and metric checks establish migration equivalence. The new
-`forecast_runtime_v2.json` identifies the saved-model lifecycle. Its
-`se3-wind-saved-v1-daily-before-issue` policy is a new forward model version,
-not a re-evaluation of the historical release. Training inputs, lag history,
-cutoff, settings, dependencies and reload checks are retained with every saved model.
-Old report reproduction blocks describe the original checkout. Current commands
-above are the supported operating interface.
-
-The exploratory decision example shifts 1 MWh/day into eight quarter-hours under a
-0.5 MW limit. It uses development predictions, allows interruptions and excludes
-fees, taxes and grid charges. Weekly persistence captures most of the benefit
-versus uniform consumption; this is not a trading-profit claim.
-
-## Package map and background
-
-`sources/` acquires data; `targets/` defines actuals and capacity; `features/`
-assembles eligible inputs; `models/` holds predictors; `evaluation/` defines
-splits and scores; `pipelines/` runs evaluation/publication; `reporting/` exports
-results. Parquet datasets and MLflow runs remain local and gitignored.
-
-Further context: [dataflow](docs/dataflow.md), [metrics](docs/metrics.md),
-[literature](docs/literature.md), [renewable final protocol](reports/holdout_protocol.md),
-[integration contract](docs/integration_contract.md),
-[public forecast inventory](../src/grid_signals/forecast/configs/benchmarks.yaml).
+Literal `docs/...` references inside original reports and source comments may refer to the former
+`research/docs/` directory. Current model/metric/publication guides are in
+`../docs/`; the old hourly metric guide and research backlog are in `../docs/archive/`.

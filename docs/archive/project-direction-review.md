@@ -1,7 +1,7 @@
 # Project direction review
 
 **Historical assessment, not the active roadmap.** The
-[agreed direction](../ROADMAP.md) now prioritises Nordic/Baltic coverage, SE3-led
+[agreed direction](../../ROADMAP.md) now prioritises Nordic/Baltic coverage, SE3-led
 demo delivery and SE4 transfer. The German-first expansion, hosting alternatives
 and experiment priorities below are retained as background, not current decisions.
 
@@ -11,7 +11,7 @@ Implementation has since progressed beyond this initial assessment: the local
 forecast demo, daily trial infrastructure and price/load benchmarks are implemented.
 Custom load improves its own baseline, but its initial downstream price gain is
 statistically unresolved. LEAR is the declared forward price baseline.
-Use the [target architecture and assessment](implementation-plan.md) and [research results](../research/README.md)
+Use the [target architecture and assessment](../implementation-plan.md) and [research results](../../research/README.md)
 for implementation status; repository observations below describe the reviewed revision.
 
 ## Recommended focus
@@ -39,7 +39,7 @@ Choose **DE-LU as the first complete price-forecasting market**, while retaining
 
 The research branch contains the forecasting work; deploying unchanged `main` will not expose it. The Dockerfile copies `src/` and `prefect.yaml`, omits `research/`, and installs without the research dependency group. The research package also relies on checkout-relative paths. Its current outputs are standalone artifacts, not a deployable application feature.
 
-The current corrected evaluation is in [products_15min.md](../research/reports/products_15min.md):
+The current corrected evaluation is in [products_15min.md](../../research/reports/products_15min.md):
 
 | Task | Current result | Interpretation |
 |---|---|---|

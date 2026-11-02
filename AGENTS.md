@@ -35,6 +35,21 @@
 - Run `bash scripts/check.sh` before pushing for the same locked lint, formatting,
   full test suite and offline web/runner image checks as CI. Use `lint`, `test`, `demo` or `runner`
   as an argument to run just one group; see `README.md` for prerequisites.
-- See `README.md` for demo commands, `research/README.md` for current forecast
-  commands, and `docs/operations.md` for deployment. The daily producer uses one
-  package/CLI; follow the implementation plan when changing it.
+- See `README.md` for quick start and checks, `docs/operations.md` for forecast
+  commands and deployment, and `research/README.md` for evaluation evidence.
+  The daily producer uses one package/CLI; follow the implementation plan when changing it.
+
+## Documentation
+
+- Keep the root README short: purpose, demo, quick start and task-based links.
+- Put maintained guides in `docs/`, evidence in `research/reports/`, supporting
+  literature in `research/literature.md` and superseded plans in `docs/archive/`.
+- Give each topic one main home: status/order in `ROADMAP.md`, architecture in
+  `docs/implementation-plan.md`, procedures in `docs/operations.md`, models in
+  `docs/dataflow.md`, evaluation definitions in `docs/metrics.md` and publication
+  rules in `docs/integration_contract.md`. Link instead of repeating details.
+- Write procedures as prerequisites, commands and expected results. Keep history
+  out of the main task sequence. Update the owning guide when behaviour changes.
+- Keep frozen reports and model identities unchanged. Original report commands
+  and literal paths describe the preserved checkout; explain them in the evidence index.
+- Check relative links and safe CLI examples after moving or editing guides.

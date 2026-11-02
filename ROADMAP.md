@@ -2,7 +2,7 @@
 
 **Direction agreed 2026-10-26.** This is the authoritative product direction and
 delivery order. The [target architecture and implementation plan](docs/implementation-plan.md)
-evaluates the existing code and explains what to combine or remove; research reports
+describes the shared package, services and implementation constraints; research reports
 retain their own frozen evaluation protocols.
 
 ## Purpose and public features
@@ -27,8 +27,7 @@ time, how it compared with credible alternatives, and whether it arrived on time
 
 Agent/RAG integration is a later usefulness evaluation, not a promised chatbot.
 Choose a task and success measure before selecting an AI approach or adding a
-public feature. The original generic chat and briefing product is scheduled for
-retirement, rather than kept as a permanent second application.
+public feature. The original generic chat and briefing product has been retired.
 
 ## Coverage destination
 
@@ -49,143 +48,68 @@ small or behind-the-meter solar fleets and offshore wind.
 
 ## Ordered milestones
 
-The [whole-project assessment and implementation plan](docs/implementation-plan.md)
-evaluates what to keep, consolidate, remove or move. Read it before implementing
-a milestone. The target is one forecasting package/CLI and lifecycle across local
-use and deployment, with Prefect orchestration and a result-reading website.
-Existing code is retained only where it serves that target. Standalone learning
-exercises move outside this focused product repository. The architecture is
-documented; milestone 2a combines the forecasting code and retires the original
-market application. Milestone 2b implements the Prefect lifecycle locally; its
-manual deployment and live acceptance remain pending.
+Read the [architecture and implementation constraints](docs/implementation-plan.md)
+before implementing a milestone. Work on one milestone at a time; current work
+is the manual deployment and live acceptance of 2b.
 
 ### 0. Establish direction — complete
 
-- [x] Agree the audience, public features, 15-zone destination and delivery order.
-- [x] Consolidate active priorities here; mark older direction documents historical.
-- [x] Separate existing implementation from unverified deployment and reliability.
-- [x] Assess the whole repository and record subsystem ownership, reuse and integration gaps.
-
-This session establishes direction and documentation only. Application changes,
-new model experiments and deployment belong to later sessions.
+Audience, public features, the 15-zone destination and delivery order are agreed.
+The [architecture](docs/implementation-plan.md) records implementation constraints;
+[historical decisions](docs/archive/implementation-history.md) preserve the assessment.
 
 ### 1. Publish the historical demo — complete
 
-Reuse the existing Streamlit explorer, saved results and standalone demo image.
-Open on **SE3 onshore wind with a populated historical comparison**. Keep German
-case studies accessible and database-dependent tools outside the public demo.
+The [test site](https://grid-signals-demotest.kaarelkivisalu.ee) was deployed and
+passed anonymous desktop/phone acceptance on 2026-11-01: historical forecasts,
+methods, matched comparisons and CSV downloads are accessible independently of
+production. The [deployment record](docs/archive/operations-record.md#public-hosting)
+retains the commit, image digests and checks.
 
-- [x] Align the default selection and introductory copy with this direction.
-- [x] Check that all result files are present; include only the versions listed in the current file index.
-- [x] Resolve release checks, including the test that assumes the latest issue is late.
-- [x] Confirm the release's commands, dependencies and result files against the
-  whole-project assessment; review uncommitted implementation into a reproducible revision.
-- [x] Expose only the forecast product. Plan removal of old navigation and runtime
-  dependencies without making all backend changes a demo-launch prerequisite.
-- [x] Verify the standalone image without database access or API credentials.
-- [x] Review the local demo, then hand deployment to the project owner.
-- [x] Deploy the test site through Dokploy and verify anonymous HTTPS access.
-- [x] Verify desktop/mobile use, CSV downloads and explicit historical dates on the public site.
-
-Local portfolio review completed 2026-10-26: 407 tests passed, 2 skipped; lint and formatting
-passed; the built image passed offline browsing checks and desktop/tablet/phone
-review. See the [release review and deployment handoff](docs/operations.md#public-hosting).
-The owner confirmed deployment on 2026-11-01 at
-[grid-signals-demotest.kaarelkivisalu.ee](https://grid-signals-demotest.kaarelkivisalu.ee).
-Anonymous HTTPS requests to the homepage and health endpoint returned HTTP 200;
-the health response was `ok`. Public acceptance checks passed on 2026-11-01 at
-1440 px desktop and 390 px phone widths: all eight pages, phone navigation,
-historical labels, date controls and all four forecast CSV downloads. Each CSV
-contains 96 intervals for 2026-09-19, with actuals and median forecasts. No browser
-errors or horizontal page overflow were found. The deployed commit
-`5e08069c9a9fdcc62598da1ede6fba4ad2458cbf` and image digests are recorded in the
-[deployment record](docs/operations.md#public-hosting).
-Deploy from `feat/electricity-forecasting` until the roadmap is reasonably complete.
-After the owner approves merging into `main`, switch to
-`https://grid-signals.kaarelkivisalu.ee`.
-
-**Done when:** a visitor can inspect forecasts, evidence and methods on the public
-site even when forecast production is unavailable. Daily freshness is not a launch
-requirement. The test site uses existing Dokploy capacity; reconsider hosting only
-for a concrete operational/cost reason. The final domain and merge into `main`
-are deferred until the roadmap is reasonably complete.
+Deploy from `feat/electricity-forecasting` while completing the roadmap. After
+owner approval to merge into `main`, switch to `https://grid-signals.kaarelkivisalu.ee`.
+Keep the existing Dokploy hosting unless a concrete capacity/cost issue warrants change.
 
 ### 2. Bring the code together and run daily SE3 forecasts
 
-Complete these two parts in order, keeping the demo usable throughout.
+**2a — One product: complete (2026-11-01).** One installed
+`grid_signals.forecast` package and `grid-signals` CLI own forecasting. The original
+market-database/chat application is retired and standalone exercises moved out.
+Original source/data and frozen evidence were preserved; fixed-input predictions,
+metrics and exports were checked against the consolidated package. See the
+[preservation record](docs/archive/operations-record.md#preservation-and-source-consolidation--2026-11-01).
 
-**2a — One product: complete (2026-11-01)**
+**2b — Implementation verified; owner deployment pending (2026-11-01).**
 
-- [x] Save copies of the original code, data and evaluated results before moving code.
-- [x] Bring reusable forecasting code together into the installed package with one CLI,
-  product registry and explicit data/output configuration. Local and scheduled runs
-  must invoke the same functions.
-- [x] Extract needed mappings/data, then retire the original PostgreSQL market
-  application, briefing/chat product, stale commands/scripts and duplicate pages.
-- [x] Move standalone exercises/exploration elsewhere; focused experiments import
-  the product package and share its data/evaluation contracts.
-- [x] Reshape dependencies and tests around the retained product; verify fixed-input
-  model predictions and metrics before removing superseded implementations.
+- [x] Implement the shared Prefect lifecycle, with model preparation separate
+  from deadline-sensitive prediction and explicit validation/promotion.
+- [x] Implement checked complete delivery, first-publication receipts, visible
+  due/missing/late/failed issues, matched scores, bias and interval coverage.
+- [x] Verify the local lifecycle, web/runner images, restart and backup restoration.
+- [ ] Provision and seed the always-on producer; verify host resources and restart behaviour.
+- [ ] Prepare a model in the deployed environment, preview the new web service,
+  disable old workstation timers, then activate Prefect schedules.
+- [ ] Verify current public forecasts and subsequent scores, domain cutover
+  and off-host backup recovery.
+- [ ] Monitor provider failures and establish live evidence that timeout handling works.
+- [ ] Assess the approximately 30-consecutive-issue reliability gate.
 
-The installed `grid_signals.forecast` package and `grid-signals` CLI now own
-forecasting, with shared market/product definitions, packaged settings and explicit
-data/output roots. Original Git history, source and data were copied and restored
-before migration; frozen records and results remain unchanged. Standalone notebooks
-moved to a sibling learning workspace. The original market database/chat runtime,
-duplicate pages and obsolete deployment definitions are removed; no running
-containers or volumes were deleted. Existing forecast timers use the installed CLI
-until the 2b cutover. Validation: 291 tests passed, 2 skipped; lint/formatting and
-two offline demo-image checks passed. Fixed-input wind/solar/load/price predictions
-and scores agree, as do all 13 exported Parquet files and three summary bundles
-(apart from generation timestamps). See [preservation and migration details](docs/operations.md#preservation-and-source-consolidation--2026-11-01).
+[Local verification](docs/archive/operations-record.md#local-verification--2026-11-01)
+passed 315 tests (2 skipped), lint/formatting, offline images, browser checks and
+isolated Prefect restart/restore. These checks do not establish host capacity,
+live deadline performance or resolution of the original provider timeout cause.
+The new daily saved-model policy is a separate forward version from frozen research.
 
-**2b — Run the forecast workflow: implementation verified; owner deployment pending (2026-11-01)**
-
-- [x] Replace old Prefect flows with data fetching/checks, training,
-  prediction, publishing, scoring and export flows. Use one scheduled runner with
-  versioned code and saved models, data and results that survive restarts.
-- [x] Separate model preparation from deadline-sensitive prediction; validate and
-  identify saved trained models and training cutoffs before promotion.
-- [ ] Provision an always-on producer independently of page serving, with bounded
-  retries, resource limits, backup/restore and tested restart behaviour.
-- [ ] Cut over to Prefect scheduling and retire local forecast timers and old
-  deployment definitions after equivalent lifecycle behaviour is verified.
-- [ ] Address observed timeout failures; monitor public forecast collection, forecasting and scoring.
-- [x] Report failures to fetch data, generate forecasts or deliver results in each
-  product's job status; a successful task run alone does not prove results were published.
-- [x] Implement automatic delivery of complete updates, retaining the last working version if an update fails.
-- [x] Expose every due issue, publication time/status, freshness and available scores.
-- [x] Compare eligible first publications with baselines and track bias/interval coverage.
-
-One persistent Prefect server, a bounded SE3 runner and a read-only result-serving
-web service are defined in `compose.forecast.yaml`. Six UTC deployments cover
-backup, preparation, public comparison collection, prediction, scoring and status.
-SE3 prediction uses checked promoted models and saved training/lag inputs without
-fitting during prediction. A new forward policy and runtime record preserve the
-original scientific evidence. Whole-generation delivery receipts determine
-first-on-time eligibility, including interrupted/retried delivery.
-
-Validation: 315 tests passed, 2 skipped; lint/formatting, both offline images,
-desktop/phone publication and CSV checks passed. An isolated Compose server/runner
-restart retained six paused deployment IDs; its checked SQLite backup restored
-all six. Cached-data preparation and reload also passed; these local checks do
-not establish live capacity or dependable publication. Provider-specific status,
-bounded timeouts and retries address failure handling; the original timeout root
-cause and its live resolution remain unverified.
-
-The owner will deploy manually. Schedules default to paused; existing local
-timers continue on preserved 2a source until the owner disables them before
-unpausing Prefect. Data seeding, model preparation, domain cutover, off-host
-recovery and current forecast/score acceptance remain required. Follow the
-[concrete deployment steps](docs/operations.md#se3-producer-deployment--milestone-2b).
-Do not start SE4 transfer before this milestone's deployment acceptance.
+**Next action:** the owner follows the [manual deployment steps](docs/operations.md#manual-deployment-steps).
+Schedules default to paused; old workstation timers remain active on preserved
+2a source until cutover. Never run both schedule owners for the same issues.
 
 **Done when:** current SE3 forecasts and subsequent scores reach the public site
-automatically, including visible failures and stale data. Assess the existing
-[approximately 30-consecutive-issue gate](research/docs/integration_contract.md)
-before claiming dependable operation. Prefect run state and MLflow experiment
-tracking complement, rather than replace, the public forecast record. German
-case-study results do not require continuing all existing German production jobs.
+automatically, failures/stale data remain visible, and live acceptance above holds.
+Use the [publication contract](docs/integration_contract.md#operational-gate) before
+claiming dependable operation. Prefect and MLflow complement the public record;
+German case studies do not require new production schedules. Do not start SE4
+transfer before deployment acceptance.
 
 ### 3. Transfer onshore wind to SE4
 
@@ -264,7 +188,7 @@ to defer. Select the use case at this milestone; do not add AI solely for breadt
 - Handle market-local delivery days, DST, units, source resolution and actual
   publication timing explicitly. Do not replace missing issue-time inputs with later data.
 - Keep training outside page requests. Use one product package, Parquet and saved result
-  files and a result-reading app. Retire the original market database; no public
+  files and a result-reading app. The original market database is retired; no public
   API or frontend rewrite is required for the selected features.
 - Preserve scientific evidence and irreplaceable data, not every implementation.
   Remove superseded components after verifying their replacement; Git history

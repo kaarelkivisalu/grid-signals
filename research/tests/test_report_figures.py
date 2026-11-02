@@ -6,6 +6,7 @@ paths are asserted rather than eyeballed.
 """
 
 import re
+from pathlib import Path
 
 import pytest
 
@@ -16,7 +17,7 @@ IMAGE = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
 MARKDOWN = (
     sorted(paths.ROOT.glob("*.md"))
     + sorted(paths.REPORTS.glob("*.md"))
-    + sorted(paths.DOCS.glob("*.md"))
+    + sorted((Path(__file__).resolve().parents[2] / "docs").rglob("*.md"))
 )
 
 

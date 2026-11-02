@@ -1,12 +1,8 @@
 # Forecast publication contract
 
-**Status, 2026-11-02:** the historical demo is published; the SE3 saved-model
-Prefect lifecycle and checked public delivery are implemented and locally tested.
-Owner deployment and scheduler cutover remain pending. German publications retain
-their older manual archive path and have no new schedules. The
-[serving-model guide](dataflow.md) traces exact sources, features, model choices,
-evaluations and execution. A downstream database/API feed is not a planned
-requirement. Displaying research snapshots does not establish daily reliability.
+This defines forecast identity, delivery eligibility and scoring rules for the
+SE3 checked-generation workflow and older manual archives. For operating status,
+see the [roadmap](../ROADMAP.md); for execution, use [operations](operations.md).
 
 ## Operational gate
 

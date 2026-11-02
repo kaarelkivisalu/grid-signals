@@ -1,140 +1,129 @@
-# Local forecast operations
+# Forecast operations
 
-One installed `grid_signals.forecast` package and `grid-signals` CLI own forecasting.
-The SE3 saved-model lifecycle and three-service deployment are locally verified.
-The owner will deploy manually; server activation, scheduler cutover and current
-public forecasts remain pending. Existing local timers continue on preserved 2a
-source until that cutover. No remote service was changed for 2b.
+Start with the task you need:
 
-For exact model inputs, feature definitions, architectures, selection reasons and
-backtest evidence, read the [serving-model guide](../research/docs/dataflow.md).
-It includes all SE3 schedules and explains the German manual-command prerequisites;
-this operations guide owns the concrete deployment and recovery steps.
+- [Configure paths and dependencies](#configure-paths-and-dependencies)
+- [Prepare and run an issue locally](#prepare-and-run-an-issue-locally)
+- [Run development comparisons](#run-development-comparisons)
+- [Deploy the SE3 producer](#se3-producer-deployment--milestone-2b)
+- [Monitor runs and inspect files](#monitor-runs-and-inspect-files)
+- [Back up and restore](#backup-and-recovery)
+- [Refresh website results](#refresh-the-historical-explorer)
+- [Update the historical site](#public-hosting)
+- [Inspect or stop the old workstation timers](#daily-local-trial)
 
-Run `uv run grid-signals ui` and open http://localhost:8501. The website reads
-portable JSON/Parquet bundles independently of training. Atomic exports keep the last
-results available during a production failure, with underlying forecast dates intact.
+The [roadmap](../ROADMAP.md) owns deployment status and acceptance. Publication
+eligibility follows the [publication contract](integration_contract.md).
 
-## Preservation and source consolidation — 2026-11-01
+## Configure paths and dependencies
 
-The pre-migration revision is `23986cfa73f93796e74882ce12c86a85f2f62790`.
-Local preservation copies are outside this checkout at
-`/home/kaarel/Projects/grid-signals-preserved/2026-11-01-before-2a/`:
+Use `uv sync --frozen --group research` for full development. Minimal environments:
 
-- `history.bundle`: complete Git history and branch references; verified with
-  `git bundle verify`. SHA-256:
-  `3c14bcda93974949ce40a9e600ee01b246f669097a0de9727285f739712852e8`.
-- `workspace.tar`: original source, datasets, raw provider responses, evaluation
-  outputs, publication history, MLflow data and exercises. SHA-256:
-  `0972d26eb1b16741cc276af7a110301c7923bfcb61c3b7abb4a70c784c6a3708`.
-- `original/`: restored archive; 6,409 research, data, source and notebook files
-  were checked byte for byte against the originals before any code moved.
-- `systemd/`: copies of the six original service/timer unit files, saved before
-  updating service commands to the installed CLI.
-- `SHA256SUMS`: archive checksums. Environment/credential files, tool settings,
-  virtualenvs and caches are excluded; this is a local preservation copy.
+```bash
+uv sync --frozen --no-default-groups --group web
+# Or, for the producer:
+uv sync --frozen --no-default-groups --group runner
+```
 
-The standalone notebooks were also copied and checked in
-`/home/kaarel/Projects/grid-signals-learning/notebooks/`. Local research data and
-original frozen model version records remain in place. No containers, database
-services or Docker volumes were removed; the local running-container inventory
-contained no Grid Signals market database. Remote services were not changed.
-Older market deployment/recovery instructions remain recoverable from the Git
-bundle and original snapshot; do not delete old remote volumes or backups based
-on removal of their application code.
+One lockfile covers all groups; MLflow and plotting belong to experimentation.
+Set paths before importing pipelines. CLI root options go before the command.
 
-Local cleanup on 2026-11-02 removed the unused empty `deploy/demo`, `deploy`,
-`research/src` and `research/notebooks` directories, plus the retired `briefings`
-directory. Its only file, `2026-03-26.md`, matched the preserved copy under
-`original/briefings/` byte for byte before removal.
-
-For exact original evaluation reproduction, work in a separate restored directory,
-install its original locked environment, and use its original `research/src`
-imports and cached inputs. Do not rewrite old source paths or checksums to point
-at moved files. The consolidated package has a separate code version record at
-`src/grid_signals/forecast/configs/releases/consolidated_v1.json`. The 2a publications
-verify that record and use its identity. It links the historical records and load
-selection by checksum without claiming a new final evaluation. A new code/settings
-revision requires a new record, created with `grid-signals version --register PATH`
-and selected through `GRID_SIGNALS_VERSION_RECORD`; this is code identity, not the
-saved-trained-model promotion. The 2b runtime has a separate record described below;
-the original and 2a records remain unchanged.
-
-Migration checks compare original and moved models on deterministic wind, solar,
-load and price inputs, including quantile predictions and scores. Model, feature,
-target and evaluation syntax trees agree after import renaming. Fresh exports from
-the preserved and installed code have identical 13 Parquet files and zone inventory;
-all three summary bundles agree except generation timestamps. The existing
-bundled results and historical records have not been regenerated. Unindexed local demo
-exports were moved to `data/retired_demo_exports` so package builds include only
-the current result files.
-
-Configuration is shared by local and scheduled operations. Set
-`GRID_SIGNALS_DATA_DIR` and `GRID_SIGNALS_OUTPUT_DIR` to absolute paths for mounted
-volumes. Optional settings/report/tracking roots and CLI examples are in the
-[README](../README.md#forecast-commands-and-configuration). To preview new exports,
-set `GRID_SIGNALS_EXPLORER_PATH` to the exported `explorer` directory and
-`GRID_SIGNALS_SNAPSHOT_PATH`, `GRID_SIGNALS_PRICE_SNAPSHOT_PATH` and
-`GRID_SIGNALS_LOAD_SNAPSHOT_PATH` to the three exported summary files.
-
-## Daily local trial
-
-The old local trial remains the active schedule until the owner's Prefect cutover.
-The installer and shell wrapper have been retired from this checkout. The three
-existing user services use the checked source from commit
-`20b607b` in
-`/home/kaarel/Projects/grid-signals-preserved/2026-11-01-before-2b/source`,
-selected by their `PYTHONPATH` environment setting. Copies of the unit files are
-in that preservation directory's `systemd/` folder. The preserved package's code
-record verifies. Data locations, timers and their schedules were not changed;
-systemd was reloaded without starting jobs. Do not add another active scheduler
-for these issues before the cutover.
-
-Inspect with `systemctl --user list-timers 'grid-signals-*'`. The old schedule remains:
-
-| Job | UTC | Behaviour |
+| Environment variable | CLI option | Default relative to the working directory |
 |---|---|---|
-| Save public forecasts | 08:55 | Preserve ENTSO-E wind/solar and load forecasts with raw metadata |
-| Forecast | 09:00 | Refresh inputs; independently publish wind, solar, price and load; export snapshots |
-| Score | 15:00 | Refresh actuals, score eligible first publications, update snapshots |
+| `GRID_SIGNALS_DATA_DIR` | `--data-dir` | `research/data` |
+| `GRID_SIGNALS_OUTPUT_DIR` | `--output-dir` | `data/exports` |
+| `GRID_SIGNALS_CONFIG_DIR` | `--config-dir` | Packaged `src/grid_signals/forecast/configs` |
+| `GRID_SIGNALS_REPORTS_DIR` | `--reports-dir` | `research/reports` |
+| `GRID_SIGNALS_MLRUNS_DIR` | `--mlruns-dir` | `research/mlruns` |
 
-Deadline: 09:30 UTC. Missed timers run on resumption with their actual late or
-retrospective status. Jobs have a 27-minute timeout and four-worker limits.
-This is a local user-session schedule: the machine needs to be running, online
-and able to execute user services. It is not an always-on server deployment.
+Use absolute paths with mounted volumes or outside the checkout. The web reads
+`GRID_SIGNALS_RESULT_ROOT` for checked daily generations. For flat historical
+exports, `GRID_SIGNALS_EXPLORER_PATH` selects the explorer directory;
+`GRID_SIGNALS_SNAPSHOT_PATH`, `GRID_SIGNALS_PRICE_SNAPSHOT_PATH` and
+`GRID_SIGNALS_LOAD_SNAPSHOT_PATH` select the three summary files.
 
-Root `.env` supplies ENTSOE_API_KEY. No database or LLM key is needed. Failure
-records store exception types, not credential-bearing HTTP URLs.
+## Prepare and run an issue locally
 
-```bash
-journalctl --user -u grid-signals-forecast.service --since today
-journalctl --user -u grid-signals-capture.service --since today
-journalctl --user -u grid-signals-score.service --since today
-```
+Requires `ENTSOE_API_KEY` in the root `.env`, historical input caches and the
+[bootstrap data](#backup-and-recovery). The following commands fetch data and
+write model/publication state. Use isolated data/output roots for experiments;
+run scheduled issues through their existing schedule owner.
 
-Evidence is under `research/data/operational/`: trial start, unchanged job records and saved public forecasts, raw XML/Parquet and renewable/price scorecards. Forecast Parquet archives
-are under `research/data/predictions/`. Only first on-time issues are scored;
-retries do not replace them. Scores await complete actual delivery days and remain
-provisional as actuals change. The first scheduled trial issue is October 16;
-today's late forecasts contribute no on-time evidence. Historical replay cannot
-satisfy the 30-run integration gate.
-
-Price publication now uses the declared LEAR baseline in
-`src/grid_signals/forecast/configs/price_forward.yaml`, with hourly distributions repeated onto market
-quarter-hours. Historical direct-quantile price forecasts remain archived as a
-separate model version. Load is published with the candidate selected before its
-final evaluation. Each product has its own forward scorecard.
-
-Exact reproduction of the frozen load release requires its original local input
-matrix. The model version record stores its checksum; newer API observations can contain revisions
-and must not silently replace that matrix. The price-input experiment also requires
-the original price cache. Portable website bundles include results, not training data.
-
-Disable the schedule with:
+For a new isolated trial, first run
+`uv run grid-signals activate --first-issue-day YYYY-MM-DD` with a future issue
+day. This records the first due issue and does not reset an existing trial.
+Replace `YYYY-MM-DD` below and prepare before that issue day's 09:00 UTC cutoff:
 
 ```bash
-systemctl --user disable --now grid-signals-capture.timer grid-signals-forecast.timer grid-signals-score.timer
+uv run grid-signals info
+uv run grid-signals workflow prepare --issue-day YYYY-MM-DD
+uv run grid-signals workflow status --issue-day YYYY-MM-DD
 ```
+
+Preparation fetches data, fits, verifies reload and promotes under the daily
+policy. Status must show a ready `active_model` and a training end before cutoff.
+At 08:55 UTC, collect the public comparison:
+
+```bash
+uv run grid-signals workflow capture --issue-day YYYY-MM-DD
+```
+
+At 09:00 UTC, generate and deliver the forecast:
+
+```bash
+uv run grid-signals workflow forecast --issue-day YYYY-MM-DD
+```
+
+After complete actual delivery days are available, update scores and results:
+
+```bash
+uv run grid-signals workflow score --issue-day YYYY-MM-DD
+uv run grid-signals export all
+```
+
+Capture must finish before the 09:00 UTC cutoff; forecast delivery is due by
+09:30 UTC. Scores for an issue await its next-day delivery actuals. Manual
+commands retain real timestamps: replay cannot become on-time evidence. SE3
+prediction loads the matching promoted model; it does not fit. Use `--no-refresh`
+with `workflow forecast` only when the required weather is already cached.
+
+For lower-level model control, use `model prepare`, `model validate` and
+`model promote`; inspect `--help` before changing promotion policy. German
+case studies use manual `forecast --product de-solar`, `de-load` or `de-price`
+with their own cached inputs and fitting path; they have no new Prefect schedules.
+See the [model guide](dataflow.md) for prerequisites.
+
+## Run development comparisons
+
+Requires the full research environment, the selected product's cached inputs and
+provider credentials when fetching data. These commands write development
+results; they do not reopen frozen final evaluations:
+
+```bash
+uv run grid-signals fetch-actuals 2026-10-01 2026-10-15
+uv run grid-signals fetch-price 2026-10-01 2026-10-15
+uv run grid-signals fetch-load 2026-10-01 2026-10-15
+uv run grid-signals refresh-weather --help
+uv run grid-signals train --help
+uv run grid-signals backtest --fuel wind_onshore
+uv run grid-signals backtest --fuel solar
+uv run grid-signals backtest-price
+uv run grid-signals backtest-load
+uv run grid-signals experiment decision_study
+```
+
+Select dates for the intended development study. `train` fits/scores the existing
+development comparison; `backtest` runs the quarter-hour product comparison.
+Other experiment names and options are listed by `grid-signals experiment --help`.
+The decision example shifts 1 MWh/day into eight quarter-hours under a 0.5 MW limit.
+It uses development predictions, allows interruptions and excludes fees, taxes
+and grid charges. Weekly persistence captures most benefit versus uniform
+consumption; this is not a trading-profit claim.
+
+Inspect `uv run grid-signals version` for code identity. Changed code/settings
+requires a new record using `version --register PATH` and selection through
+`GRID_SIGNALS_VERSION_RECORD`. This differs from saved-model promotion; never
+rewrite frozen records. See [research reproduction](../research/README.md#reproduce-or-extend-the-work).
 
 ## SE3 producer deployment — milestone 2b
 
@@ -144,55 +133,12 @@ This replaces the multi-product local schedule with **SE3 onshore wind only**;
 German results remain historical case studies and manual commands. The historical
 public site stays available during setup.
 
-### What is implemented
-
-- `forecast_runtime_v2.json` identifies runtime
-  `forecast-runtime-v2+1a775e36653d5d5b`. The daily saved-model policy is
-  `se3-wind-saved-v1-daily-before-issue`, a new forward version. Each preparation
-  retains exact training inputs, lag history, settings, code/dependency identities,
-  training cutoff, trained model, fitted physical reference and a reload comparison.
-  It excludes training delivery days at or after the preparation/issue cutoff.
-- Preparation validates and explicitly promotes a saved model. Prediction only
-  loads the matching issue's promoted model. Changed files, code or dependencies,
-  models prepared after the issue cutoff and models over 30 hours old are rejected.
-  Train inside the deployed runner: the local Python 3.13 validation artifact is
-  intentionally incompatible with the runner's pinned Python 3.12 environment.
-- Durable candidate files precede publication. All public payloads are checked
-  before a whole-generation pointer is committed. A delivery receipt is confirmed
-  only after that generation is readable. A crash before confirmation remains
-  unverified; recovery uses its real confirmation time. Retries preserve confirmed
-  first publications. The web pins a checked generation and can fall back to the
-  previous one or bundled history, with a warning.
-- Publication pages expose every due day, missing/late/failed issues, freshness,
-  model and collection evidence. The client derives missing due days even when
-  the producer stops; a snapshot older than 45 minutes is visibly stale.
-  Forward scores use complete actual days and the first verified on-time receipt,
-  matched against the saved physical reference. Public point forecasts are compared
-  only with complete, hashed responses received before the information cutoff.
-  Bias, CRPS and interval coverage are retained; scores remain revisable with actuals.
-- Provider phases have separate status, error type and elapsed time. Actuals and
-  weather fetching have bounded retries/timeouts; fitting and prediction do not
-  retry blindly. Historical `ReadTimeout` records do not identify the original
-  provider/root cause. The new controls and visibility are tested, but live
-  evidence that those failures are resolved is still required.
-
-All six deployments use UTC and share a single runner slot and data lock:
-
-| Operation | UTC schedule | Behaviour |
-|---|---|---|
-| Backup | 03:00 | Checked data/results and online SQLite backup |
-| Prepare | 06:00 | Refresh inputs, fit, verify reload, promote for today's issue |
-| Capture | 08:55 | Save the public SE3 wind forecast before the cutoff |
-| Forecast | 09:00 | Fetch eligible weather, load saved model, deliver by 09:30 |
-| Score | 15:00 | Refresh actuals and publish matched scores |
-| Status | Every 15 minutes | Publish current due-day and job status |
-
-Prefect schedules keep their original scheduled day across restarts. Overdue
-forecast/preparation/collection runs fail visibly instead of using newer inputs
-to fabricate on-time evidence. Local commands call the same flow/task functions.
-The static runner uses Prefect's [local-process deployments](https://docs.prefect.io/v3/how-to-guides/deployment_infra/run-flows-in-local-processes).
-Schedules start **paused**; the server persists its SQLite database independently
-of runner and page serving.
+Train models inside the deployed runner: the local Python 3.13 validation artifact
+is incompatible with the runner's pinned Python 3.12 environment. Prediction rejects
+incompatible, stale, changed or post-cutoff models. Read the
+[model preparation rules](dataflow.md#33-architecture-training-and-promotion)
+and [delivery contract](integration_contract.md) before changing that policy.
+Schedules default to paused; enable them only after disabling the old timers.
 
 ### Manual deployment steps
 
@@ -314,46 +260,21 @@ evaluated inputs, frozen code/model records or first-publication evidence.
 Dokploy also provides [volume backups](https://docs.dokploy.com/docs/core/volume-backups);
 application backups use SQLite's online backup API for a consistent database copy.
 
-### Local verification — 2026-11-01
-
-- 315 tests passed, 2 skipped. Checks include the real temporary Prefect engine,
-  fixed-input fitted-versus-reloaded predictions, crossfit calibration, 92/96/100
-  interval delivery grids, incomplete actuals, bad/missing model files, deadline
-  crossing, delivery interruption/retry and verified backup/restore/seed behaviour.
-- Ruff lint/formatting passed. Both final images passed checks without network
-  access or credentials. The runner check performs synthetic preparation,
-  promotion, prediction, publication and recovery as UID 10001; web/experiment
-  dependencies are excluded from the runner.
-- An isolated Compose stack started healthy, registered six paused UTC schedules,
-  retained all six IDs and pause states across server/runner restarts, and restored
-  its real Prefect database with six deployment rows. The web result mount was
-  verified read-only. No real provider calls or scheduled forecasts were run.
-- Desktop (1440 px) and phone (390 px) browser checks passed for the new publication
-  record, latest forecast navigation and both CSV downloads. Forecast CSVs included
-  96 intervals and saved-model/training metadata. This used isolated synthetic
-  results; it did not publish new live evidence. No browser errors or page overflow
-  were found.
-- A cached-data preparation with the default crossfit settings used 934 training
-  days / 22,392 hourly rows, took 249.1 seconds and peaked at 1,075.6 MiB RSS.
-  Loading that model and predicting a fixed 96-hour input took 1.4937 seconds;
-  predictions agreed within `1e-12`. This uncapped workstation measurement excludes
-  provider fetching and feature construction and is not a host/deadline guarantee.
-  The retrospective 2026-10-22 artifact and verification are retained under
-  `research/data/model_validation/`, unpromoted and unscored. It is not a serving
-  model for the runner's different Python environment.
-
-The actual host, domain cutover, first current issue/scores, off-host recovery and
-ongoing reliability checks remain the owner's manual deployment work.
-
 ## Refresh the historical explorer
 
 The website has one shared market/date/target/model selection, full backtest
 series and grouped diagnostics. Exporting reads **completed** research evaluations;
-it never trains or reopens a sealed holdout:
+it never trains or reruns a frozen final evaluation:
 
 ```bash
 uv run grid-signals export explorer --historical
 ```
+
+For daily results, `uv run grid-signals export all` commits a checked complete
+generation to `data/exports/`. Use a root option such as
+`uv run grid-signals --output-dir /absolute/results export all` to select another
+destination; preview it with `GRID_SIGNALS_RESULT_ROOT=/absolute/results`.
+Exporting does not train models, score holdouts or start a trial.
 
 Daily delivery commits complete generations separately. Historical flat exporters
 name files using checksums and update the file index (`manifest.json`) last.
@@ -390,147 +311,15 @@ the project's [SDAC registry](https://www.entsoe.eu/network_codes/cacm/implement
 
 ## Public hosting
 
-The owner confirmed the Dokploy test deployment on **2026-11-01**:
-[grid-signals-demotest.kaarelkivisalu.ee](https://grid-signals-demotest.kaarelkivisalu.ee).
-It is deployed from `feat/electricity-forecasting`. Anonymous requests to the
-homepage and `/_stcore/health` returned HTTP 200 with certificate verification
-enabled; the health response was `ok`. Public acceptance checks passed on
-2026-11-01 (details below). The owner supplied the deployed commit and Docker
-build output for this deployment:
+Use `Dockerfile.demo` for the standalone historical site. It needs no credentials
+or persistent volumes. For local preview, follow the [quick start](../README.md#run-the-local-demo).
+The [deployment record](archive/operations-record.md#public-hosting) retains the
+public URL, deployed commit, image digests and acceptance checks. Deployment
+source and domain changes follow the [roadmap](../ROADMAP.md).
 
-| Item | Recorded value |
-|---|---|
-| Git commit | `5e08069c9a9fdcc62598da1ede6fba4ad2458cbf` |
-| Image tag | `docker.io/library/gridsignals-gridsignalsdemo-95atzm:latest` |
-| Image index (manifest list) digest | `sha256:99fa7561577e72e40a0c6a6b22e75b029b0a3a3415690dcdce05286d78fba8d1` |
-| Image manifest digest | `sha256:ad8a033f5e0a397afa5aefcad7a10f54b541689f38c8a62200bd7400b0e1a54c` |
-| Image config digest | `sha256:3578c823e81a7e84e89912d15d9112c8e558b5428d9856b22ded1a3404371ad2` |
-
-These digests identify the build output; the `latest` tag can change on a later
-build. The local image name does not establish that the image was pushed to a
-registry.
-
-Keep this test domain while developing the roadmap. Once the roadmap is
-reasonably complete and the owner approves merging into `main`, change the
-deployment source to `main` and the domain to
-**`https://grid-signals.kaarelkivisalu.ee`**, configure its DNS and HTTPS, and
-repeat the public acceptance checks. The final domain is planned, not verified.
-
-The presentation has a separate, non-root web-only image with pinned UI dependencies.
-Start it locally with Docker Compose:
-
-```bash
-docker compose -f compose.demo.yaml up --build -d
-```
-
-Open http://localhost:8502. The image includes the historical explorer and three summary bundles and omits the
-legacy database/agent tools. Its build context excludes research data, secrets and
-the virtualenv. The build checks every indexed Parquet file's checksum and copies
-only those files into the final image. Older local exports are preserved under
-`data/retired_demo_exports`, outside installed package assets.
-View logs with `docker compose -f compose.demo.yaml logs -f`; stop and remove the
-demo container with `docker compose -f compose.demo.yaml down`.
-Use `compose.demo.yaml` explicitly. The original market Compose files and worker
-Dockerfile were removed in 2a; use `compose.forecast.yaml` for the new producer.
-The Python runtime and uv builder images are pinned by digest. The Dockerfile
-follows Astral's [multistage example](https://github.com/astral-sh/uv-docker-example/blob/main/multistage.Dockerfile):
-the uv 0.13.6 Python builder runs `uv sync --locked` with a shared build cache and
-compiled bytecode, then prepares the checked website files. The final Python
-image copies those files and `/app/.venv`; it contains no uv binary or build cache.
-The website runs directly with the virtual environment's Python as UID 10001.
-The root `pyproject.toml` defines `web`, `runner`, `research` and `dev` groups;
-root `uv.lock` locks all profiles. The image installs only base/web dependencies
-with `uv sync --locked --no-default-groups --group web --no-install-project`.
-There is no separate demo project or lockfile. Update dependencies deliberately
-with `uv lock`, then rerun release checks.
-
-Check the built image without networking or credentials:
-
-```bash
-docker run --rm -i --network none --entrypoint python grid-signals-demo:local < tests/demo_image_check.py
-```
-
-The same build and offline check run in CI. Refresh result bundles only when
-intentionally publishing newer results, then rebuild. No refresh or training is
-needed to deploy the saved historical release.
-
-### Historical release and local review
-
-Overview opens on **SE3, 2026-09-19** with a price graph and a combined fundamentals
-graph. Area and date controls are visible. The saved selected model supplies at
-most one forecast per product; products without a forecast show observations
-only. Price uses EUR/MWh; fundamentals use MW with whole-MW axis labels and
-tooltips. Overview omits repeated selection captions and the demand case-study
-link; demand has a separate page. The sidebar has three
-groups: Overview/Map, Prices/Wind/Solar/Demand, and Models & data/Performance.
-Area choices group country zones and nearby single-area markets, with
-EE/LV/LT together. Buttons join edge to edge with square corners, small gaps
-between groups and no country headings. Unsupported choices are greyed out for
-each page.
-
-Product pages use area and date as the main controls, with alternative models
-and earlier publications in expandable sections. The selected date determines
-whether a forecast is a historical evaluation, development result or published
-issue; the page explains that distinction. Chart legends name the forecast and
-reference. Forecast/error panels and CSV downloads remain available.
-Performance leads with matched scores and monthly error patterns; evaluation
-period and model controls are optional. Models & data explains each approach
-with a responsive input-to-forecast diagram before its regional applications.
-Detailed sources, fitting rules and timing assumptions can be expanded. Product
-selectors use joined buttons, matching area selectors. Delivery dates use a 160 px
-calendar field joined to
-two arrow buttons that move between saved days; missing dates show an explicit
-empty state. The clear control is disabled; an empty value sent by an older
-browser restores the last selected day before date-range checks. Map keeps all
-39 SDAC areas visible in a larger map with plain labels. Its compact table puts
-groups with evaluated forecasts first, followed by groups with observations,
-then unavailable groups. All rows scroll with the page.
-Areas link to Overview, evaluated cells to product
-pages, and observation-only cells to Overview. Unavailable cells have no data link.
-Forecast shading uses saved quantiles, not ensemble scenarios.
-
-The bundled file index was exported at **2026-10-23T15:00:31.076936+00:00** and
-references 13 checked, Git-tracked Parquet files. SE3's final evaluation covers
-2026-03-20 through 2026-09-19, with 182 of 184 complete days. Later issues retain
-their recorded publication times and statuses. The export date does not imply
-current forecasts or reliable daily updates. Original evaluated results, model
-version records and their source files are unchanged.
-
-The 2026-10-26 portfolio checks passed: **407 tests, 2 skipped** before the latest
-UI revisions. The calendar and layout revision passed **47 focused tests**, Ruff lint and
-formatting, two offline image checks and desktop/tablet/phone browser review at
-1440, 820 and 390 px. Navigation and CSV downloads work without browser errors,
-external requests or horizontal page overflow. Tests cover grouped choices,
-one forecast per product, observation-only areas, all map links, the full zone
-table, calendar navigation across missing days, cleared-date recovery on Overview
-and Wind, preserved selections and aligned error values. The publication-status
-test checks the selected issue.
-Existing evaluated result files and model code were not changed.
-
-The 2026-11-01 usability revision passed **52 focused tests**, Ruff lint and
-formatting, and local browser checks at 1440, 820 and 390 px. Forecasts select
-the saved result type by date, chart references are named, and model guides work
-independently of area selection. Navigation, CSV downloads and responsive diagrams
-passed without browser errors or horizontal page overflow. This review used a
-separate local Streamlit preview; the running Docker demo was not refreshed.
-
-The deployed test site passed anonymous Chromium acceptance checks on
-**2026-11-01** at **1440 × 1100** and **390 × 844**. Overview, Wind, Solar,
-Prices, Demand, Performance, Models & data and Map rendered without application
-exceptions, browser errors or horizontal page overflow. Phone sidebar navigation,
-previous/next saved-day controls and the forecast-to-methods link worked. Wind
-opens on SE3's populated historical comparison; German solar, price and demand
-case studies remain accessible. Forecast pages explicitly label the selected
-2026-09-19 results as historical evaluation. On both screen sizes, each of the
-four forecast CSV downloads contained 96 quarter-hour intervals for that delivery
-date, with actuals and median forecasts. Desktop performance and phone wind
-screenshots were also reviewed. These checks complete historical-demo acceptance;
-they do not establish daily production or freshness. The deployed Git revision
-and image identity are recorded above.
-
-Standalone learning notebooks have moved out in milestone 2a. Three style rules
-remain narrowly exempted in the moved split/conformal modules to avoid incidental
-algorithm edits during consolidation; original evaluated source is preserved separately.
+Before publishing an update, run `bash scripts/check.sh`. Its `demo` group builds
+and checks the web image without networking or credentials. Refresh bundled
+results only when deliberately publishing new evidence.
 
 ### Manual deployment steps for the owner
 
@@ -573,4 +362,147 @@ seeding and scheduler cutover. The demo-only steps above do not activate daily f
 Existing Dokploy capacity hosts the test site; reconsider hosting only for a
 concrete operational or cost constraint. The
 [roadmap](../ROADMAP.md) defines release acceptance; the
-[historical direction review](project-direction-review.md) retains the comparison.
+[historical direction review](archive/project-direction-review.md) retains the comparison.
+## Monitor runs and inspect files
+
+Inspect Prefect flow/task failures and the public due-day status. A successful flow
+alone does not prove public delivery. Provider-phase records retain error type and
+elapsed time without credential-bearing URLs. Check the latest confirmed receipt,
+model readiness, weather availability and complete actuals when an issue or score
+is missing. Historical `ReadTimeout` records do not identify the original provider;
+live evidence is still needed to establish whether the new handling resolves it.
+
+
+| Under configured data/result roots | Meaning |
+|---|---|
+| `/data/raw/`, `/data/parsed/`, `/data/interim/` | Provider data, parsed weather and derived targets; exact source-specific paths in `sources/` |
+| `/data/models/se3-wind/<model_id>/` | `record.json`, `training.parquet`, `lag_targets.parquet`, `reload_inputs.parquet`, `reload_predictions.npz`, `model.pkl` |
+| `/data/models/se3-wind/active.json`, `promotions/` | Checked active-model pointer and immutable promotion reasons/history |
+| `/data/runtime/se3-wind/trial.json`, `lifecycle/` | First due issue and per-phase status/error type/elapsed-time records |
+| `/data/runtime/se3-wind/issues/<forecast_id>/` | Candidate `inputs.parquet`, `forecast.parquet`, checksummed `record.json` |
+| `/data/operational/captures/`, `/data/operational/raw_captures/` | Public comparison collection evidence; `/data/operational/actual_fetches/` holds fresh SE3 observation receipts; see `journal.py` and `sources/capture.py` |
+| `/results/generations/<id>/` | Complete checked explorer/summary payloads, `publication.json`, `files.json` |
+| `/results/current.json`, `previous.json` | Whole-generation pointers; confirmed delivery receipt and its real timing |
+| `/backups/forecast-<UTC timestamp>.tar.gz` | Checked recovery archive; retain/copy off-host explicitly |
+
+Local defaults are `research/data`, `research/mlruns`, `data/exports` and
+`research/reports`; environment variables or CLI root options select mounted
+locations before imports. See [paths.py](../src/grid_signals/forecast/paths.py).
+The saved pickle requires its recorded compatible environment and trusted origin;
+checksums identify our own artifact, not arbitrary downloaded models.
+
+Publication implementation is [live.publish/acknowledge/status_record](../src/grid_signals/forecast/live.py).
+Only after the complete generation is visible is a receipt confirmed; a crash
+before confirmation stays unverified and recovery uses its actual later time.
+Retries cannot replace an earlier first eligible receipt. Scores use complete
+native actual days and matched intervals, with physical error, bias, CRPS and
+coverage; public point MAE is added only with eligible capture evidence. Scores
+can change with revised actuals. The web reader
+[results.py](../src/grid_signals/app/results.py) verifies payloads, falls back
+to previous/bundled data with a warning, derives missing due days during outages,
+and flags snapshots older than 45 minutes. Prefect success alone does not prove
+public delivery. See the [publication contract](integration_contract.md).
+
+## Schedules and task bounds
+
+
+| Time / deployment | Exact operation and data movement |
+|---|---|
+| 03:00 `se3-backup` | Save checked data/models/publication history/results/tracking and online Prefect SQLite backup into `/backups`. Same-host copies need a separate off-host transfer. |
+| 06:00 `se3-prepare` | Refresh A75 over [I−7,I+1); rebuild hourly target table. Build clusters from the seeded registry. Fetch MEPS/IFS run dates [I−10,I), so today's unavailable IFS cycle is not a training prerequisite. Fetch Previous Runs valid dates [I−10,I+3). Fit both saved models using the pre-issue rule, verify reload, promote, publish status. Existing historical caches are still required. |
+| 08:55 `se3-capture` | Request next-day public A69/A18 wind/solar document; require a complete wind curve received before 09:00; record missing/late/error evidence. Failure does not substitute an unverified historical public curve or a different forecasting model. |
+| 09:00 `se3-forecast` | Fetch MEPS/IFS run dates [I,I+1), Previous Runs valid dates [I,I+3). Load that issue's checked promoted model and its saved lag history; build delivery-day features without target actuals; validate source-time/grid/required weather/capacity; predict and repeat hourly quantiles; save immutable candidate inputs/forecasts; commit a complete public generation and confirm actual delivery. No fitting. |
+| 09:30 deadline | A later verified delivery is late and cannot become an on-time scored issue. The forecast flow checks its window before/after fetching and after delivery. |
+| 15:00 `se3-score` | Refresh A75 over the current [I−7,I+1) window and rebuild targets; recompute scores for first eligible issues whose actual delivery days are complete; publish actuals and provisional scores. At 15:00 the same issue's next-day actuals are not yet available: it scores earlier deliveries, with later retries on subsequent days. |
+| Every 15 minutes `se3-status` | Commit due-day/job/model/collection status and any available scores. Fresh export time does not make an old forecast current. |
+
+Date bounds above are half-open. `openmeteo.pull` converts them to inclusive API
+`end_date=end−1 day`; MEPS/IFS iterate run dates. Pullers reuse cached identical
+requests/runs, rather than re-downloading every listed date. Parsed stores merge
+new rows; exact raw and cache paths are defined in each source module.
+Registry, zone definitions, historical training weather, A68 audit data and initial
+data volume are **bootstrap/manual inputs**, not silently fetched by every job.
+No monthly final-evaluation or automatic model-tuning job runs in production.
+
+Prefect task bounds are in `flows.py`: actuals 300 s with two retries (20 s delay),
+weather 600 s with one retry (20 s), preparation 1800 s without retries, prediction
+180 s without retries, capture 120 s with one retry (10 s), delivery 120 s with
+two retries (5 s); whole flow 3000 s without flow retries. Source clients also have
+HTTP timeouts/backoff where implemented. MEPS's production xarray/netCDF transport
+does not use the separate ASCII helper's HTTP retry settings; its enclosing
+weather task supplies the explicit 600-second workflow bound. One runner slot and shared file lock prevent overlapping
+producer operations. Scheduled runs retain their original intended day after
+restarts; expired preparation/collection/forecast runs fail visibly rather than
+backdating fresh data. See `requested_day`, `execute`, `deployments` and `start`.
+
+The [German product commands](dataflow.md#4-de-lu-solar) remain **manual only** in this stack. They
+fit during their command, require their own cached histories/weather and use the
+older append-only archives. Running a manual German command does not enrol it in
+SE3's atomic live overlay or start a German schedule. Bundled case studies remain
+available without continuing German production.
+
+## Daily local trial
+
+The old local trial remains the active schedule until the owner's Prefect cutover.
+The installer and shell wrapper have been retired from this checkout. The three
+existing user services use the checked source from commit
+`20b607b` in
+`/home/kaarel/Projects/grid-signals-preserved/2026-11-01-before-2b/source`,
+selected by their `PYTHONPATH` environment setting. Copies of the unit files are
+in that preservation directory's `systemd/` folder. The preserved package's code
+record verifies. Data locations, timers and their schedules were not changed;
+systemd was reloaded without starting jobs. Do not add another active scheduler
+for these issues before the cutover.
+
+Inspect with `systemctl --user list-timers 'grid-signals-*'`. The old schedule remains:
+
+| Job | UTC | Behaviour |
+|---|---|---|
+| Save public forecasts | 08:55 | Preserve ENTSO-E wind/solar and load forecasts with raw metadata |
+| Forecast | 09:00 | Refresh inputs; independently publish wind, solar, price and load; export snapshots |
+| Score | 15:00 | Refresh actuals, score eligible first publications, update snapshots |
+
+Deadline: 09:30 UTC. Missed timers run on resumption with their actual late or
+retrospective status. Jobs have a 27-minute timeout and four-worker limits.
+This is a local user-session schedule: the machine needs to be running, online
+and able to execute user services. It is not an always-on server deployment.
+
+Root `.env` supplies ENTSOE_API_KEY. No database or LLM key is needed. Failure
+records store exception types, not credential-bearing HTTP URLs.
+
+```bash
+journalctl --user -u grid-signals-forecast.service --since today
+journalctl --user -u grid-signals-capture.service --since today
+journalctl --user -u grid-signals-score.service --since today
+```
+
+Evidence is under `research/data/operational/`: trial start, unchanged job records and saved public forecasts, raw XML/Parquet and renewable/price scorecards. Forecast Parquet archives
+are under `research/data/predictions/`. Only first on-time issues are scored;
+retries do not replace them. Scores await complete actual delivery days and remain
+provisional as actuals change. The first scheduled trial issue is October 16;
+today's late forecasts contribute no on-time evidence. Historical replay cannot
+satisfy the 30-run integration gate.
+
+Price publication now uses the declared LEAR baseline in
+`src/grid_signals/forecast/configs/price_forward.yaml`, with hourly distributions repeated onto market
+quarter-hours. Historical direct-quantile price forecasts remain archived as a
+separate model version. Load is published with the candidate selected before its
+final evaluation. Each product has its own forward scorecard.
+
+Exact reproduction of the frozen load release requires its original local input
+matrix. The model version record stores its checksum; newer API observations can contain revisions
+and must not silently replace that matrix. The price-input experiment also requires
+the original price cache. Portable website bundles include results, not training data.
+
+Disable the schedule with:
+
+```bash
+systemctl --user disable --now grid-signals-capture.timer grid-signals-forecast.timer grid-signals-score.timer
+```
+
+## Preservation and source consolidation — 2026-11-01
+
+Original source, data, archive checksums and exact-evaluation recovery instructions
+are in the [preservation record](archive/operations-record.md#preservation-and-source-consolidation--2026-11-01).
+[Local deployment checks](archive/operations-record.md#local-verification--2026-11-01)
+record measured reload, resource, restart and restore results.

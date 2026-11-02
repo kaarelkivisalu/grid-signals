@@ -1,5 +1,8 @@
 # What the metrics measure, and over which rows
 
+Archived hourly evaluation context. Use [current metrics](../metrics.md) for quarter-hour and forward comparisons. Statements about a sealed holdout below describe the original study, not its current status.
+
+
 This documents the archived hourly boards. The corrected quarter-hour wind and solar
 populations and their added ramp metrics are in `reports/products_15min.md` and the
 2026-10-15 protocol amendment. The old hourly results predate the forward-weather
@@ -16,7 +19,7 @@ Regenerate the figures and the counts below with
 
 ## 1. Which rows
 
-![](../reports/figures/evaluation_window.png)
+![](../../research/reports/figures/evaluation_window.png)
 
 | | days | delivery hours | dates |
 |---|---|---|---|
@@ -64,7 +67,7 @@ but it is why the counts are quoted in hours.
 
 ### What a forecast being scored actually looks like
 
-![](../reports/figures/backtest_examples.png)
+![](../../research/reports/figures/backtest_examples.png)
 
 Each panel is one of the 546 scored days: 24 delivery hours, each with 19 quantiles, and
 the outturn in black. Every metric in section 2 is a different way of collapsing the gap

@@ -1,5 +1,8 @@
 # Nordic-Baltic Electricity Market Changes (2025–)
 
+Dated market research notes, retained as background. Dates and external-service claims below have not been reverified for current operations; use the [roadmap](../../ROADMAP.md) for project priorities.
+
+
 Significant market, regulatory, and infrastructure changes relevant for grid-signals data pipelines.
 
 ---

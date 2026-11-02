@@ -5,8 +5,8 @@ Nordic/Baltic direction and delivery order. The options below preserve earlier
 experiment ideas and measured resource estimates; they are not parallel workstreams
 or current completion checklists. Some tasks, including local scheduling and final
 holdout evaluation, have since been implemented. See the
-[research README](../README.md) for results and
-[target architecture](../../docs/implementation-plan.md) for the current boundary
+[research README](../../research/README.md) for results and
+[target architecture](../implementation-plan.md) for the current boundary
 and the planned retirement of components that no longer serve the forecast product.
 
 Any experiment selected later needs a protocol appropriate to the then-available
@@ -245,8 +245,8 @@ What follows, for N zone-fuel pairs:
   commercial API key is the scaling path.
 - **Open-Meteo Previous Runs:** heaviest per request (120-day chunks × 9 variables ×
   2 offsets). Same free-tier constraint.
-- **ENTSO-E:** 400 requests/min; 30-day chunks work see [rate limiting](../../src/grid_signals/pipeline.py) and
-  [backfill chunks](../../src/grid_signals/flows.py).
+- **ENTSO-E:** 400 requests/min; 30-day chunks work see rate limiting in the retired `src/grid_signals/pipeline.py` and
+  backfill chunks in the retired `src/grid_signals/flows.py`.
 
 ### Per-area issues to expect
 

@@ -3,6 +3,11 @@
 Compiled 2026-09-21 for `research/README.md`. Scope: what the published record, vendor
 documentation and grey literature say about the problems the README lists.
 
+This is a supporting research library, not an active work plan. Priority labels
+and README problem tags below reflect the original September study. Current
+work follows [ROADMAP.md](../ROADMAP.md); model choices are explained in the
+[model reference](../docs/dataflow.md). External-service details are dated notes.
+
 **How to read this file**
 
 - Downloaded PDFs are in `research/data/papers/` (gitignored); entries with a PDF name it under the reference line.

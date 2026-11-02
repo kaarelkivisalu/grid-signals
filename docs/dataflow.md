@@ -1,11 +1,14 @@
-# Serving models: data, features, evidence and production workflow
+# Model reference: sources, features and choices
 
-Reviewed against the implementation on **2026-11-02**. This is the entry point for
-understanding the models that supply the website or have a supported publication
-command. The [roadmap](../../ROADMAP.md) owns delivery order; the
-[operations guide](../../docs/operations.md#se3-producer-deployment--milestone-2b)
-owns deployment commands. Frozen research reports retain their original protocols
-and results. This guide describes current code without relabelling old evaluations.
+Reviewed against the implementation on **2026-11-02**. Use this reference to
+trace each model from provider inputs through features, fitting and prediction.
+For scores, start with [research evidence](../research/README.md); for commands,
+use [operations](operations.md). The [roadmap](../ROADMAP.md) owns operating status.
+
+The common pattern is market observations + eligible forecast weather → derived
+features → quantile model and references → saved forecasts. The website reads
+results; it does not run models. SE3 uses a saved-model lifecycle; German products
+remain manually runnable case studies.
 
 ## 1. Which models are in scope?
 
@@ -16,7 +19,7 @@ and results. This guide describes current code without relabelling old evaluatio
 | DE-LU load | Development-selected `load_quantile_gbm` / `QuantileLoad` | Historical `load_weekly`, ridge and point GBM comparisons | Saved website case study and manual `forecast --product de-load`; no new production schedule |
 | DE-LU prices | `lear_hourly` / `ResidualDistribution(Lear)` for forward publication | Historical weekly naive and price GBM comparisons | Saved website case study and manual `forecast --product de-price`; no new production schedule |
 
-A product's presence in [products.py](../../src/grid_signals/products.py) does not
+A product's presence in [products.py](../src/grid_signals/products.py) does not
 mean it has a deployed schedule. Website alternatives are archived comparisons,
 not extra models run on every visit. SE3's physical reference is prepared and
 predicted alongside its main model. The public wind forecast is fetched as a
@@ -29,20 +32,20 @@ in the new serving workflow. Their research code or plans do not imply deploymen
 The old local multi-product timers use preserved 2a source until owner cutover;
 their schedule is documented separately in operations.
 
-### Reading map for the six questions
+### Find model details
 
 | Question | Where to read |
 |---|---|
-| Exact providers, requested fields, fetching and caveats | Sections 3, 4.1, 5.1, 6.1; linked `sources/` functions |
-| Exact derived inputs | Sections 3.2, 4.2, 5.2, 6.2; linked feature selectors |
-| Architecture and fitted parameters | Sections 3.3, 4.3, 5.3, 6.3 |
-| Why these choices | Each model's selection/rationale subsection; section 7 for limits of the evidence |
-| Backtest protocols and results | Section 7 and its original report/data links |
-| Host, services, schedules, storage and failure/recovery | Section 8 and the operations guide |
+| Exact providers, requested fields, fetching and caveats | [Wind](#31-source-data-exact-use-and-fetching), [solar](#41-sources-and-fetching), [load](#51-sources-and-fetching), [prices](#61-source-and-fetching) |
+| Exact derived inputs | [Wind](#32-exact-derived-features), [solar](#42-features-and-physical-conversion), [load](#52-features), [prices](#62-features) |
+| Architecture and fitted parameters | [Wind](#33-architecture-training-and-promotion), [solar](#43-architecture-rationale-and-references), [load](#53-architecture-and-choice), [prices](#63-architecture-and-selection) |
+| Why these choices | Model-specific rationale below; [evidence limits](#7-evaluation-evidence-and-limits) |
+| Backtest protocols and results | [Research evidence](../research/README.md) |
+| Host, services, schedules, storage and failure/recovery | [Architecture](implementation-plan.md), [operations](operations.md) |
 
 All source links below refer to the current installed package. Exact reproduction
 of frozen evaluations uses the preserved original source/environment and inputs,
-as explained in [operations](../../docs/operations.md#preservation-and-source-consolidation--2026-11-01).
+as explained in [operations](operations.md#preservation-and-source-consolidation--2026-11-01).
 
 ## 2. Shared task and data conventions
 
@@ -50,7 +53,7 @@ Let **I** be the issue day and **D = I + 1** the delivery day. The information c
 is **09:00 UTC on I**, with a **09:30 UTC** publication deadline. A forecast's
 intended cutoff, actual computation time and actual delivery time are separate.
 UTC timestamps identify intervals; delivery days follow CET/CEST. The current
-[windows.py](../../src/grid_signals/forecast/windows.py) uses `Europe/Stockholm`,
+[windows.py](../src/grid_signals/forecast/windows.py) uses `Europe/Stockholm`,
 which has the same clock transitions as these SE3/DE-LU tasks. The product registry
 records `Europe/Berlin` for the evaluated products. Neither is a generic contract
 for every future zone.
@@ -77,13 +80,13 @@ checks are not a guarantee that every feature or every source grid cell is compl
 
 | Source and code | Exact data used | Fetching and important limits |
 |---|---|---|
-| ENTSO-E actual generation, [observations.refresh](../../src/grid_signals/forecast/sources/observations.py), [entsoe.load](../../src/grid_signals/forecast/sources/entsoe.py), [actuals.py](../../src/grid_signals/forecast/targets/actuals.py) | A75 generation for `SE_3`; select `wind_onshore` / B19 and the actual generation aggregation, excluding consumption rows. Hourly means supply training CF and 48/72/168-hour generation lags; genuine quarter-hours supply current forward scores. | At preparation and scoring, `EntsoeRawClient` requests local-midnight bounds from I−7 through I+1 exclusive. Each refresh saves a uniquely dated raw XML, parsed Parquet and receipt/hash. The loader resolves overlaps by retrieval time. Actuals can be revised; historical lag values are not proven original issue-time vintages. Older hourly data are not expanded into genuine quarter-hour scoring targets. |
-| Vindbrukskollen, [fleet.py](../../src/grid_signals/forecast/sources/fleet.py), [sites.build](../../src/grid_signals/forecast/features/sites.py), committed [zone polygons](../../src/grid_signals/forecast/configs/se_bidding_zones.geojson) | Local GeoPackage `raw/vindbrukskollen/lst.vbk_vindkraftverk.gpkg`: `VERKID`, `OMRID`, geometry, `MAXEFFEKT`, `UPPFORT`, `STATUS`, `NAVHOJD`, `ROTDIAMETER`, `FABRIKAT`, `MODELL`, `PLACERING`, `LANSNAMN`, `SenasteUppdatering`. Positions, rated MW, commissioning/decommissioning information determine the zone capacity series; active SE3 onshore coordinates, capacities and mean hub heights define eight weather query clusters. Other retained attributes are not all ML features. | The GeoPackage is a seeded/manual input: daily flows **do not download a new registry**. The download URL and missing-file error are in `fleet.py`. Zone assignment uses a spatial join and nearest-zone fallback for unmatched coastal points. A current registry reconstructs historical commissioning; decommissioning uses the last-update date as a proxy. This is not a fully versioned historical fleet. Archive any proposed replacement before changing the saved-model inputs. |
-| ENTSO-E A68 national installed capacity | Cached Sweden-wide capacity is an audit cross-check, not the numeric SE3 prediction denominator or an ML input. | The original data audit compared national registry totals with A68. No daily A68 refresh or national rescaling is performed by the SE3 flow. Zonal CF uses the registry capacity series. See [data audit](../reports/data_audit.md) and [labels.build](../../src/grid_signals/forecast/targets/labels.py). |
-| Open-Meteo Previous Runs, [openmeteo.py](../../src/grid_signals/forecast/sources/openmeteo.py) | Pinned `ecmwf_ifs025`, `gfs025`, `icon_eu` at the eight SE3 clusters. Requested hourly fields: `wind_speed_100m`, `wind_speed_10m`, `wind_direction_100m`, `wind_gusts_10m`, `temperature_2m`, `relative_humidity_2m`, `surface_pressure`, `snow_depth`, `precipitation`, each at `_previous_day1` and `_previous_day2`. Wind is requested in m/s, timestamps in UTC. Precipitation is fetched but not used in the selected feature matrix. | Both preparation and prediction call the shared puller; exact ranges are in section 8. Parameter-hashed JSON gzip cache, serial point/model requests, parsed point/model Parquets merged by valid time. Offsets mean values predicted 24/48 hours before valid time, **not a named 00z run**. Per-row offset selection includes forward-trajectory endpoints. No `best_match` blend. Measured archive starts in code are February/March 2024, not a promise about future provider coverage. |
-| MET Norway THREDDS MEPS, [meps.py](../../src/grid_signals/forecast/sources/meps.py) | Deterministic `meps_det_hl`, named 00z issue-day run; `x_wind_z`, `y_wind_z`, `air_temperature_z`, `relative_humidity_z` at 80 and 120 m; hourly leads 16…50. Nearest cells for the eight clusters are extracted from one OPeNDAP bounding box (`radius=0`; neighbourhood averaging is not enabled). | Serial xarray/netCDF OPeNDAP access, parsed per-run Parquet storage. The downloaded bounding box/raw binary is **not retained** by this path. Grid-relative wind is rotated to Earth-relative direction; kelvin temperature and fractional humidity are converted. Uses fixed, tested 2.5 km grid geometry. This is **not the 30-member MEPS ensemble**. Its product was chosen for the stable archived signature. The provenance guard stamps the run instant; actual service availability is an operational assumption, not an archived receipt-time proof. |
-| Open-Meteo Single Runs IFS, [ifs_runs.py](../../src/grid_signals/forecast/sources/ifs_runs.py) | `models=ecmwf_ifs` (HRES, distinct from `ecmwf_ifs025`), `run=I T00:00`. The same nine weather variables as above under plain names, eight coordinates in one request. `forecast_hours=54`, with the first 16 hours discarded for the 00z block. | Parameter-hashed JSON gzip plus parsed per-run Parquet. Columns are dated to run time + **8 h 35 min** by the guard; this is the fixed conservative assumption from the recorded latency study, not measured Open-Meteo receipt time for every historical run. The 18z cycle and jump features exist in research code but are disabled in the serving configuration. |
-| ENTSO-E public wind forecast, [capture.run](../../src/grid_signals/forecast/sources/capture.py), [captured_curve](../../src/grid_signals/forecast/live.py) | A69 with **process A18** for SE3's next delivery day. Select the complete onshore wind curve. Retain raw XML, parsed Parquet, request/receipt times, document creation/revision fields and hashes. | Scheduled 08:55 UTC. Only a complete response received by 09:00 is eligible. Native quarter-hours or explicitly repeated hourly points can be compared. This is a point-error comparison, not a probabilistic forecast model fitted here. Historical A69/**A01** latest-vintage boards are a different, optimistic comparison; do not substitute them for the captured curve. |
+| ENTSO-E actual generation, [observations.refresh](../src/grid_signals/forecast/sources/observations.py), [entsoe.load](../src/grid_signals/forecast/sources/entsoe.py), [actuals.py](../src/grid_signals/forecast/targets/actuals.py) | A75 generation for `SE_3`; select `wind_onshore` / B19 and the actual generation aggregation, excluding consumption rows. Hourly means supply training CF and 48/72/168-hour generation lags; genuine quarter-hours supply current forward scores. | At preparation and scoring, `EntsoeRawClient` requests local-midnight bounds from I−7 through I+1 exclusive. Each refresh saves a uniquely dated raw XML, parsed Parquet and receipt/hash. The loader resolves overlaps by retrieval time. Actuals can be revised; historical lag values are not proven original issue-time vintages. Older hourly data are not expanded into genuine quarter-hour scoring targets. |
+| Vindbrukskollen, [fleet.py](../src/grid_signals/forecast/sources/fleet.py), [sites.build](../src/grid_signals/forecast/features/sites.py), committed [zone polygons](../src/grid_signals/forecast/configs/se_bidding_zones.geojson) | Local GeoPackage `raw/vindbrukskollen/lst.vbk_vindkraftverk.gpkg`: `VERKID`, `OMRID`, geometry, `MAXEFFEKT`, `UPPFORT`, `STATUS`, `NAVHOJD`, `ROTDIAMETER`, `FABRIKAT`, `MODELL`, `PLACERING`, `LANSNAMN`, `SenasteUppdatering`. Positions, rated MW, commissioning/decommissioning information determine the zone capacity series; active SE3 onshore coordinates, capacities and mean hub heights define eight weather query clusters. Other retained attributes are not all ML features. | The GeoPackage is a seeded/manual input: daily flows **do not download a new registry**. The download URL and missing-file error are in `fleet.py`. Zone assignment uses a spatial join and nearest-zone fallback for unmatched coastal points. A current registry reconstructs historical commissioning; decommissioning uses the last-update date as a proxy. This is not a fully versioned historical fleet. Archive any proposed replacement before changing the saved-model inputs. |
+| ENTSO-E A68 national installed capacity | Cached Sweden-wide capacity is an audit cross-check, not the numeric SE3 prediction denominator or an ML input. | The original data audit compared national registry totals with A68. No daily A68 refresh or national rescaling is performed by the SE3 flow. Zonal CF uses the registry capacity series. See [data audit](../research/reports/data_audit.md) and [labels.build](../src/grid_signals/forecast/targets/labels.py). |
+| Open-Meteo Previous Runs, [openmeteo.py](../src/grid_signals/forecast/sources/openmeteo.py) | Pinned `ecmwf_ifs025`, `gfs025`, `icon_eu` at the eight SE3 clusters. Requested hourly fields: `wind_speed_100m`, `wind_speed_10m`, `wind_direction_100m`, `wind_gusts_10m`, `temperature_2m`, `relative_humidity_2m`, `surface_pressure`, `snow_depth`, `precipitation`, each at `_previous_day1` and `_previous_day2`. Wind is requested in m/s, timestamps in UTC. Precipitation is fetched but not used in the selected feature matrix. | Both preparation and prediction call the shared puller; exact ranges are in [operations](operations.md). Parameter-hashed JSON gzip cache, serial point/model requests, parsed point/model Parquets merged by valid time. Offsets mean values predicted 24/48 hours before valid time, **not a named 00z run**. Per-row offset selection includes forward-trajectory endpoints. No `best_match` blend. Measured archive starts in code are February/March 2024, not a promise about future provider coverage. |
+| MET Norway THREDDS MEPS, [meps.py](../src/grid_signals/forecast/sources/meps.py) | Deterministic `meps_det_hl`, named 00z issue-day run; `x_wind_z`, `y_wind_z`, `air_temperature_z`, `relative_humidity_z` at 80 and 120 m; hourly leads 16…50. Nearest cells for the eight clusters are extracted from one OPeNDAP bounding box (`radius=0`; neighbourhood averaging is not enabled). | Serial xarray/netCDF OPeNDAP access, parsed per-run Parquet storage. The downloaded bounding box/raw binary is **not retained** by this path. Grid-relative wind is rotated to Earth-relative direction; kelvin temperature and fractional humidity are converted. Uses fixed, tested 2.5 km grid geometry. This is **not the 30-member MEPS ensemble**. Its product was chosen for the stable archived signature. The provenance guard stamps the run instant; actual service availability is an operational assumption, not an archived receipt-time proof. |
+| Open-Meteo Single Runs IFS, [ifs_runs.py](../src/grid_signals/forecast/sources/ifs_runs.py) | `models=ecmwf_ifs` (HRES, distinct from `ecmwf_ifs025`), `run=I T00:00`. The same nine weather variables as above under plain names, eight coordinates in one request. `forecast_hours=54`, with the first 16 hours discarded for the 00z block. | Parameter-hashed JSON gzip plus parsed per-run Parquet. Columns are dated to run time + **8 h 35 min** by the guard; this is the fixed conservative assumption from the recorded latency study, not measured Open-Meteo receipt time for every historical run. The 18z cycle and jump features exist in research code but are disabled in the serving configuration. |
+| ENTSO-E public wind forecast, [capture.run](../src/grid_signals/forecast/sources/capture.py), [captured_curve](../src/grid_signals/forecast/live.py) | A69 with **process A18** for SE3's next delivery day. Select the complete onshore wind curve. Retain raw XML, parsed Parquet, request/receipt times, document creation/revision fields and hashes. | Scheduled 08:55 UTC. Only a complete response received by 09:00 is eligible. Native quarter-hours or explicitly repeated hourly points can be compared. This is a point-error comparison, not a probabilistic forecast model fitted here. Historical A69/**A01** latest-vintage boards are a different, optimistic comparison; do not substitute them for the captured curve. |
 
 The active fleet is clustered with capacity-weighted KMeans, eight clusters,
 `random_state=0`, `n_init=10`, in EPSG:3006 before centroids return to WGS84.
@@ -109,7 +112,7 @@ those atmospheric models. Pinning API product names and run times prevents an
 automatic provider blend, but does not freeze every upstream model upgrade or
 archive correction. A stable file signature is not proof of unchanged NWP physics.
 
-[labels.build](../../src/grid_signals/forecast/targets/labels.py) drops partial hours
+[labels.build](../src/grid_signals/forecast/targets/labels.py) drops partial hours
 and marks CF in −0.01…1.05 as trainable. Capacity disagreement/quarantine and
 nonpositive-price curtailment flags are diagnostics; they do not themselves remove
 rows from training. Cached SE3 prices can create those flags but are **not inputs**
@@ -118,9 +121,9 @@ research feature builders and are not called by the serving assembly.
 
 ### 3.2 Exact derived features
 
-Authoritative construction: [wind.py](../../src/grid_signals/forecast/features/wind.py),
-[assemble.py](../../src/grid_signals/forecast/features/assemble.py). Selection:
-[models.base.feature_columns](../../src/grid_signals/forecast/models/base.py) takes
+Authoritative construction: [wind.py](../src/grid_signals/forecast/features/wind.py),
+[assemble.py](../src/grid_signals/forecast/features/assemble.py). Selection:
+[models.base.feature_columns](../src/grid_signals/forecast/models/base.py) takes
 numeric columns except its explicit `EXCLUDED` set. Capacity, targets, dates,
 source run times and `nwp_offset_days` are bookkeeping, not learned inputs.
 
@@ -226,7 +229,7 @@ those blocks for the main model and evaluates both on identical rows.
 
 ### 3.3 Architecture, training and promotion
 
-[QuantileGBM](../../src/grid_signals/forecast/models/quantile.py) is 19 independent
+[QuantileGBM](../src/grid_signals/forecast/models/quantile.py) is 19 independent
 LightGBM gradient-boosted tree regressors with quantile/pinball loss, one per
 level. Defaults: 400 trees, 31 leaves, learning rate 0.05, minimum child samples
 40, row fraction 0.8 with frequency 1, column fraction 0.8, L2 penalty 1.0. Serving
@@ -236,7 +239,7 @@ an exhaustive hyperparameter search. Quantile boosters have no monotone constrai
 Raw quantiles are clipped to [0,1] and sorted. Four contiguous whole-day blocks
 within the available training window produce out-of-fold predictions (fit each
 block's complement); final boosters are then refitted on all training rows.
-[SpreadCQR](../../src/grid_signals/forecast/models/conformal.py) applies additive
+[SpreadCQR](../src/grid_signals/forecast/models/conformal.py) applies additive
 residual corrections by predicted CF bin (four bins) and weather-spread tercile
 (`power_curve_model_std`), falling back to level then global corrections below
 30 rows. `normalise=False`, `by_season=False`. This is training-side block crossfit,
@@ -244,13 +247,13 @@ not a chronological outer test; all these blocks precede the forecast issue.
 The online `adaptive_levels` helper is **not called** by the serving flow.
 Time-series dependence prevents an unconditional conformal coverage guarantee.
 
-[PhysicalPowerCurve](../../src/grid_signals/forecast/evaluation/baselines.py) fits
+[PhysicalPowerCurve](../src/grid_signals/forecast/evaluation/baselines.py) fits
 an affine scale/intercept to the physical feature on the older 75% of training
 days. The newest 25% supplies empirical residual quantiles. Its point and final
 quantiles are bounded to [0,1]. It is a calibrated physical reference, not a wholly
 unfitted power curve.
 
-[saved_models.prepare](../../src/grid_signals/forecast/saved_models.py) uses all
+[saved_models.prepare](../src/grid_signals/forecast/saved_models.py) uses all
 available eligible hourly rows on delivery days strictly before
 `min(issue_day, preparation_UTC_date)`. It requires at least 60 distinct training
 days, rejects a last training day over three days behind the issue and excludes
@@ -266,7 +269,7 @@ has an immutable record and explicit promotion reason/history. Loading rejects
 changed files/code/environment, a different issue, preparation after the cutoff,
 future preparation times and age over 30 hours. No fallback training occurs in
 prediction. See `prepare`, `validate`, `promote`, `load` and
-[live.candidate](../../src/grid_signals/forecast/live.py).
+[live.candidate](../src/grid_signals/forecast/live.py).
 
 ### 3.4 Why this combination?
 
@@ -282,9 +285,9 @@ Recorded choices have different strengths of evidence:
 
 - Adding MEPS and named IFS runs to the Previous Runs block improved matched
   development errors; keeping all sources beat replacing the old block entirely.
-  See [MEPS/IFS comparisons](../reports/meps_archive.md).
+  See [MEPS/IFS comparisons](../research/reports/meps_archive.md).
 - Crossfit/additive spread calibration was selected using the development
-  comparisons in [calibration.md](../reports/calibration.md). Seasonal strata and
+  comparisons in [calibration.md](../research/reports/calibration.md). Seasonal strata and
   width-normalised correction did not earn adoption.
 - Hourly repetition remained the serving default because quarter-hour weather
   interpolation did not establish a CRPS gain on its matched winter A/B.
@@ -300,8 +303,8 @@ policy has already achieved the historical final scores. Exact results are in se
 
 ### 4.1 Sources and fetching
 
-[solar.build/refresh](../../src/grid_signals/forecast/features/solar.py) and
-[delu_solar.yaml](../../src/grid_signals/forecast/configs/experiments/delu_solar.yaml)
+[solar.build/refresh](../src/grid_signals/forecast/features/solar.py) and
+[delu_solar.yaml](../src/grid_signals/forecast/configs/experiments/delu_solar.yaml)
 use ENTSO-E A75 B16 solar generation for DE-LU, A68 solar annual capacity and
 Open-Meteo **`ecmwf_ifs025` only**. Weather requests contain
 `shortwave_radiation_instant`, `temperature_2m`, `snow_depth` at offsets 1 and 2.
@@ -309,7 +312,7 @@ Instantaneous radiation avoids treating a backward-hour average as an instantane
 sample. Missing regional radiation stays missing rather than becoming zero.
 
 The six equal-weight points are in
-[solar_sites.csv](../../src/grid_signals/forecast/configs/solar_sites.csv): the
+[solar_sites.csv](../src/grid_signals/forecast/configs/solar_sites.csv): the
 Cartesian product of latitudes 48.5, 51.0, 53.5 and longitudes 8.0, 12.5; each has
 weight 1/6. These are a declared lattice, **not MaStR registry or capacity weights**.
 A68 capacity uses the last annual snapshot at/before issue; duplicate snapshot
@@ -322,7 +325,7 @@ automatically refresh A75/A68 or build a dated PV fleet. Seed those histories;
 `fetch-actuals START END` fetches SE3 and DE-LU generation, and the generic ENTSO-E
 cache skips an identical already-cached chunk. Capacity fetching is part of the
 explicit data setup, not a daily German job. See `sources.entsoe.backfill` and
-[pull_solar.py](../../src/grid_signals/forecast/pipelines/pull_solar.py).
+[pull_solar.py](../src/grid_signals/forecast/pipelines/pull_solar.py).
 
 ### 4.2 Features and physical conversion
 
@@ -336,7 +339,7 @@ solar_elevation, lead_hour, hour_sin, hour_cos, doy_sin, doy_cos
 Hourly GHI / calculated clear-sky GHI gives clear-sky index, interpolated at
 quarter-hour **midpoints**, bounded to 0…1.5 and multiplied by midpoint clear sky.
 Both hourly endpoints must satisfy the issue-time age rule. Temperature and snow
-are interpolated too. [pv_output](../../src/grid_signals/forecast/features/solar.py)
+are interpolated too. [pv_output](../src/grid_signals/forecast/features/solar.py)
 uses pvlib solar position, Erbs direct/diffuse decomposition, plane-of-array
 irradiance and PVWatts DC. Fixed mix: 50% south (tilt 30°, azimuth 180°), 25% east
 (20°, 90°), 25% west (20°, 270°). Cell temperature is ambient + 0.03 × plane irradiance;
@@ -347,7 +350,7 @@ the weighted share with snow depth > 0.01 m. No generation lags enter the main m
 
 ### 4.3 Architecture, rationale and references
 
-[SolarQuantileGBM](../../src/grid_signals/forecast/models/solar.py) wraps the same
+[SolarQuantileGBM](../src/grid_signals/forecast/models/solar.py) wraps the same
 19-quantile LightGBM and four-block crossfit calibration as wind, with the
 configuration override above. It trains on elevation > 0° with valid target and
 physical output, requiring at least 30 daylight training days. It sets all night
@@ -369,7 +372,7 @@ holdout supported the quantile model over the physical/persistence references;
 section 7 gives their actual populations and coverage.
 
 Historical reference implementations are in
-[evaluation/solar.py](../../src/grid_signals/forecast/evaluation/solar.py):
+[evaluation/solar.py](../src/grid_signals/forecast/evaluation/solar.py):
 `SolarPhysical` fits one derating factor and held-out, clear-sky-scaled residual
 quantiles; `SmartPersistence` uses observed CF / clear-sky CF at a **48-hour UTC lag**
 with a training-median fallback and residual uncertainty. They test added value
@@ -380,8 +383,8 @@ reference. None establishes a registry-weighted PV forecast or resolves sub-hour
 
 ### 5.1 Sources and fetching
 
-Policy: [load.yaml](../../src/grid_signals/forecast/configs/load.yaml).
-[observations.fetch/load](../../src/grid_signals/forecast/sources/load.py) calls
+Policy: [load.yaml](../src/grid_signals/forecast/configs/load.yaml).
+[observations.fetch/load](../src/grid_signals/forecast/sources/load.py) calls
 ENTSO-E `query_load("DE_LU")`, A65 / process A16. The target is actual total load
 including losses and excluding absorbed storage energy; it is not the public
 load forecast. Store parsed quarter-hour MW and `fetched_at`, resolve overlaps
@@ -399,8 +402,8 @@ Manual `forecast --product de-load` refreshes actual load over [D−8, D+1) with
 `refresh=True`, but does **not** fetch temperature. Historical data and eligible
 future temperatures must already be cached. `fetch-load START END` supports setup;
 the historical bulk pull skips existing chunks, whereas the explicit manual
-forecast refresh replaces the requested load chunk. References: [operations.py](../../src/grid_signals/forecast/operations.py),
-[features/load.py](../../src/grid_signals/forecast/features/load.py).
+forecast refresh replaces the requested load chunk. References: [operations.py](../src/grid_signals/forecast/operations.py),
+[features/load.py](../src/grid_signals/forecast/features/load.py).
 
 ### 5.2 Features
 
@@ -428,7 +431,7 @@ not independently prove that every lag value was published within that allowance
 
 ### 5.3 Architecture and choice
 
-[QuantileLoad](../../src/grid_signals/forecast/models/load.py) fits 19 direct
+[QuantileLoad](../src/grid_signals/forecast/models/load.py) fits 19 direct
 LightGBM quantile regressors, sorts their predictions and clips below at zero.
 It has **no wind/solar CQR layer**. Fixed settings: 300 trees, 15 leaves,
 learning rate 0.05, minimum child samples 80, L2 penalty 1.0, four threads,
@@ -439,7 +442,7 @@ days; the lags/calendar/degree terms encode those mechanisms while the GBM can
 combine them. Six-site equal weights and 15/22°C thresholds are initial declared
 assumptions, not proven optimal spatial weights or temperature breakpoints.
 
-[load.backtest/publish](../../src/grid_signals/forecast/pipelines/load.py) selects
+[load.backtest/publish](../src/grid_signals/forecast/pipelines/load.py) selects
 lowest development CRPS then MAE and records `load_protocol.json` before final
 evaluation. The selected model is `load_quantile_gbm`; its selection record checksum
 must match the code version record before manual publication. Publication fits
@@ -459,10 +462,10 @@ are in section 7.
 ### 6.1 Source and fetching
 
 The selected forward model is declared in
-[price_forward.yaml](../../src/grid_signals/forecast/configs/price_forward.yaml),
+[price_forward.yaml](../src/grid_signals/forecast/configs/price_forward.yaml),
 separately from the earlier price GBM experiment. Its only external input is
 ENTSO-E **A44 DE-LU SDAC auction prices**, EUR/MWh, using `entsoe-py` 0.7.11's
-classification sequence 1 (not EXAA). See [sources/prices.py](../../src/grid_signals/forecast/sources/prices.py)
+classification sequence 1 (not EXAA). See [sources/prices.py](../src/grid_signals/forecast/sources/prices.py)
 and the pinned client dependency in `uv.lock`. Earlier hourly prices can train
 LEAR; quarter-hour targets are treated as native only from local **2025-10-01**.
 A complete post-transition hourly aggregate requires four reported quarter-hours.
@@ -495,7 +498,7 @@ fundamental forecast enters this serving model.
 
 ### 6.3 Architecture and selection
 
-[Lear](../../src/grid_signals/forecast/models/price.py) is a **price-only LEAR
+[Lear](../src/grid_signals/forecast/models/price.py) is a **price-only LEAR
 adaptation**, not an exact implementation of the full exogenous epftoolbox model.
 It fits 24 separate hourly linear LASSO regressions using
 `LassoLarsIC(criterion="aic", max_iter=500)`. Training-only median imputation,
@@ -510,7 +513,7 @@ refits the point model on all training days. Add offsets to hourly point prices
 and repeat across quarter-hours. Prices are not clipped to zero. Uncertainty is
 an empirical marginal residual distribution, not a direct conditional quantile GBM.
 
-[price_forward.publish](../../src/grid_signals/forecast/pipelines/price_forward.py)
+[price_forward.publish](../src/grid_signals/forecast/pipelines/price_forward.py)
 uses up to the trailing 730 calendar days through the issue day inclusive, with
 at least 180 distinct days and complete hourly training aggregates. Unlike
 observed generation/load, the issue day's price curve is already knowable at
@@ -526,246 +529,34 @@ historical publication vintages for exogenous fundamentals. Weekly naive and
 median/direct-quantile GBMs remain historical comparators, not the selected forward
 model. Their full protocols/results are linked below.
 
-## 7. Backtests, results and what they do not prove
+## 7. Evaluation evidence and limits
 
-Frozen reports are the authority for evaluated populations. No new model selection,
-training run or backtest was performed to write this guide. Monthly seven-day-
-embargo evaluations and new daily serving refits are different policies. Correct
-fixed-input reload equivalence verifies implementation, not forecast skill.
+The [evidence index](../research/README.md) summarises outcomes and links each
+frozen protocol, development comparison and final result. [Metrics](metrics.md)
+defines populations, units, bias signs and confidence intervals. Earlier hourly
+boards describe different weather timing and must not be quoted as current skill.
 
-MAE compares q0.50 with actuals. Renewable nMAE/CRPS use CF, so 0.0246 nMAE means
-2.46% of installed capacity, not 2.46% of actual generation. Load MAE/CRPS use MW;
-its optional normalisation is each fold's training mean load. Price metrics use
-EUR/MWh. CRPS is computed from all 19 quantiles with `scoringrules.crps_quantile`;
-coverage is the share inside the stated quantile bounds. Confidence intervals
-resample whole delivery days (2,000 draws by default), not independent intervals.
-Renewable metric code reports bias as actual minus forecast; price/load evaluators
-and explorer plot errors use forecast minus actual. Read the sign convention with
-the field, rather than comparing unsigned `bias` names across files. Implementations:
-[evaluation/metrics.py](../../src/grid_signals/forecast/evaluation/metrics.py),
-`pipelines/load.py`, `pipelines/price.py`, `reporting/export_explorer.py`.
+The model choices above draw on the
+[MEPS/IFS comparison](../research/reports/meps_archive.md),
+[calibration comparison](../research/reports/calibration.md),
+[quarter-hour comparison](../research/reports/products_15min.md) and the linked
+load/price evaluations. The [custom-load price experiment](../research/reports/price_load.md)
+did not establish a resolved gain and is not a serving input.
 
-### 7.1 Renewable development and final evaluation
+The renewable final protocol uses monthly refits with a seven-day embargo. The
+new daily saved-model policy has **no separate completed accuracy backtest or new
+live score series recorded here**. Do not present historical 2.46% wind nMAE as
+its independently measured result. Migration and fitted-versus-reloaded checks
+verify implementation; the [local verification record](archive/operations-record.md#local-verification--2026-11-01)
+retains timings, resource measurements and restart/restore evidence.
 
-[products_15min.md](../reports/products_15min.md) compares three fixed winter
-folds (December 2025, January/February 2026), monthly refits and seven-day embargo,
-with matched complete **native quarter-hour actuals**. The two wind arms share an
-hourly-trained model; solar is trained at quarter-hours. Solar headline rows have
-maximum site elevation > 5°. CF errors are fractions of installed capacity.
+## 8. Run and inspect the pipeline
 
-| Product/method | Complete days | nMAE | CRPS (CF) | 80% coverage |
-|---|---:|---:|---:|---:|
-| Wind hourly repeated | 79 | 2.902% | 0.02209 | 72.244% |
-| Wind interpolated weather | 79 | 2.935% | 0.02230 | 73.009% |
-| Solar quantile | 90 | 1.955% | 0.01444 | 75.459% |
-| Solar smart persistence | 90 | 3.230% | 0.02451 | 81.075% |
-| Solar physical | 90 | 3.512% | 0.02566 | 68.146% |
-
-The wind interpolation-minus-repetition CRPS 95% day-block interval was
-[−0.00015, +0.00057], so no resolved improvement. Interpolation improved ramp MAE
-but worsened peak-ramp timing. This does not prove native sub-hourly skill.
-
-[holdout_protocol.md](../reports/holdout_protocol.md) froze the corrected models
-before final evaluation. Delivery **2026-03-20…2026-09-19 inclusive**, refit March 20
-then month starts, training strictly before origin minus seven days. Later folds
-may use earlier test-window observations, as in a rolling deployment simulation;
-no tuning on final outcomes. Final [holdout.md](../reports/holdout.md):
-
-| Product/method | Scored/requested days | nMAE | CRPS (CF) | 80% coverage |
-|---|---:|---:|---:|---:|
-| Wind quantile | 182/184 | 2.46% | 0.01839 | 81.1% |
-| Wind physical reference | 182/184 | 3.28% | 0.02519 | 83.3% |
-| Solar quantile | 184/184 | 2.84% | 0.02076 | 80.6% |
-| Solar smart persistence | 184/184 | 5.44% | 0.04200 | 85.5% |
-| Solar physical reference | 184/184 | 3.48% | 0.02882 | 82.3% |
-
-Wind excludes June 24 and September 3 for incomplete days.
-[Diagnostics](../reports/holdout_diagnostics.md) give paired 95% day-block CRPS
-intervals versus physical: wind −0.800…−0.564 and solar −1.020…−0.567 percentage
-points of capacity. Solar's mean bias is about −2.07% capacity using
-**actual minus forecast**: overprediction. Seasonal/monthly coverage varies even
-when pooled coverage is close to nominal.
-
-Reproduction and evidence paths: [backtest_products.py](../../src/grid_signals/forecast/pipelines/backtest_products.py),
-[holdout.py](../../src/grid_signals/forecast/pipelines/holdout.py),
-[holdout_diagnostics.py](../../src/grid_signals/forecast/reporting/holdout_diagnostics.py),
-`research/data/holdout_renewables_2026_10_15/` (local checkpoints/metrics), and
-[frozen records](../configs/releases/). The recorded solar harness amendment
-preserves the original record and wind results; do not rewrite those hashes.
-
-Earlier source/calibration A/Bs explain the selection, but their hourly boards
-predate the final forward-trajectory information-age correction:
-
-- [MEPS/IFS](../reports/meps_archive.md): on the matched 17-fold / 12,026-row board,
-  all weather blocks scored nMAE 0.0271 / CRPS 0.0205 versus Previous Runs alone
-  0.0309 / 0.0231. Code: `pipelines/compare_meps.py`.
-- [Calibration](../reports/calibration.md): four-block crossfit CRPS 0.0198 versus
-  recent-quarter 0.0205; paired difference [−0.0011, −0.0004], coverage 78.4%
-  versus 76.5%. Code: `pipelines/compare_calibration.py`.
-- [Original model comparisons](../reports/modelling.md),
-  [weather-age experiments](../reports/openmeteo_vintage.md) and
-  [metrics definitions](metrics.md) explain the earlier alternatives and populations.
-  Do not quote those earlier boards as current serving accuracy or combine their
-  counts with the corrected quarter-hour final evaluation.
-
-### 7.2 Load and price development/final results
-
-Development is **2026-05-01…2026-08-31**, final **2026-09-01…2026-10-14**.
-Monthly refits, seven-day embargo, two-year trailing training window, matched
-complete quarter-hour days. Uncertainty calibration uses only training data.
-
-| Model | Development days | Development MAE / CRPS / cov80 | Final days | Final MAE / CRPS / cov80 |
-|---|---:|---|---:|---|
-| Load quantile GBM (selected) | 123/123 | 1,678.5 / 1,299.3 MW / 66.1% | 44/44 | 1,433.4 / 1,069.6 MW / 79.7% |
-| Load point GBM | 123/123 | 1,807.1 / 1,355.8 MW / 81.9% | 44/44 | 1,545.5 / 1,138.4 MW / 83.2% |
-| Load ridge | 123/123 | 2,384.3 / 1,730.3 MW / 79.4% | 44/44 | 2,100.1 / 1,614.8 MW / 75.2% |
-| Load weekly reference | 123/123 | 2,478.0 / 1,919.6 MW / 84.9% | 44/44 | 1,746.2 / 1,337.6 MW / 94.0% |
-| Price LEAR (selected forward) | 123/123 | 24.72 / 19.84 EUR/MWh / 79.8% | 42/44 | 37.21 / 29.42 EUR/MWh / 68.2% |
-| Price point GBM | 123/123 | 26.92 / 21.12 EUR/MWh / 80.4% | 42/44 | 41.38 / 32.74 EUR/MWh / 65.5% |
-| Price direct quantile GBM | 123/123 | 26.16 / 20.55 EUR/MWh / 62.5% | 42/44 | 42.97 / 33.43 EUR/MWh / 52.9% |
-| Price weekly reference | 123/123 | 35.66 / 29.14 EUR/MWh / 81.2% | 42/44 | 57.89 / 46.81 EUR/MWh / 62.6% |
-
-Price excludes September 13 (hourly curve cannot supply native quarter-hour targets)
-and September 20 (incomplete weekly reference) for **every** method. Price intervals
-substantially under-cover; the best point/CRPS model does not imply calibrated
-80% intervals. Load selection preceded its final evaluation; LEAR's forward
-selection timing differs as explained above. Negative prices make MAPE unsuitable.
-
-Sources: [load protocol](../reports/load_protocol.md),
-[development](../reports/load_benchmark.md), [final](../reports/load_holdout.md);
-[price protocol](../reports/price_protocol.md),
-[development](../reports/price_benchmark.md), [final](../reports/price_holdout.md).
-Implementations: `pipelines/load.py`, `load_holdout.py`, `price.py`,
-`price_holdout.py`; model and feature files linked in sections 5–6.
-Local evidence: `research/data/interim/{load,price}_metrics.parquet`,
-`research/data/holdout_{load,price}_2026_10_15/`,
-`research/data/predictions/backtest_{load,price}.parquet`.
-The [custom-load price experiment](../reports/price_load.md) did not establish a
-resolved gain and is not a serving input. No final evaluation was reopened in 2a/2b.
-
-### 7.3 New saved-model policy: what remains unmeasured
-
-2a checked fixed-input wind/solar/load/price predictions, metrics and exports
-against preserved code. 2b checked fitted-versus-reloaded SE3 predictions,
-crossfit, cutoff rejection, DST, complete actuals, delivery interruption/retry,
-real Prefect execution/restarts and backup recovery. These are implementation tests.
-
-The retained cached-data model validation used 934 days / 22,392 hourly rows,
-249.1 seconds and 1,075.6 MiB peak RSS; fixed 96-hour reload/prediction took 1.4937
-seconds. This is a retrospective, unpromoted, unscored workstation artifact in
-`research/data/model_validation/`, not an accuracy backtest or full production
-latency measurement. The **new daily saved-model training/refit policy has no
-separate completed accuracy backtest or new live score series recorded here**.
-Do not present 2.46% as its independently measured result. Confirm its behaviour
-through the new immutable forward record; further experiments need declared windows.
-
-## 8. Whole production pipeline, schedules and storage
-
-### 8.1 Services and execution
-
-[compose.forecast.yaml](../../compose.forecast.yaml) defines the planned single-host
-Dokploy deployment. It has been checked in an isolated local stack; owner remote
-deployment and cutover remain pending. [Dockerfile.runner](../../Dockerfile.runner)
-contains the locked runner environment; [Dockerfile.demo](../../Dockerfile.demo)
-contains the result-reading website. Manual [CLI](../../src/grid_signals/cli.py)
-commands and [Prefect tasks/flow](../../src/grid_signals/forecast/flows.py) invoke
-the same SE3 lifecycle. The website never trains or calls provider APIs.
-
-| Service | Responsibility | Persistent state / access |
-|---|---|---|
-| `prefect` | Schedules, flow/task state and UI/API; SQLite initially | `prefect-data` at `/var/prefect`, API on internal 4200 and host loopback 4200 |
-| `runner` | Static Prefect `serve`, one flow slot, six deployments, lifecycle data lock | `forecast-data:/data`, `public-results:/results`, `forecast-backups:/backups`, Prefect metadata read-only for SQLite online backups; provider key only here |
-| `web` | Read checked generations, merge confirmed receipts, show forecasts/status/scores | `public-results:/results:ro`; bundled historical fallback; internal 8501, host loopback 8503 |
-
-All run as UID 10001. Runner default cap is 3 GiB / two CPUs; server 1 GiB and web
-768 MiB. These caps do not establish that a particular live host has enough headroom.
-There is no market PostgreSQL database, mandatory MLflow server or public forecasting
-API. MLflow is for optional experiment comparison, separate from public delivery evidence.
-
-### 8.2 Daily SE3 sequence (all UTC)
-
-| Time / deployment | Exact operation and data movement |
-|---|---|
-| 03:00 `se3-backup` | Save checked data/models/publication history/results/tracking and online Prefect SQLite backup into `/backups`. Same-host copies need a separate off-host transfer. |
-| 06:00 `se3-prepare` | Refresh A75 over [I−7,I+1); rebuild hourly target table. Build clusters from the seeded registry. Fetch MEPS/IFS run dates [I−10,I), so today's unavailable IFS cycle is not a training prerequisite. Fetch Previous Runs valid dates [I−10,I+3). Fit both saved models using the pre-issue rule, verify reload, promote, publish status. Existing historical caches are still required. |
-| 08:55 `se3-capture` | Request next-day public A69/A18 wind/solar document; require a complete wind curve received before 09:00; record missing/late/error evidence. Failure does not substitute an unverified historical public curve or a different forecasting model. |
-| 09:00 `se3-forecast` | Fetch MEPS/IFS run dates [I,I+1), Previous Runs valid dates [I,I+3). Load that issue's checked promoted model and its saved lag history; build delivery-day features without target actuals; validate source-time/grid/required weather/capacity; predict and repeat hourly quantiles; save immutable candidate inputs/forecasts; commit a complete public generation and confirm actual delivery. No fitting. |
-| 09:30 deadline | A later verified delivery is late and cannot become an on-time scored issue. The forecast flow checks its window before/after fetching and after delivery. |
-| 15:00 `se3-score` | Refresh A75 over the current [I−7,I+1) window and rebuild targets; recompute scores for first eligible issues whose actual delivery days are complete; publish actuals and provisional scores. At 15:00 the same issue's next-day actuals are not yet available: it scores earlier deliveries, with later retries on subsequent days. |
-| Every 15 minutes `se3-status` | Commit due-day/job/model/collection status and any available scores. Fresh export time does not make an old forecast current. |
-
-Date bounds above are half-open. `openmeteo.pull` converts them to inclusive API
-`end_date=end−1 day`; MEPS/IFS iterate run dates. Pullers reuse cached identical
-requests/runs, rather than re-downloading every listed date. Parsed stores merge
-new rows; exact raw and cache paths are defined in each source module.
-Registry, zone definitions, historical training weather, A68 audit data and initial
-data volume are **bootstrap/manual inputs**, not silently fetched by every job.
-No monthly final-evaluation or automatic model-tuning job runs in production.
-
-Prefect task bounds are in `flows.py`: actuals 300 s with two retries (20 s delay),
-weather 600 s with one retry (20 s), preparation 1800 s without retries, prediction
-180 s without retries, capture 120 s with one retry (10 s), delivery 120 s with
-two retries (5 s); whole flow 3000 s without flow retries. Source clients also have
-HTTP timeouts/backoff where implemented. MEPS's production xarray/netCDF transport
-does not use the separate ASCII helper's HTTP retry settings; its enclosing
-weather task supplies the explicit 600-second workflow bound. One runner slot and shared file lock prevent overlapping
-producer operations. Scheduled runs retain their original intended day after
-restarts; expired preparation/collection/forecast runs fail visibly rather than
-backdating fresh data. See `requested_day`, `execute`, `deployments` and `start`.
-
-The German commands in sections 4–6 remain **manual only** in this stack. They
-fit during their command, require their own cached histories/weather and use the
-older append-only archives. Running a manual German command does not enrol it in
-SE3's atomic live overlay or start a German schedule. Bundled case studies remain
-available without continuing German production.
-
-### 8.3 Files to inspect after a run
-
-| Under configured data/result roots | Meaning |
-|---|---|
-| `/data/raw/`, `/data/parsed/`, `/data/interim/` | Provider data, parsed weather and derived targets; exact source-specific paths in `sources/` |
-| `/data/models/se3-wind/<model_id>/` | `record.json`, `training.parquet`, `lag_targets.parquet`, `reload_inputs.parquet`, `reload_predictions.npz`, `model.pkl` |
-| `/data/models/se3-wind/active.json`, `promotions/` | Checked active-model pointer and immutable promotion reasons/history |
-| `/data/runtime/se3-wind/trial.json`, `lifecycle/` | First due issue and per-phase status/error type/elapsed-time records |
-| `/data/runtime/se3-wind/issues/<forecast_id>/` | Candidate `inputs.parquet`, `forecast.parquet`, checksummed `record.json` |
-| `/data/operational/captures/`, `/data/operational/raw_captures/` | Public comparison collection evidence; `/data/operational/actual_fetches/` holds fresh SE3 observation receipts; see `journal.py` and `sources/capture.py` |
-| `/results/generations/<id>/` | Complete checked explorer/summary payloads, `publication.json`, `files.json` |
-| `/results/current.json`, `previous.json` | Whole-generation pointers; confirmed delivery receipt and its real timing |
-| `/backups/forecast-<UTC timestamp>.tar.gz` | Checked recovery archive; retain/copy off-host explicitly |
-
-Local defaults are `research/data`, `research/mlruns`, `data/exports` and
-`research/reports`; environment variables or CLI root options select mounted
-locations before imports. See [paths.py](../../src/grid_signals/forecast/paths.py).
-The saved pickle requires its recorded compatible environment and trusted origin;
-checksums identify our own artifact, not arbitrary downloaded models.
-
-Publication implementation is [live.publish/acknowledge/status_record](../../src/grid_signals/forecast/live.py).
-Only after the complete generation is visible is a receipt confirmed; a crash
-before confirmation stays unverified and recovery uses its actual later time.
-Retries cannot replace an earlier first eligible receipt. Scores use complete
-native actual days and matched intervals, with physical error, bias, CRPS and
-coverage; public point MAE is added only with eligible capture evidence. Scores
-can change with revised actuals. The web reader
-[results.py](../../src/grid_signals/app/results.py) verifies payloads, falls back
-to previous/bundled data with a warning, derives missing due days during outages,
-and flags snapshots older than 45 minutes. Prefect success alone does not prove
-public delivery. See the [publication contract](integration_contract.md).
-
-### 8.4 Bootstrap, activation and remaining acceptance
-
-Follow the [concrete owner deployment steps](../../docs/operations.md#manual-deployment-steps).
-They cover the separately transferred checked seed archive, importing into an empty
-data volume, preparing inside the runner's Python environment, choosing the first
-issue day, preview-domain checks, disabling the original workstation timers and
-unpausing Prefect. `GRID_SIGNALS_SCHEDULES_PAUSED=true` is the default. Never run
-both schedule owners for the same issues. Do not import the workstation's
-retrospective validation model as a serving model.
-
-Remote host capacity, public current forecasts/subsequent scores, off-host recovery
-and the 30-consecutive-on-time-issue gate are still pending. The historical
-`ReadTimeout` records do not establish their original provider/root cause; the new
-bounded retries and phase records improve handling/diagnosis but do not prove the
-live failure is resolved. See operations for tested local resource/restart evidence.
+- [Architecture and service boundaries](implementation-plan.md#how-the-deployed-system-should-run).
+- [Exact schedules, data fetching and task bounds](operations.md#schedules-and-task-bounds).
+- [Model, input, forecast and receipt files](operations.md#monitor-runs-and-inspect-files).
+- [Bootstrap, deployment and scheduler cutover](operations.md#se3-producer-deployment--milestone-2b).
+- [Publication identity, eligibility and failures](integration_contract.md).
 
 ## 9. Source documentation and evidence boundaries
 
