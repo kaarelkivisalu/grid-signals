@@ -28,9 +28,10 @@ flowchart LR
 | `runner` | Six UTC deployments, one flow slot and a shared data lock | `forecast-data:/data`, `public-results:/results`, `forecast-backups:/backups`; provider key only here |
 | `web` | Forecasts, evidence and publication status | Read-only `public-results:/results`; bundled historical fallback; internal port 8501, host-loopback 8503 |
 
-All services run as UID 10001. Default memory caps are 3 GiB for the runner,
-1 GiB for Prefect and 768 MiB for the web; the runner has two CPUs. Verify host
-headroom before deployment. The standalone historical demo uses
+All services run as UID 10001. GitHub Actions builds the runner and web images
+and pushes them to GHCR; the host only pulls them. Default memory caps are 2 GiB
+for the runner, 512 MiB for Prefect and 768 MiB for the web; the runner has two
+CPUs. See [host resources](operations.md#host-resources). The standalone historical demo uses
 `Dockerfile.demo` and `compose.demo.yaml`, independently of forecast production.
 
 ## Shared package and configuration

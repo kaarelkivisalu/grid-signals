@@ -142,26 +142,27 @@ Schedules default to paused; enable them only after disabling the old timers.
 
 ### Manual deployment steps
 
-1. Make the reviewed commit available on `feat/electricity-forecasting` when ready
-   and wait for its CI checks. No push or remote deployment was performed during
-   preparation. Leave Dokploy automatic deployment disabled.
+1. Push the reviewed commit to `feat/electricity-forecasting` and wait for CI.
+   After lint, tests and image checks pass, the `images` job pushes
+   `ghcr.io/kaarelkivisalu/grid-signals-runner` and `grid-signals-web`, tagged
+   `sha-<full commit>` and with the branch name. The server pulls these images and
+   never builds them. GitHub creates new packages as private: after the first push,
+   make both packages public in their GitHub package settings, or add a GHCR registry
+   with a `read:packages` token in Dokploy. Leave Dokploy automatic deployment disabled.
 2. In Dokploy, create a **Docker Compose** application from this repository and
-   branch, using `compose.forecast.yaml`. Build from the repository root. Set:
+   branch, using `compose.forecast.yaml`. Set:
 
    ```dotenv
    ENTSOE_API_KEY=your-existing-provider-key
-   GRID_SIGNALS_IMAGE_TAG=the-reviewed-commit
+   GRID_SIGNALS_IMAGE_TAG=sha-the-full-reviewed-commit
    GRID_SIGNALS_SCHEDULES_PAUSED=true
-   GRID_SIGNALS_RUNNER_MEMORY=3g
-   GRID_SIGNALS_RUNNER_CPUS=2
    ```
 
-   The image tag is a label: deploy the reviewed source commit as well. The runner
-   alone receives the provider key. Four named volumes persist forecast data,
-   public results, Prefect state and backups. The web mounts results read-only.
-   All app processes run as UID 10001. Default memory caps total 4.75 GiB; ensure
-   the host also has room for Dokploy, builds and existing services. Host capacity
-   has not been checked. Do not remove these volumes when updating containers.
+   The image tag selects the exact CI-built images; change it to update or roll back.
+   The runner alone receives the provider key. Four named volumes persist forecast
+   data, public results, Prefect state and backups. The web mounts results read-only.
+   All app processes run as UID 10001. Check [host resources](#host-resources) first.
+   Do not remove these volumes when updating containers.
 3. Deploy with schedules paused. Check that `prefect` and `runner` are healthy and
    `web` serves `/_stcore/health`. On the host the diagnostic endpoints are bound
    to loopback: Prefect `http://127.0.0.1:4200` and web
@@ -222,6 +223,32 @@ Schedules default to paused; enable them only after disabling the old timers.
    the deployed commit/image, domain, first issue and backup destination here.
    Server restart, off-host recovery and the approximately 30 consecutive on-time
    issue gate require deployment evidence before claiming dependable operation.
+
+### Host resources
+
+The limits fit a 2 vCPU / 4 GB host (for example Hetzner CX23) shared with Dokploy
+and a few small services. Measured locally on 2026-11-05, idle memory was about
+255 MiB for Prefect, 210 MiB for the runner and 75 MiB for the web; one session
+opening every page peaked at about 480 MiB. Model preparation peaked at
+1.1 GiB on the workstation.
+
+| Service | Memory | CPUs |
+|---|---|---|
+| `prefect` | 512 MiB | 1 |
+| `runner` | 2 GiB (`GRID_SIGNALS_RUNNER_MEMORY`) | 2 (`GRID_SIGNALS_RUNNER_CPUS`) |
+| `web` | 768 MiB | 1 |
+
+The runner keeps two CPUs because the saved-model policy fits with four LightGBM
+threads and preparation has an 1800-second limit. Other containers still get a fair
+CPU share, so they slow down during the 06:00 fit rather than stopping. Expect that
+fit to take several times the workstation's 249 seconds; check its duration in
+Prefect on the first run. If `se3-prepare` is killed for memory (exit code 137),
+set `GRID_SIGNALS_RUNNER_MEMORY=2560m`. A 2 GB host swap file adds a safety margin.
+
+Before deploying, run `free -h`, `df -h /` and `docker stats --no-stream` on the host.
+Disk is the tightest resource: each daily backup is about 1 GB and nothing deletes
+old ones, and each saved model adds about 50 MB. Delete old `/backups` archives and
+run `docker image prune` after updates until automatic cleanup exists.
 
 ### Backup and recovery
 

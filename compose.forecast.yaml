@@ -1,10 +1,9 @@
 name: grid-signals-forecast
 
+# Images are built and pushed by GitHub Actions; the host only pulls them.
+# GRID_SIGNALS_IMAGE_TAG is sha-<full commit>. Limits fit a 2 vCPU / 4 GB host.
 x-runner-image: &runner-image
-    image: grid-signals-runner:${GRID_SIGNALS_IMAGE_TAG:-local}
-    build:
-        context: .
-        dockerfile: Dockerfile.runner
+    image: ${GRID_SIGNALS_IMAGE_REGISTRY:-ghcr.io/kaarelkivisalu}/grid-signals-runner:${GRID_SIGNALS_IMAGE_TAG:?Set GRID_SIGNALS_IMAGE_TAG to sha-<full commit>}
 
 services:
     prefect:
@@ -21,7 +20,7 @@ services:
             interval: 15s
             timeout: 5s
             retries: 10
-        mem_limit: 1g
+        mem_limit: 512m
         cpus: 1
         restart: unless-stopped
     runner:
@@ -46,15 +45,12 @@ services:
             timeout: 5s
             retries: 5
             start_period: 60s
-        mem_limit: ${GRID_SIGNALS_RUNNER_MEMORY:-3g}
+        mem_limit: ${GRID_SIGNALS_RUNNER_MEMORY:-2g}
         cpus: ${GRID_SIGNALS_RUNNER_CPUS:-2}
         stop_grace_period: 60s
         restart: unless-stopped
     web:
-        image: grid-signals-web:${GRID_SIGNALS_IMAGE_TAG:-local}
-        build:
-            context: .
-            dockerfile: Dockerfile.demo
+        image: ${GRID_SIGNALS_IMAGE_REGISTRY:-ghcr.io/kaarelkivisalu}/grid-signals-web:${GRID_SIGNALS_IMAGE_TAG:?Set GRID_SIGNALS_IMAGE_TAG to sha-<full commit>}
         environment:
             GRID_SIGNALS_RESULT_ROOT: /results
         volumes:
