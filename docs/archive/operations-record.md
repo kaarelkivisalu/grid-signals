@@ -8,7 +8,7 @@ for commands; these checks do not establish current forecast production.
 
 The pre-migration revision is `23986cfa73f93796e74882ce12c86a85f2f62790`.
 Local preservation copies are outside this checkout at
-`/home/kaarel/Projects/grid-signals-preserved/2026-11-01-before-2a/`:
+`../grid-signals-preserved/2026-11-01-before-2a/`, relative to the repository root:
 
 - `history.bundle`: complete Git history and branch references; verified with
   `git bundle verify`. SHA-256:
@@ -24,7 +24,7 @@ Local preservation copies are outside this checkout at
   virtualenvs and caches are excluded; this is a local preservation copy.
 
 The standalone notebooks were also copied and checked in
-`/home/kaarel/Projects/grid-signals-learning/notebooks/`. Local research data and
+`../grid-signals-learning/notebooks/`, relative to the repository root. Local research data and
 original frozen model version records remain in place. No containers, database
 services or Docker volumes were removed; the local running-container inventory
 contained no Grid Signals market database. Remote services were not changed.

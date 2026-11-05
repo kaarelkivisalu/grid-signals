@@ -447,7 +447,7 @@ The old local trial remains the active schedule until the owner's Prefect cutove
 The installer and shell wrapper have been retired from this checkout. The three
 existing user services use the checked source from commit
 `20b607b` in
-`/home/kaarel/Projects/grid-signals-preserved/2026-11-01-before-2b/source`,
+`../grid-signals-preserved/2026-11-01-before-2b/source` (relative to the repository root),
 selected by their `PYTHONPATH` environment setting. Copies of the unit files are
 in that preservation directory's `systemd/` folder. The preserved package's code
 record verifies. Data locations, timers and their schedules were not changed;
